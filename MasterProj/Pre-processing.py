@@ -1,4 +1,6 @@
-from dataclasses import dataclass, astuple, fields
+from dataclasses import dataclass, astuple
+import os
+
 
 """ Creating classes """
 
@@ -59,6 +61,25 @@ class Celline:
     def print_self(self):
         print(f"Strain: {self.strain} with nodelist: {self.nodes}")
 
+def process_file_to_node(*args):
+    nodes = []
+    for arg in args:
+        with open(arg, encoding="latin-1") as file:
+            file_content: list[str] = file.readlines()
+    for index, line in enumerate(file_content):
+        if line.startswith("chr"):
+            columns = line.strip("\n").split("\t")
+            if len(columns) != 7:
+                print(f"Bad line format: {columns} with index: {index}")
+            else:
+                if columns[6] == ".":
+                    nodes.append(Node(columns[3], columns[6], columns[0]))
+                else:
+                    nodes.append(Node(columns[3], columns[6].split(";"), columns[0]))
+    return NodeList(nodes)
+
+# nodes = process_file_to_node("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy/IMR90_50kb.domain.RAW.no_cen.NCHG_fdr.o_by_e5_to_plot.gtrack")
+
 
 # Secelting directory containing files to process and instantiating Celline class
 def process_directory_to_celline(directory):
@@ -78,6 +99,6 @@ def process_files_to_celline(files):
 
 cellines = process_directory_to_celline("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4cell_lines_Hi-C")
 
-
-for celline in cellines:
-    celline.print_self()
+# # Calling repr method
+# for celline in cellines:
+#     celline.print_self()
