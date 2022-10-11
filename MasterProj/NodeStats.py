@@ -1,7 +1,8 @@
-""" Statistics on empty nodes and connectedness ratio (empty vs connected))"""
-from Pre-processing.py import nodes
 
-# Lists for isolated and connected nodes across all chromosomes called int he get_nodes_from_chromosomes function
+""" Statistics on empty nodes and connectedness ratio (empty vs connected))"""
+from Processing import nodes
+
+# Lists for isolated and connected nodes across all chromosomes called in the get_nodes_from_chromosomes function
 chromlist_isolated_nodes = []
 chromlist_connected_nodes = []
 # Isolated nodes are the first value for every key, connected nodes the econd value for every key
@@ -118,3 +119,28 @@ def get_nodes_from_chromosome(*args):
 
 get_nodes_from_chromosome("chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7", "chr8", "chr9", "chr10", "chr11", "chr12",
                           "chr13", "chr14", "chr15", "chr16", "chr17", "chr18", "chr19", "chr20", "chr21", "chr22", "chrX")
+
+
+""" Node read length statistics """
+
+# We need to create positional information from the reads in the nodes, so we can sort them e.g by length and
+# plot them from start to finish or something? Later we want to integrate RNAseq data so we can overlay this on the nodes?
+
+# Use pybadtools or do it organically in python, think we should avoid hte command line if we can.
+
+# Can we just write a function in python that takes each connected node as input from the data class. The nodes are already ordered from start to end of chromosome/genome.
+# Then we calculate the length of the first node for the 4 different cell lines.
+# Then we quantify their positions, by using the start/end point.
+# Maybe the largest node is the anchor node, and the smaller nodes are matched against it?
+# After we have length and positions, we can calculate the percentage of overlap.
+# If nodes overlap less than say 50%, the node is discarded (not deleted from the data class, but just not included in the function output).
+
+# We want to examine node overlap both on the "node level" (whatever that means) and on the bp level.
+# Find overlap using pybadtools intersect? or just write the function to calculate the percentage overlap/ bp overlap.
+# Do this for every node, iterating through each instance of the data class for the 4 cell lines.
+# Before we do this we need to write functionality for reading in multiple cell lines and store their data as instances of the Node class.
+# Then we can iterate over the instances, for each cell line, all the way through the data class.
+# Inside this iterator, we need to do the percentage/bp/node overlap calculations
+# OR
+# We can output the mapping of the nodes (start and end to find length) for each isntance to a dict or something,
+# and then use this for further coverage calculations.

@@ -87,46 +87,46 @@ class Celline:
 
 
 # Selecting files to pre-process and instantiating Node class
-def process_file_to_node(*args):
-    nodes = []
-    for arg in args:
-        with open(arg, encoding="latin-1") as file:
-            file_content: list[str] = file.readlines()
-    for index, line in enumerate(file_content):
-        if line.startswith("chr"):
-            columns = line.strip("\n").split("\t")
-            if len(columns) != 7:
-                print(f"Bad line format: {columns} with index: {index}")
-            else:
-                if columns[6] == ".":
-                    nodes.append(Node(columns[3], columns[6], columns[0]))
-                else:
-                    nodes.append(Node(columns[3], columns[6].split(";"), columns[0]))
-    return NodeList(nodes)
-
-nodes = process_file_to_node("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy/IMR90_50kb.domain.RAW.no_cen.NCHG_fdr.o_by_e5_to_plot.gtrack")
+# def process_file_to_node(*args):
+#     nodes = []
+#     for arg in args:
+#         with open(arg, encoding="latin-1") as file:
+#             file_content: list[str] = file.readlines()
+#     for index, line in enumerate(file_content):
+#         if line.startswith("chr"):
+#             columns = line.strip("\n").split("\t")
+#             if len(columns) != 7:
+#                 print(f"Bad line format: {columns} with index: {index}")
+#             else:
+#                 if columns[6] == ".":
+#                     nodes.append(Node(columns[3], columns[6], columns[0]))
+#                 else:
+#                     nodes.append(Node(columns[3], columns[6].split(";"), columns[0]))
+#     return NodeList(nodes)
+#
+# nodes = process_file_to_node("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy/IMR90_50kb.domain.RAW.no_cen.NCHG_fdr.o_by_e5_to_plot.gtrack")
 
 # Secelting directory containing files to process and instantiating Celline class
-def process_directory_to_celline(directory):
-    paths = []
-    for file in os.listdir(directory):
-        paths.append(os.path.join(directory, file))
-    return process_files_to_celline(paths)
+# def process_directory_to_celline(directory):
+#     paths = []
+#     for file in os.listdir(directory):
+#         paths.append(os.path.join(directory, file))
+#     return process_files_to_celline(paths)
+#
+# def process_files_to_celline(files):
+#     cellines = []
+#     for arg in files:
+#         with open(arg):
+#             strain = arg.split("/")[7].split("_")[0]
+#             if not strain.startswith("."):
+#                 cellines.append(Celline(strain, process_file_to_node(arg)))
+#     return cellines
+#
+# cellines = process_directory_to_celline("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4cell_lines_Hi-C")
+#
 
-def process_files_to_celline(files):
-    cellines = []
-    for arg in files:
-        with open(arg):
-            strain = arg.split("/")[7].split("_")[0]
-            if not strain.startswith("."):
-                cellines.append(Celline(strain, process_file_to_node(arg)))
-    return cellines
-
-cellines = process_directory_to_celline("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4cell_lines_Hi-C")
-
-
-for celline in cellines:
-    celline.print_self()
+# for celline in cellines:
+#     celline.print_self()
 
 
 """ Statistics on empty nodes and connectedness ratio (empty vs connected))"""
@@ -141,109 +141,109 @@ node_ratio_con_dict = {}
 
 
 
-def get_nodes_from_chromosome(*args):
-
-    """
-    creates lists containing empty and connected nodes from selected chromosomes, e.g: ("chr1", "chrX")
-    and calculates some statistics on empty vs connected nodes for the selected chromosome(s)
-    """
-
-    # empty and connected node lists
-    for node in nodes.as_list():
-        if node.edges == "." and node.chr in args:
-            chromlist_isolated_nodes.append(node)
-        elif node.edges != "." and node.chr in args:
-            chromlist_connected_nodes.append(node)
-
-    # stats for all chromosomes combined (for comparing cell lines)
-    total_nodes = len(chromlist_isolated_nodes) + len(chromlist_connected_nodes)
-
-    def sum_total_nodes(*args):
-        for arg in args:
-            # sum total nodes
-            print(f"Sum of nodes in {arg} = {total_nodes}")
-            # sum empty nodes
-            print(f"Isolated nodes in {arg} = {len(chromlist_isolated_nodes)}")
-            # sum connected nodes
-            print(f"Connected nodes in {arg} = {len(chromlist_connected_nodes)}")
-            # sum connected node ratio
-            total_connectedness_ratio = len(chromlist_connected_nodes) / total_nodes
-            print(f"Connectedness ratio in {arg} = {round(total_connectedness_ratio, 5)}")
-            # sum isolated node ratio
-            total_isolated_ratio = len(chromlist_isolated_nodes) / total_nodes
-            print(f"Isolated ratio in {arg} = {round(total_isolated_ratio, 5)}")
-
-    sum_total_nodes()
-
-    # nodes per chromosome
-    def get_nodes_in_chrom(*args, nodelist):
-        nodes_in_total = []
-        for arg in args:
-            get_chrom = list(filter(lambda x: arg == str(x.chr), nodes))
-            print(f"Chromosome {arg} has {len(get_chrom)} nodes in total")
-            nodes_in_total.append(len(get_chrom))
-        # Test (unit test this some day?)
-        if sum(nodes_in_total) != total_nodes:
-            print(
-                f"ERROR: len(nodes_in_total) = {sum(nodes_in_total)} and len(total_nodes) = {total_nodes} are different."
-                f" Maybe you duplicated chromosomes when calling the function?")
-
-    # get_nodes_in_chrom(*args, nodelist=nodes)
-
-    # Empty to connected ratio per chromosome
-    def empty_nodes_in_chrom(*args, nodes):
-        for arg in args:
-            get_chroms = list(filter(lambda x: arg == str(x.chr), nodes.as_list()))
-
-            # number of isolated nodes
-            get_iso = list(filter(lambda y: y.edges == ".", get_chroms))
-            print(f"Chromosome {arg} has {len(get_iso)} isolated nodes")
-
-            # number of connected nodes
-            get_con = list(filter(lambda z: z.edges != ".", get_chroms))
-            print(f"Chromosome {arg} has {len(get_con)} connected nodes")
-
-            # isolated node ratio
-            iso_ratio = len(get_iso) / len(get_con + get_iso)
-            print(f"Chromosome {arg} has isolation ratio = {round(iso_ratio, 5)}")
-
-            # connective node ratio
-            con_ratio = len(get_con) / len(get_con + get_iso)
-            print(f"Chromosome {arg} has connective ratio = {round(con_ratio, 5)}")
-
-            # outputting connective and isolated node ratios to global dict for plotting
-            def add_element_node_ratio_dict(dictionary, key, iso_value, con_value):
-                if key not in node_ratio_dict:
-                    node_ratio_dict[key] = []
-                dictionary[key].append(iso_value)
-                dictionary[key].append(con_value)
-
-            add_element_node_ratio_dict(node_ratio_dict, arg, iso_ratio, con_ratio)
-
-            # creating isolated node ratio dict for plotting
-            def add_element_node_ratio_dict_iso(dictionary, key, value):
-                if key not in node_ratio_iso_dict:
-                    node_ratio_iso_dict[key] = []
-                dictionary[key].append(value)
-
-            add_element_node_ratio_dict_iso(node_ratio_iso_dict, arg, iso_ratio)
-
-            # creating connected ratio dictionary for plotting
-            def add_element_node_ratio_dict_con(dictionary, key, value):
-                if key not in node_ratio_con_dict:
-                    node_ratio_con_dict[key] = []
-                dictionary[key].append(value)
-
-            add_element_node_ratio_dict_con(node_ratio_con_dict, arg, con_ratio)
-
-            # tests (because IDK how to unit testing yet)
-            if con_ratio + iso_ratio != 1:
-                print(f"ERROR: sum of con+iso ratios are not equal to 1. They are = {con_ratio + iso_ratio}")
-            if len(get_chroms) != len(get_iso) + len(get_con):
-                print(f"ERROR: len(get_chroms) = {len(get_chroms)} is not equal to len of isolated"
-                      f" + connected nodes {len(get_iso) + len(get_con)}")
-
-    empty_nodes_in_chrom(*args, nodes=nodes)
+# def get_nodes_from_chromosome(*args):
+#
+#     """
+#     creates lists containing empty and connected nodes from selected chromosomes, e.g: ("chr1", "chrX")
+#     and calculates some statistics on empty vs connected nodes for the selected chromosome(s)
+#     """
+#
+#     # empty and connected node lists
+#     for node in nodes.as_list():
+#         if node.edges == "." and node.chr in args:
+#             chromlist_isolated_nodes.append(node)
+#         elif node.edges != "." and node.chr in args:
+#             chromlist_connected_nodes.append(node)
+#
+#     # stats for all chromosomes combined (for comparing cell lines)
+#     total_nodes = len(chromlist_isolated_nodes) + len(chromlist_connected_nodes)
+#
+#     def sum_total_nodes(*args):
+#         for arg in args:
+#             # sum total nodes
+#             print(f"Sum of nodes in {arg} = {total_nodes}")
+#             # sum empty nodes
+#             print(f"Isolated nodes in {arg} = {len(chromlist_isolated_nodes)}")
+#             # sum connected nodes
+#             print(f"Connected nodes in {arg} = {len(chromlist_connected_nodes)}")
+#             # sum connected node ratio
+#             total_connectedness_ratio = len(chromlist_connected_nodes) / total_nodes
+#             print(f"Connectedness ratio in {arg} = {round(total_connectedness_ratio, 5)}")
+#             # sum isolated node ratio
+#             total_isolated_ratio = len(chromlist_isolated_nodes) / total_nodes
+#             print(f"Isolated ratio in {arg} = {round(total_isolated_ratio, 5)}")
+#
+#     sum_total_nodes()
+#
+#     # nodes per chromosome
+#     def get_nodes_in_chrom(*args, nodelist):
+#         nodes_in_total = []
+#         for arg in args:
+#             get_chrom = list(filter(lambda x: arg == str(x.chr), nodes))
+#             print(f"Chromosome {arg} has {len(get_chrom)} nodes in total")
+#             nodes_in_total.append(len(get_chrom))
+#         # Test (unit test this some day?)
+#         if sum(nodes_in_total) != total_nodes:
+#             print(
+#                 f"ERROR: len(nodes_in_total) = {sum(nodes_in_total)} and len(total_nodes) = {total_nodes} are different."
+#                 f" Maybe you duplicated chromosomes when calling the function?")
+#
+#     # get_nodes_in_chrom(*args, nodelist=nodes)
+#
+#     # Empty to connected ratio per chromosome
+#     def empty_nodes_in_chrom(*args, nodes):
+#         for arg in args:
+#             get_chroms = list(filter(lambda x: arg == str(x.chr), nodes.as_list()))
+#
+#             # number of isolated nodes
+#             get_iso = list(filter(lambda y: y.edges == ".", get_chroms))
+#             print(f"Chromosome {arg} has {len(get_iso)} isolated nodes")
+#
+#             # number of connected nodes
+#             get_con = list(filter(lambda z: z.edges != ".", get_chroms))
+#             print(f"Chromosome {arg} has {len(get_con)} connected nodes")
+#
+#             # isolated node ratio
+#             iso_ratio = len(get_iso) / len(get_con + get_iso)
+#             print(f"Chromosome {arg} has isolation ratio = {round(iso_ratio, 5)}")
+#
+#             # connective node ratio
+#             con_ratio = len(get_con) / len(get_con + get_iso)
+#             print(f"Chromosome {arg} has connective ratio = {round(con_ratio, 5)}")
+#
+#             # outputting connective and isolated node ratios to global dict for plotting
+#             def add_element_node_ratio_dict(dictionary, key, iso_value, con_value):
+#                 if key not in node_ratio_dict:
+#                     node_ratio_dict[key] = []
+#                 dictionary[key].append(iso_value)
+#                 dictionary[key].append(con_value)
+#
+#             add_element_node_ratio_dict(node_ratio_dict, arg, iso_ratio, con_ratio)
+#
+#             # creating isolated node ratio dict for plotting
+#             def add_element_node_ratio_dict_iso(dictionary, key, value):
+#                 if key not in node_ratio_iso_dict:
+#                     node_ratio_iso_dict[key] = []
+#                 dictionary[key].append(value)
+#
+#             add_element_node_ratio_dict_iso(node_ratio_iso_dict, arg, iso_ratio)
+#
+#             # creating connected ratio dictionary for plotting
+#             def add_element_node_ratio_dict_con(dictionary, key, value):
+#                 if key not in node_ratio_con_dict:
+#                     node_ratio_con_dict[key] = []
+#                 dictionary[key].append(value)
+#
+#             add_element_node_ratio_dict_con(node_ratio_con_dict, arg, con_ratio)
+#
+#             # tests (because IDK how to unit testing yet)
+#             if con_ratio + iso_ratio != 1:
+#                 print(f"ERROR: sum of con+iso ratios are not equal to 1. They are = {con_ratio + iso_ratio}")
+#             if len(get_chroms) != len(get_iso) + len(get_con):
+#                 print(f"ERROR: len(get_chroms) = {len(get_chroms)} is not equal to len of isolated"
+#                       f" + connected nodes {len(get_iso) + len(get_con)}")
+#
+#     empty_nodes_in_chrom(*args, nodes=nodes)
 
 
 # get_nodes_from_chromosome("chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7", "chr8", "chr9", "chr10", "chr11", "chr12",
