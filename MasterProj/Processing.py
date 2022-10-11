@@ -59,8 +59,11 @@ class Celline:
         return self
 
     def print_self(self):
-        print(f"Strain: {self.strain} with nodelist: {self.nodes}")
+        return print(f"Strain: {self.strain} with nodelist: {self.nodes}")
 
+    def group_by_celline(self):
+        for self.strain in self:
+            print(self.nodes)
 
 
 def process_file_to_node(*args):
@@ -101,10 +104,10 @@ def process_files_to_celline(files):
 
 cellines = process_directory_to_celline("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4cell_lines_Hi-C")
 
-# # Calling repr method
-# for celline in cellines:
-#     celline.print_self()
 
+# Calling repr method
+for celline in cellines:
+    celline.print_self()
 
 
 
