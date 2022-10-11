@@ -1,3 +1,5 @@
+""" Importing packages"""
+
 from dataclasses import dataclass, astuple, fields
 import matplotlib.pyplot as plt
 import numpy as np
@@ -28,6 +30,11 @@ class Node:
 
     def __iter__(self):
         return iter(astuple(self))
+
+    def print_class(self):
+        print("Node '" + self.id + "', chromosome '" + self.chr + "'")
+
+
 
 
 @dataclass
@@ -70,33 +77,20 @@ class Celline:
     def __iter__(self):
         return self
 
-    # we want to read in multiple cell lines and store them, differentiate them and run stats on them
-    # would be best if we can jus specify the folder location in a function below and the rest is automatic
+    def print_self(self):
+        print(f"Strain: {self.strain} with nodelist: {self.NodeList}")
+
+Celline.print_self(NodeList)
 
 
 """ Pre-processing data from gtrack to edgelist """
 
 
-# count = 0
-# directory = "/Users/GBS/Master/HiC-Data/Processed_Data/HiC_from_Jonas/FullGenome"
-# for filename in os.listdir(directory):
-#     if filename.endswith(".txt"):
-#         count += 1
-#         with open(directory + filename, "r") as read_file:
-#            return_of_your_function = do_something_with_data() # Putt pre-processinga over inn en funksjon som calles her
-#         with open(directory + count + filename, "w") as write_file:
-#             write_file.write(return_of_your_function)  !!! igjen bare caller funksjonen her !!!
-
-
-# for filename in os.listdir("files"):
-#    with open(os.path.join("files", filename), 'r') as f:
-#        text = f.read()
-#        print(text)
-
+# Selecting files to pre-process and instantiating Node class
 def process_file_to_node(*args):
     nodes = []
     for arg in args:
-        with open(arg) as file:
+        with open(arg, encoding="latin-1") as file:
             file_content: list[str] = file.readlines()
     for index, line in enumerate(file_content):
         if line.startswith("chr"):
@@ -110,37 +104,27 @@ def process_file_to_node(*args):
                     nodes.append(Node(columns[3], columns[6].split(";"), columns[0]))
     return NodeList(nodes)
 
-
 nodes = process_file_to_node("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy/IMR90_50kb.domain.RAW.no_cen.NCHG_fdr.o_by_e5_to_plot.gtrack")
 
+# Secelting directory containing files to process and instantiating Celline class
 def process_directory_to_celline(directory):
     paths = []
     for file in os.listdir(directory):
         paths.append(os.path.join(directory, file))
-    process_files_to_celline(paths)
+    return process_files_to_celline(paths)
 
 def process_files_to_celline(files):
     cellines = []
     for arg in files:
         with open(arg):
-            strain = arg.split("_")[0]
-            cellines.append(Celline(strain, process_file_to_node(arg)))
+            strain = arg.split("/")[7].split("_")[0]
+            if not strain.startswith("."):
+                cellines.append(Celline(strain, process_file_to_node(arg)))
     return cellines
 
-process_directory_to_celline("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4cell_lines_Hi-C")
+cellines = process_directory_to_celline("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4cell_lines_Hi-C")
 
-# def process_files_in_dir(*args):
-#
-#     for arg in args:
-#         for filename in os.listdir(arg):
-#             if filename.endswith(".gtrack"):
-#                 with open(os.path.join(arg, filename)) as file:
-#                     content = file.read()
-#                     if content.startswith("chr"):
-#                         contents = content.strip("\n").split("\t")
-#                         print(contents)
-#
-# process_files_in_dir("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy")
+
 
 
 """ Statistics on empty nodes and connectedness ratio (empty vs connected))"""
@@ -260,8 +244,8 @@ def get_nodes_from_chromosome(*args):
     empty_nodes_in_chrom(*args, nodes=nodes)
 
 
-get_nodes_from_chromosome("chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7", "chr8", "chr9", "chr10", "chr11", "chr12",
-                          "chr13", "chr14", "chr15", "chr16", "chr17", "chr18", "chr19", "chr20", "chr21", "chr22", "chrX")
+# get_nodes_from_chromosome("chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7", "chr8", "chr9", "chr10", "chr11", "chr12",
+#                           "chr13", "chr14", "chr15", "chr16", "chr17", "chr18", "chr19", "chr20", "chr21", "chr22", "chrX")
 
 """ Plotting node stats """
 
