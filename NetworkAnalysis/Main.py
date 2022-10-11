@@ -1,8 +1,9 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, astuple, fields
 import matplotlib.pyplot as plt
 import numpy as np
 import pybedtools as pb
 import os
+from os import path
 
 import pandas as pd
 from igraph import *
@@ -24,34 +25,20 @@ class Node:
     id: str
     edges: list[str]
     chr: str
-    # celline: str
-    # we want to read in multipel cell lines and store them, differentiate them and run stats on them
-    # would be best if we can jus specify the folder location in a function below and the rest is automatic
 
-    "Create class method that filters empty nodes: . to empty lists or something"
-    "So that we can work with different file formts in the future, not just .gtrack"
-    "Use filter(lambda), split, strip or someting to create empty lists instead?"
-    "Then we need to refactor the code so all logic checks for empty lists and not ."
-
-# We need to structue the dataclasses so that it represents the actual structure found in biology.
-# Celline (cell is one instance) is on top of the hierarchical structure, with attributes such as
-# strain and cancerouns, ID etc.
-# Within the celline class, we have the Node and Nodelist classes. We need to create all the methods in the
-# nodelist class, for comparing chromosomes, node overlap etc.
-
-@dataclass
-class Celline:
-    strain: str
-
-
-
+    def __iter__(self):
+        return iter(astuple(self))
 
 
 @dataclass
-class Nodelist:
-    id: str
-    edges: list[str]
-    chr: str
+class NodeList:
+    nodes: list
+
+    def __iter__(self):
+        return iter(astuple(self))
+
+    def as_list(self):
+        return self.nodes
 
     def group_cellines(self):
         pass
@@ -74,22 +61,21 @@ class Nodelist:
     def standardize_nodes(self):
         pass
 
-# Want to create a dataclass that has a list of all nodes (meaning list of ann Node instances)
-# Then we need to create class methods that allow for selection of the class instances,
-# so that we move from listing instances of the cless using Node as arg, and working with text,
-# toworking with instances of the dataclass. We can write methods to select speciic chromosomes,
-# reads of certain lengths, nodes with X% overlap, isolated nodes etc etc
 
+@dataclass
+class Celline:
+    strain: str
+    nodes: NodeList
 
-columns = []  # list of raw data as columns
-nodes = []  # list of all processed nodes and edges
-connected_nodes = []  # list of Node objects with edges
-isolated_nodes = []  # list of Node objects without edges
+    def __iter__(self):
+        return self
+
+    # we want to read in multiple cell lines and store them, differentiate them and run stats on them
+    # would be best if we can jus specify the folder location in a function below and the rest is automatic
+
 
 """ Pre-processing data from gtrack to edgelist """
-# def open_gtrack_file(file_path):
-# def open_gtrack_files(directory_path):
-# def open_file()
+
 
 # count = 0
 # directory = "/Users/GBS/Master/HiC-Data/Processed_Data/HiC_from_Jonas/FullGenome"
@@ -102,50 +88,60 @@ isolated_nodes = []  # list of Node objects without edges
 #             write_file.write(return_of_your_function)  !!! igjen bare caller funksjonen her !!!
 
 
-
 # for filename in os.listdir("files"):
 #    with open(os.path.join("files", filename), 'r') as f:
 #        text = f.read()
 #        print(text)
 
-
-def files_to_process (*args):
-    directory = "some place"
-    pass
-# files_to_process("/Users/GBS/Master/HiC-Data/Processed_Data/HiC_from_Jonas/FullGenome")
-
-def open_file(*args):
+def process_file_to_node(*args):
+    nodes = []
     for arg in args:
         with open(arg) as file:
             file_content: list[str] = file.readlines()
-            for index, line in enumerate(file_content):
-                if line.startswith("chr"):
-                    columns = line.strip("\n").split("\t")
-                    if len(columns) != 7:
-                        print(f"Bad line format: {columns} with index: {index}")
-                    else:
-                        if columns[6] == ".":
-                            nodes.append(Node(columns[3], columns[6], columns[0]))
-                        else:
-                            nodes.append(Node(columns[3], columns[6].split(";"), columns[0]))
+    for index, line in enumerate(file_content):
+        if line.startswith("chr"):
+            columns = line.strip("\n").split("\t")
+            if len(columns) != 7:
+                print(f"Bad line format: {columns} with index: {index}")
+            else:
+                if columns[6] == ".":
+                    nodes.append(Node(columns[3], columns[6], columns[0]))
+                else:
+                    nodes.append(Node(columns[3], columns[6].split(";"), columns[0]))
+    return NodeList(nodes)
 
-open_file("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy/IMR90_50kb.domain.RAW.no_cen.NCHG_fdr.o_by_e5_to_plot.gtrack")
 
+nodes = process_file_to_node("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy/IMR90_50kb.domain.RAW.no_cen.NCHG_fdr.o_by_e5_to_plot.gtrack")
 
-#     with open(
-#             "/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy/IMR90_50kb.domain.RAW.no_cen.NCHG_fdr"
-#             ".o_by_e5_to_plot.gtrack") as file:
-#         file_content: list[str] = file.readlines()
-#         for index, line in enumerate(file_content):
-#             # next(file_content) x2 to skip headers?
-#             columns = line.strip("\n").split("\t")
-#             if len(columns) != 7:
-#                 print(f"Bad line format: {columns} with index: {index}")
-#             else:
-#                 if columns[6] == ".":
-#                     nodes.append(Node(columns[3], columns[6], columns[0]))
-#                 else:
-#                     nodes.append(Node(columns[3], columns[6].split(";"), columns[0]))
+def process_directory_to_celline(directory):
+    paths = []
+    for file in os.listdir(directory):
+        paths.append(os.path.join(directory, file))
+    process_files_to_celline(paths)
+
+def process_files_to_celline(files):
+    cellines = []
+    for arg in files:
+        with open(arg):
+            strain = arg.split("_")[0]
+            cellines.append(Celline(strain, process_file_to_node(arg)))
+    return cellines
+
+process_directory_to_celline("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4cell_lines_Hi-C")
+
+# def process_files_in_dir(*args):
+#
+#     for arg in args:
+#         for filename in os.listdir(arg):
+#             if filename.endswith(".gtrack"):
+#                 with open(os.path.join(arg, filename)) as file:
+#                     content = file.read()
+#                     if content.startswith("chr"):
+#                         contents = content.strip("\n").split("\t")
+#                         print(contents)
+#
+# process_files_in_dir("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy")
+
 
 """ Statistics on empty nodes and connectedness ratio (empty vs connected))"""
 
@@ -156,19 +152,18 @@ chromlist_connected_nodes = []
 node_ratio_dict = {}
 node_ratio_iso_dict = {}
 node_ratio_con_dict = {}
-# All chromosomes for QoL when calling functions
-# put all chroms here if it works
-# all_chroms = "chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7", "chr8", "chr9", "chr10", "chr11", "chr12", "chr13", "chr14", "chr15", "chr16", "chr17", "chr18", "chr19", "chr20", "chr21", "chr22", "chrX"
 
 
-def get_nodes_from_chromosome(*args): #adde celline som arg siden? muliggjør selektering av cellelinjer.
+
+def get_nodes_from_chromosome(*args):
+
     """
     creates lists containing empty and connected nodes from selected chromosomes, e.g: ("chr1", "chrX")
     and calculates some statistics on empty vs connected nodes for the selected chromosome(s)
     """
 
     # empty and connected node lists
-    for node in nodes:
+    for node in nodes.as_list():
         if node.edges == "." and node.chr in args:
             chromlist_isolated_nodes.append(node)
         elif node.edges != "." and node.chr in args:
@@ -210,9 +205,9 @@ def get_nodes_from_chromosome(*args): #adde celline som arg siden? muliggjør se
     # get_nodes_in_chrom(*args, nodelist=nodes)
 
     # Empty to connected ratio per chromosome
-    def empty_nodes_in_chrom(*args, nodelist):
+    def empty_nodes_in_chrom(*args, nodes):
         for arg in args:
-            get_chroms = list(filter(lambda x: arg == str(x.chr), nodes))
+            get_chroms = list(filter(lambda x: arg == str(x.chr), nodes.as_list()))
 
             # number of isolated nodes
             get_iso = list(filter(lambda y: y.edges == ".", get_chroms))
@@ -262,14 +257,11 @@ def get_nodes_from_chromosome(*args): #adde celline som arg siden? muliggjør se
                 print(f"ERROR: len(get_chroms) = {len(get_chroms)} is not equal to len of isolated"
                       f" + connected nodes {len(get_iso) + len(get_con)}")
 
-    empty_nodes_in_chrom(*args, nodelist=nodes)
+    empty_nodes_in_chrom(*args, nodes=nodes)
 
 
 get_nodes_from_chromosome("chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7", "chr8", "chr9", "chr10", "chr11", "chr12",
                           "chr13", "chr14", "chr15", "chr16", "chr17", "chr18", "chr19", "chr20", "chr21", "chr22", "chrX")
-
-
-
 
 """ Plotting node stats """
 
@@ -370,10 +362,6 @@ get_nodes_from_chromosome("chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7"
 #     plt.show()
 
 
-
-
-
-
 """ Node read length statistics """
 
 # We need to create positional information from the reads in the nodes, so we can sort them e.g by length and
@@ -397,7 +385,6 @@ get_nodes_from_chromosome("chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7"
 # OR
 # We can output the mapping of the nodes (start and end to find length) for each isntance to a dict or something,
 # and then use this for further coverage calculations.
-
 
 
 """ Writing pre-processed output to new files """
@@ -486,5 +473,3 @@ get_nodes_from_chromosome("chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7"
 
 # After we standardize nodes, we can run community detection (e.g fast greedy first), then look at
 # clustering, degree distritution, betweeness centrality and other network metrics.
-
-
