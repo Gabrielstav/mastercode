@@ -31,12 +31,6 @@ class Node:
     def __iter__(self):
         return iter(astuple(self))
 
-    def print_class(self):
-        print("Node '" + self.id + "', chromosome '" + self.chr + "'")
-
-
-
-
 @dataclass
 class NodeList:
     nodes: list
@@ -44,29 +38,34 @@ class NodeList:
     def __iter__(self):
         return iter(astuple(self))
 
-    def as_list(self):
-        return self.nodes
+    def print_class(self):
+        print(f"Nodes: {self.nodes}")
 
-    def group_cellines(self):
-        pass
 
-    def group_chromosomes(self):
-        pass
 
-    def group_connected_nodes(self):
-        pass
-
-    def group_isolated_nodes(self):
-        pass
-
-    def isolated_degree(self):
-        pass
-
-    def node_overlap(self):
-        pass
-
-    def standardize_nodes(self):
-        pass
+    # def as_list(self):
+    #     return self.nodes
+    #
+    # def group_cellines(self):
+    #     pass
+    #
+    # def group_chromosomes(self):
+    #     pass
+    #
+    # def group_connected_nodes(self):
+    #     pass
+    #
+    # def group_isolated_nodes(self):
+    #     pass
+    #
+    # def isolated_degree(self):
+    #     pass
+    #
+    # def node_overlap(self):
+    #     pass
+    #
+    # def standardize_nodes(self):
+    #     pass
 
 
 @dataclass
@@ -78,9 +77,10 @@ class Celline:
         return self
 
     def print_self(self):
-        print(f"Strain: {self.strain} with nodelist: {self.NodeList}")
+        print(f"Strain: {self.strain} with nodelist: {self.nodes}")
 
-Celline.print_self(NodeList)
+
+
 
 
 """ Pre-processing data from gtrack to edgelist """
@@ -125,6 +125,8 @@ def process_files_to_celline(files):
 cellines = process_directory_to_celline("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4cell_lines_Hi-C")
 
 
+for celline in cellines:
+    celline.print_self()
 
 
 """ Statistics on empty nodes and connectedness ratio (empty vs connected))"""
