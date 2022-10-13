@@ -1,7 +1,6 @@
 from dataclasses import dataclass, astuple
 import os
 
-
 """ Creating classes """
 
 
@@ -14,6 +13,7 @@ class Node:
     def __iter__(self):
         return iter(astuple(self))
 
+
 @dataclass
 class NodeList:
     nodes: list
@@ -23,7 +23,6 @@ class NodeList:
 
     def print_class(self):
         print(f"Nodes: {self.nodes}")
-
 
     def as_list(self):
         return self.nodes
@@ -55,15 +54,10 @@ class Celline:
     strain: str
     nodes: NodeList
 
-    def __iter__(self):
-        return self
-
-    def print_self(self):
-        return print(f"Strain: {self.strain} with nodelist: {self.nodes}")
-
-    def group_by_celline(self):
-        for self.strain in self:
-            print(self.nodes)
+    @classmethod
+    def print_cellines(cls, strain):
+        for celline in strain:
+            return print(f"Strain: {celline.strain} with nodelist: {celline.nodes}")
 
 
 def process_file_to_node(*args):
@@ -83,35 +77,39 @@ def process_file_to_node(*args):
                     nodes.append(Node(columns[3], columns[6].split(";"), columns[0]))
     return NodeList(nodes)
 
+
 nodes = process_file_to_node("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy/IMR90_50kb.domain.RAW.no_cen.NCHG_fdr.o_by_e5_to_plot.gtrack")
 
-
-# Secelting directory containing files to process and instantiating Celline class
+# Seelcting directory containing files to process and instantiating Celline class
 def process_directory_to_celline(directory):
     paths = []
     for file in os.listdir(directory):
         paths.append(os.path.join(directory, file))
     return process_files_to_celline(paths)
-
 def process_files_to_celline(files):
     cellines = []
     for arg in files:
         with open(arg):
             strain = arg.split("/")[7].split("_")[0]
             if not strain.startswith("."):
-                cellines.append(Celline(strain, process_file_to_node(arg)))
+                cellines.append(Celline(str(strain), process_file_to_node(arg)))
     return cellines
-
-cellines = process_directory_to_celline("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4cell_lines_Hi-C")
-
-for celline in cellines:
-    celline.print_self()
-
-# Lag class method for cellines
-#
+cellines = process_directory_to_celline("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/folder_test")
 
 
+Celline.print_cellines(cellines)
+Celline.print_strains(cellines)
 
+# Print cell lines with corresponding nodelist
+# def print_cellines():
+#     for celline in cellines:
+#         return celline.print_self()
+# print_cellines()
+
+
+
+# for celline in cellines:
+#     celline.group_by_celline(cls, cellines)
 
 """ Writing pre-processed output to new files """
 
