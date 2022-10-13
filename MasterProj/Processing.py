@@ -104,10 +104,11 @@ def process_files_to_celline(files):
 
 cellines = process_directory_to_celline("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4cell_lines_Hi-C")
 
-
-# Calling repr method
 for celline in cellines:
     celline.print_self()
+
+# Lag class method for cellines
+#
 
 
 

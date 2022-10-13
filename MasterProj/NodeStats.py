@@ -126,7 +126,7 @@ get_nodes_from_chromosome("chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7"
 # We need to create positional information from the reads in the nodes, so we can sort them e.g by length and
 # plot them from start to finish or something? Later we want to integrate RNAseq data so we can overlay this on the nodes?
 
-# Use pybadtools or do it organically in python, think we should avoid hte command line if we can.
+# Use pybedtools or do it organically in python, think we should avoid hte command line if we can.
 
 # Can we just write a function in python that takes each connected node as input from the data class. The nodes are already ordered from start to end of chromosome/genome.
 # Then we calculate the length of the first node for the 4 different cell lines.
