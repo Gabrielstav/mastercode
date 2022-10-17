@@ -66,12 +66,15 @@ class Celline:
         return Celline(self.strain, iso_nodes)
 
     @classmethod
-    def only_iso_cellines(cls, celline_list):
-        iso_cellines = {}
+    def by_strain(cls, celline_list):
+        cellines_by_strain = {}
         for celline in celline_list:
-            iso_celline = celline.only_iso_nodes()
-            iso_cellines[iso_celline.strain] = iso_celline
-        return iso_cellines
+            cellines_by_strain[celline.strain, celline]
+        return cellines_by_strain
+
+    @classmethod
+    def only_iso_cellines(cls, celline_list):
+        return list(map(lambda c: c.only_iso_nodes(), celline_list))
 
     """    def group_chromosomes(self):
             pass
@@ -95,31 +98,30 @@ class Celline:
     @classmethod
     def print_cellines(cls, celline_list):
         newline = "\n"
-        for celline in celline_list.values():
+        for celline in celline_list:
             print(f"Strain: {celline.strain} with Nodelist: {celline.nodes} {newline}")
 
     # Instantiating Celline class
     # and pre-processing gtrack files in directory
     @classmethod
-    def process_directory_to_celline(cls, directory):
+    def from_dir(cls, directory):
         paths = []
         for file in os.listdir(directory):
             paths.append(os.path.join(directory, file))
-        return Celline.process_files_to_celline(paths)
+        return Celline.from_files(paths)
 
     @classmethod
-    def process_files_to_celline(cls, files):
-        cellines_dict = {}
+    def from_files(cls, files):
+        celline_list = []
         for arg in files:
             with open(arg):
                 strain = arg.split("/")[7].split("_")[0]
                 if not strain.startswith("."):
-                    celline = Celline(str(strain), Node.process_file_to_node(arg))
-                    cellines_dict[celline.strain] = celline
-        return cellines_dict
+                    celline_list.append(Celline(str(strain), Node.process_file_to_node(arg)))
+        return celline_list
 
-cellines = Celline.process_directory_to_celline("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/folder_test")
-iso_cellines = Celline.only_iso_cellines(cellines.values())
+cellines = Celline.from_dir("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/folder_test")
+iso_cellines = Celline.only_iso_cellines(cellines)
 Celline.print_cellines(iso_cellines)
 
 
