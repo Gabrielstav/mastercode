@@ -13,51 +13,64 @@ class Node:
     def __iter__(self):
         return iter(astuple(self))
 
+    def is_isolated(self):
+        return self.edges == "."
 
-@dataclass
-class NodeList:
+    def is_connecte(self):
+        return self.edges != "."
+
+
+# @dataclass
+# class NodeList:
+#     nodes: list
+#
+#     def nodes(self):
+#         return self.nodes
+#
+#     def as_list(self):
+#         return self.nodes
+#
+#     def only_iso_nodes(self):
+#         return NodeList(list(filter(lambda node: node.is_empty(), self.nodes)))
+
+
+# (frozen=True, eq=True)
+@dataclass(frozen=True, eq=True)
+class Celline:
+    strain: str
     nodes: list
 
-    def __iter__(self):
-        return iter(astuple(self))
-
-    def print_class(self):
-        print(f"Nodes: {self.nodes}")
+    def nodes(self):
+        return self.nodes
 
     def as_list(self):
         return self.nodes
 
-    def group_cellines(self):
-        pass
+    def only_iso_nodes(self):
+        return Celline(list(filter(lambda node: node.is_isolated(), self.nodes)))
 
-    def group_chromosomes(self):
-        pass
-
-    def group_connected_nodes(self):
-        pass
-
-    def group_isolated_nodes(self):
-        pass
-
-    def isolated_degree(self):
-        pass
-
-    def node_overlap(self):
-        pass
-
-    def standardize_nodes(self):
-        pass
+    def only_con_nodes(self):
+        return Celline(list(filter(lambda node: node.is_connected(), self.nodes)))
 
 
-@dataclass
-class Celline:
-    strain: str
-    nodes: NodeList
+    def to_string(self):
+        return f"{self.nodes.__sizeof__()} nodes"
 
     @classmethod
-    def print_cellines(cls, strain):
-        for celline in strain:
-            return print(f"Strain: {celline.strain} with nodelist: {celline.nodes}")
+    def print_cellines(cls, celline_list):
+        newline = "\n"
+        for celline in celline_list.values():
+            print(f"Strain: {celline.strain} with nodelist: {celline.nodes} {newline}")
+
+    @classmethod
+    def print_cellines(cls, celline_list):
+        for celline in celline_list.values():
+            print(celline.nodes.only_iso_nodes().to_string())
+
+    def to_string(self):
+        return f"celline '" + self.strain + " with " + nodes.to_string()
+
+
 
 
 def process_file_to_node(*args):
@@ -75,10 +88,11 @@ def process_file_to_node(*args):
                     nodes.append(Node(columns[3], columns[6], columns[0]))
                 else:
                     nodes.append(Node(columns[3], columns[6].split(";"), columns[0]))
-    return NodeList(nodes)
+    return Celline(nodes)
 
 
 nodes = process_file_to_node("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy/IMR90_50kb.domain.RAW.no_cen.NCHG_fdr.o_by_e5_to_plot.gtrack")
+
 
 # Seelcting directory containing files to process and instantiating Celline class
 def process_directory_to_celline(directory):
@@ -86,30 +100,52 @@ def process_directory_to_celline(directory):
     for file in os.listdir(directory):
         paths.append(os.path.join(directory, file))
     return process_files_to_celline(paths)
+
+
 def process_files_to_celline(files):
-    cellines = []
+    cellines = {}
     for arg in files:
         with open(arg):
             strain = arg.split("/")[7].split("_")[0]
             if not strain.startswith("."):
-                cellines.append(Celline(str(strain), process_file_to_node(arg)))
+                celline = Celline(str(strain), process_file_to_node(arg))
+                cellines[celline.strain] = celline
     return cellines
+
+
 cellines = process_directory_to_celline("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/folder_test")
 
-
 Celline.print_cellines(cellines)
-Celline.print_strains(cellines)
-
-# Print cell lines with corresponding nodelist
-# def print_cellines():
-#     for celline in cellines:
-#         return celline.print_self()
-# print_cellines()
 
 
 
-# for celline in cellines:
-#     celline.group_by_celline(cls, cellines)
+
+
+
+
+
+"""    def group_chromosomes(self):
+        pass
+
+    def group_connected_nodes(self):
+        pass
+
+    def group_isolated_nodes(self):
+        pass
+
+    def isolated_degree(self):
+        pass
+
+    def node_overlap(self):
+        pass
+
+    def standardize_nodes(self):
+        pass
+"""
+
+
+
+
 
 """ Writing pre-processed output to new files """
 
