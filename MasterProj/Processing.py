@@ -1,11 +1,6 @@
 from dataclasses import dataclass, astuple
 import os
 
-""" 
-Creating classes 
-"""
-
-
 @dataclass(frozen=True, eq=True)
 class Node:
     id: str
@@ -29,20 +24,25 @@ class Node:
         for edge in self.edges:
             return edge.as_list()
 
-
-# @dataclass
-# class NodeList:
-#     nodes: list
-#
-#     def nodes(self):
-#         return self.nodes
-#
-#     def as_list(self):
-#         return self.nodes
-#
-#     def only_iso_nodes(self):
-#         return NodeList(list(filter(lambda node: node.is_empty(), self.nodes)))
-
+    # Instantiating Node class
+    # and pre-processing the gtrack data
+    @classmethod
+    def process_file_to_node(cls, *args):
+        nodes = []
+        for arg in args:
+            with open(arg, encoding="latin-1") as file:
+                file_content: list[str] = file.readlines()
+        for index, line in enumerate(file_content):
+            if line.startswith("chr"):
+                columns = line.strip("\n").split("\t")
+                if len(columns) != 7:
+                    print(f"Bad line format: {columns} with index: {index}")
+                else:
+                    if columns[6] == ".":
+                        nodes.append(Node(columns[3], columns[6], columns[0]))
+                    else:
+                        nodes.append(Node(columns[3], columns[6].split(";"), columns[0]))
+        return nodes
 
 @dataclass(frozen=True, eq=True)
 class Celline:
@@ -73,10 +73,24 @@ class Celline:
             iso_cellines[iso_celline.strain] = iso_celline
         return iso_cellines
 
-    #
-    # def only_con_nodes(self):
-    #     return Celline(list(filter(lambda node: node.is_connected(), self.nodes)))
+    """    def group_chromosomes(self):
+            pass
 
+        def group_connected_nodes(self):
+            pass
+
+        def group_isolated_nodes(self):
+            pass
+
+        def isolated_degree(self):
+            pass
+
+        def node_overlap(self):
+            pass
+
+        def standardize_nodes(self):
+            pass
+    """
 
     @classmethod
     def print_cellines(cls, celline_list):
@@ -84,86 +98,29 @@ class Celline:
         for celline in celline_list.values():
             print(f"Strain: {celline.strain} with Nodelist: {celline.nodes} {newline}")
 
+    # Instantiating Celline class
+    # and pre-processing gtrack files in directory
+    @classmethod
+    def process_directory_to_celline(cls, directory):
+        paths = []
+        for file in os.listdir(directory):
+            paths.append(os.path.join(directory, file))
+        return Celline.process_files_to_celline(paths)
 
+    @classmethod
+    def process_files_to_celline(cls, files):
+        cellines_dict = {}
+        for arg in files:
+            with open(arg):
+                strain = arg.split("/")[7].split("_")[0]
+                if not strain.startswith("."):
+                    celline = Celline(str(strain), Node.process_file_to_node(arg))
+                    cellines_dict[celline.strain] = celline
+        return cellines_dict
 
-
-# Instantiating Node class
-# and pre-processing the gtrack data
-def process_file_to_node(*args):
-    nodes = []
-    for arg in args:
-        with open(arg, encoding="latin-1") as file:
-            file_content: list[str] = file.readlines()
-    for index, line in enumerate(file_content):
-        if line.startswith("chr"):
-            columns = line.strip("\n").split("\t")
-            if len(columns) != 7:
-                print(f"Bad line format: {columns} with index: {index}")
-            else:
-                if columns[6] == ".":
-                    nodes.append(Node(columns[3], columns[6], columns[0]))
-                else:
-                    nodes.append(Node(columns[3], columns[6].split(";"), columns[0]))
-    return nodes
-
-
-# nodes = process_file_to_node("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy/IMR90_50kb.domain.RAW.no_cen.NCHG_fdr.o_by_e5_to_plot.gtrack")
-
-# Instantiating Celline class
-# and pre-processing gtrack files in directory
-def process_directory_to_celline(directory):
-    paths = []
-    for file in os.listdir(directory):
-        paths.append(os.path.join(directory, file))
-    return process_files_to_celline(paths)
-
-
-def process_files_to_celline(files):
-    cellines_dict = {}
-    for arg in files:
-        with open(arg):
-            strain = arg.split("/")[7].split("_")[0]
-            if not strain.startswith("."):
-                celline = Celline(str(strain), process_file_to_node(arg))
-                cellines_dict[celline.strain] = celline
-    return cellines_dict
-
-
-cellines = process_directory_to_celline("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/folder_test")
-
-
-# Celline.print_cellines(cellines)
-
+cellines = Celline.process_directory_to_celline("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/folder_test")
 iso_cellines = Celline.only_iso_cellines(cellines.values())
 Celline.print_cellines(iso_cellines)
-
-
-
-
-
-
-
-"""    def group_chromosomes(self):
-        pass
-
-    def group_connected_nodes(self):
-        pass
-
-    def group_isolated_nodes(self):
-        pass
-
-    def isolated_degree(self):
-        pass
-
-    def node_overlap(self):
-        pass
-
-    def standardize_nodes(self):
-        pass
-"""
-
-
-
 
 
 """ 
