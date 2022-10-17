@@ -1,5 +1,7 @@
 
-""" Plotting node stats """
+"""
+Plotting node stats
+"""
 
 # Dictionaries created in the node stats function (remove once plotting is complete)
 
@@ -98,7 +100,9 @@
 #     plt.show()
 
 
-""" Node read length statistics """
+""" 
+Node read length statistics 
+"""
 
 # We need to create positional information from the reads in the nodes, so we can sort them e.g by length and
 # plot them from start to finish or something? Later we want to integrate RNAseq data so we can overlay this on the nodes?
@@ -123,7 +127,9 @@
 # and then use this for further coverage calculations.
 
 
-""" Network analysis """
+""" 
+Network analysis 
+"""
 
 # Check if we can create graph objects directly without having to create an edgelist format file each time and
 # import it from a different directory.

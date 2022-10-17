@@ -1,5 +1,8 @@
 
-""" Statistics on empty nodes and connectedness ratio (empty vs connected))"""
+"""
+Statistics on empty nodes and connectedness ratio (empty vs connected))
+"""
+
 from Processing import nodes
 
 # Lists for isolated and connected nodes across all chromosomes called in the get_nodes_from_chromosomes function
@@ -121,7 +124,9 @@ get_nodes_from_chromosome("chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7"
                           "chr13", "chr14", "chr15", "chr16", "chr17", "chr18", "chr19", "chr20", "chr21", "chr22", "chrX")
 
 
-""" Node read length statistics """
+""" 
+Node read length statistics 
+"""
 
 # We need to create positional information from the reads in the nodes, so we can sort them e.g by length and
 # plot them from start to finish or something? Later we want to integrate RNAseq data so we can overlay this on the nodes?
