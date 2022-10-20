@@ -9,9 +9,6 @@ class Node:
     edges: list[str]
     chr: str
 
-    def __iter__(self):
-        return iter(astuple(self))
-
     def as_list(self):
         for edge in self.edges:
             return edge.as_list()
@@ -33,9 +30,8 @@ class Node:
         for edge in self.edges:
             return edge.as_list()
 
-    def select_chromosome(self):
-        for chrom in self.chr:
-            return chrom
+    def get_chromosome(self):
+        return self.chrom
 
     # Instantiating Node class
     # and pre-processing the gtrack data
@@ -57,16 +53,11 @@ class Node:
                         nodelist.append(Node(columns[3], columns[6].split(";"), columns[0]))
         return nodelist
 
-
     @classmethod
     def print_all_nodes(cls, nodelist):
         newline = "\n"
         for node in nodelist:
             print(f"Node: {node.id} with edges: {node.edges} on chromosome: {node.chr} {newline}")
-
-# iso_cellines = Celline.only_iso_cellines(cellines)  # assigning iso-cellines
-# Celline.print_cellines(iso_cellines)  # class method for print
-
 
 
 @dataclass(frozen=True, eq=True)
@@ -94,17 +85,11 @@ class Celline:
         con_nodes = list(filter(lambda n: n.is_connected(), self.nodes))
         return Celline(self.strain, con_nodes)
 
-
-
-
-    # def isolated_degree(self):
-    #     pass
-
     @classmethod
     def by_strain(cls, celline_list):
         cellines_by_strain = {}
-        for celline in celline_list:
-            cellines_by_strain[celline.strain, celline]
+        for cline in celline_list:
+            cellines_by_strain[cline.strain, cline]
         return cellines_by_strain
 
     @classmethod
@@ -114,8 +99,8 @@ class Celline:
     @classmethod
     def print_cellines(cls, celline_list):
         newline = "\n"
-        for celline in celline_list:
-            print(f"Strain: {celline.strain} with Nodelist: {celline.nodes} {newline}")
+        for cline in celline_list:
+            print(f"Strain: {cline.strain} with Nodelist: {cline.nodes} {newline}")
 
     # Instantiating Celline class
     # and pre-processing gtrack files in directory
@@ -136,72 +121,71 @@ class Celline:
                     celline_list.append(Celline(str(strain), Node.process_file_to_node(arg)))
         return celline_list
 
-cellines = Celline.from_dir("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy")
 
+celline = Celline.from_dir("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy")
 
-# iso_cellines = Celline.only_iso_cellines(cellines)  # assigning iso-cellines
-# Celline.print_cellines(iso_cellines)  # class method for print
+# Calling class method
+# Celline.only_iso_cellines(cellines)
+# Celline.print_cellines(celline)
 
+# Calling instance method (need to loop)
 # for celline in cellines:
-#     isocell = celline.only_iso_nodes()
-#
-# print(isocell)
-
-
-
-
-
-
-# du må vel kalle dette på en bestemt celline-instans, eller på hver i lista.
-
-
+#     celline.celline_string()
 
 
 @dataclass(frozen=True, eq=True)
 class Cellines:
-    strains: [str]
+    cellines: list[Celline]
 
     @classmethod
-    def instantiate(cls):
-        cellines_list = [Cellines(Celline)]
+    def instantiate(cls, *args):
+        cellines_list = []
+        for arg in args:
+            cellines_list.append(Cellines(str(Celline.from_dir(arg))))
+        return cellines_list
 
-    # @classmethod
-    # def print_cellines(cls):
-    #     for celline in cellines_list:
-    #     pass
+    @classmethod
+    def print_cellines(cls, cellines_list):
+        newline = "\n"
+        for cline in cellines_list:
+            print(f"Cellines: {cline.cellines} {newline}")
+
+all_cellines = Cellines() # How to make list of all instances of the Cellines class? 
+Cellines.print_cellines(all_cellines)
+
+# Find overlap between cellines
+def node_size(self):
+    pass
+
+def sort_nodes_by_size(self):
+    pass
+
+def node_overlap(self):
+    pass
+
+def standardize_nodes(self):
+    pass
+
+# Eller sånn
+
+def segment_node(self):
+    # Divide the node length in bp into segments
+    # Do I need to do this for the whole genome or only the node?
+    # Then find where the nodes are
+    pass
+
+def node_size(self):
+    pass
+
+def node_overlap(self):
+    pass
+
+# Eller dette
+
+def find_overlap_by_pybedtools(self):
+    pass
 
 
-    # Find overlap between cellines
-    def node_size(self):
-        pass
-
-    def sort_nodes_by_size(self):
-        pass
-
-    def node_overlap(self):
-        pass
-
-    def standardize_nodes(self):
-        pass
-
-    # Eller sånn
-
-    def segment_node(self):
-        # Divide the node length in bp into segments
-        # Do I need to do this for the whole genome or only the node?
-        # Then find where the nodes are
-        pass
-
-    def node_size(self):
-        pass
-
-    def node_overlap(self):
-        pass
-
-    # Eller dette
-
-    def find_overlap_by_pybedtools(self):
-        pass
 
 
 """ 

@@ -1,4 +1,5 @@
 from Processing import Node
+from Processing import Celline
 
 # Lists for isolated and connected nodes across all chromosomes called in the get_nodes_from_chromosomes function
 chromlist_isolated_nodes = []
@@ -18,8 +19,8 @@ def get_nodes_from_chromosome(*args):
     """
 
     # empty and connected node lists
-    for node in nodes.as_list():
-        if node.edges == "." and node.chr in args:
+    for node in Node.nodelist.as_list():
+        if nodelist.edges == "." and nodelist.chr in args:
             chromlist_isolated_nodes.append(node)
         elif node.edges != "." and node.chr in args:
             chromlist_connected_nodes.append(node)
