@@ -1,9 +1,4 @@
-
-"""
-Statistics on empty nodes and connectedness ratio (empty vs connected))
-"""
-
-from Processing import nodes
+from Processing import Node
 
 # Lists for isolated and connected nodes across all chromosomes called in the get_nodes_from_chromosomes function
 chromlist_isolated_nodes = []

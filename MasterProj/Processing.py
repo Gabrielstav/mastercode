@@ -1,5 +1,7 @@
 from dataclasses import dataclass, astuple
+import pybedtools as pbt
 import os
+
 
 @dataclass(frozen=True, eq=True)
 class Node:
@@ -10,25 +12,36 @@ class Node:
     def __iter__(self):
         return iter(astuple(self))
 
-    def is_isolated(self):
-        return self.edges == "."
-
-    def is_connected(self):
-        return self.edges != "."
-
     def as_list(self):
         for edge in self.edges:
             return edge.as_list()
+
+    def all_nodes(self):
+        return self.id + self.edges + self.chr
+
+    def is_isolated(self):
+        return self.edges == "."
 
     def iso_list(self):
         for edge in self.edges:
             return edge.as_list()
 
+    def is_connected(self):
+        return self.edges != "."
+
+    def con_list(self):
+        for edge in self.edges:
+            return edge.as_list()
+
+    def select_chromosome(self):
+        for chrom in self.chr:
+            return chrom
+
     # Instantiating Node class
     # and pre-processing the gtrack data
     @classmethod
     def process_file_to_node(cls, *args):
-        nodes = []
+        nodelist = []
         for arg in args:
             with open(arg, encoding="latin-1") as file:
                 file_content: list[str] = file.readlines()
@@ -39,10 +52,22 @@ class Node:
                     print(f"Bad line format: {columns} with index: {index}")
                 else:
                     if columns[6] == ".":
-                        nodes.append(Node(columns[3], columns[6], columns[0]))
+                        nodelist.append(Node(columns[3], columns[6], columns[0]))
                     else:
-                        nodes.append(Node(columns[3], columns[6].split(";"), columns[0]))
-        return nodes
+                        nodelist.append(Node(columns[3], columns[6].split(";"), columns[0]))
+        return nodelist
+
+
+    @classmethod
+    def print_all_nodes(cls, nodelist):
+        newline = "\n"
+        for node in nodelist:
+            print(f"Node: {node.id} with edges: {node.edges} on chromosome: {node.chr} {newline}")
+
+# iso_cellines = Celline.only_iso_cellines(cellines)  # assigning iso-cellines
+# Celline.print_cellines(iso_cellines)  # class method for print
+
+
 
 @dataclass(frozen=True, eq=True)
 class Celline:
@@ -65,6 +90,16 @@ class Celline:
         iso_nodes = list(filter(lambda n: n.is_isolated(), self.nodes))
         return Celline(self.strain, iso_nodes)
 
+    def only_con_nodes(self):
+        con_nodes = list(filter(lambda n: n.is_connected(), self.nodes))
+        return Celline(self.strain, con_nodes)
+
+
+
+
+    # def isolated_degree(self):
+    #     pass
+
     @classmethod
     def by_strain(cls, celline_list):
         cellines_by_strain = {}
@@ -75,25 +110,6 @@ class Celline:
     @classmethod
     def only_iso_cellines(cls, celline_list):
         return list(map(lambda c: c.only_iso_nodes(), celline_list))
-
-    """    def group_chromosomes(self):
-            pass
-
-        def group_connected_nodes(self):
-            pass
-
-        def group_isolated_nodes(self):
-            pass
-
-        def isolated_degree(self):
-            pass
-
-        def node_overlap(self):
-            pass
-
-        def standardize_nodes(self):
-            pass
-    """
 
     @classmethod
     def print_cellines(cls, celline_list):
@@ -120,9 +136,72 @@ class Celline:
                     celline_list.append(Celline(str(strain), Node.process_file_to_node(arg)))
         return celline_list
 
-cellines = Celline.from_dir("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/folder_test")
-iso_cellines = Celline.only_iso_cellines(cellines)
-Celline.print_cellines(iso_cellines)
+cellines = Celline.from_dir("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy")
+
+
+# iso_cellines = Celline.only_iso_cellines(cellines)  # assigning iso-cellines
+# Celline.print_cellines(iso_cellines)  # class method for print
+
+# for celline in cellines:
+#     isocell = celline.only_iso_nodes()
+#
+# print(isocell)
+
+
+
+
+
+
+# du må vel kalle dette på en bestemt celline-instans, eller på hver i lista.
+
+
+
+
+@dataclass(frozen=True, eq=True)
+class Cellines:
+    strains: [str]
+
+    @classmethod
+    def instantiate(cls):
+        cellines_list = [Cellines(Celline)]
+
+    # @classmethod
+    # def print_cellines(cls):
+    #     for celline in cellines_list:
+    #     pass
+
+
+    # Find overlap between cellines
+    def node_size(self):
+        pass
+
+    def sort_nodes_by_size(self):
+        pass
+
+    def node_overlap(self):
+        pass
+
+    def standardize_nodes(self):
+        pass
+
+    # Eller sånn
+
+    def segment_node(self):
+        # Divide the node length in bp into segments
+        # Do I need to do this for the whole genome or only the node?
+        # Then find where the nodes are
+        pass
+
+    def node_size(self):
+        pass
+
+    def node_overlap(self):
+        pass
+
+    # Eller dette
+
+    def find_overlap_by_pybedtools(self):
+        pass
 
 
 """ 
