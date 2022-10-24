@@ -29,8 +29,8 @@ class Node:
         for edge in self.edges:
             return edge.as_list()
 
-    # def get_chromosome(self):
-    #     return self.chrom
+    def get_chromosome(self):
+        return self.chr
 
     # Instantiating Node class
     # and pre-processing the gtrack data
@@ -56,14 +56,13 @@ class Node:
     @classmethod
     def print_all_nodes(cls, nodelist):
         newline = "\n"
-        for node in nodelist:
-            print(f"Node: {node.id} with edges: {node.edges} on chromosome: {node.chr} {newline}")
-
+        for nodes in nodelist:
+            print(f"Node: {nodes.id} with edges: {nodes.edges} on chromosome: {nodes.chr} {newline}")
 
 @dataclass(frozen=True, eq=True)
 class Celline:
     strain: str
-    nodes: list
+    nodes: list[Node]
 
     def nodes(self):
         return self.nodes
@@ -87,17 +86,14 @@ class Celline:
 
     def group_by_chromosome(self, *args):
         for arg in args:
-            selected_chromosomes = list(filter(lambda n: n.chromosome() == arg, self.nodes))
+            selected_chromosomes = list(filter(lambda n: arg == n.get_chromosome(), self.nodes))
             return Celline(self.strain, selected_chromosomes)
-
-
 
 @dataclass(frozen=True, eq=True)
 class Cellines:
     cellines: list[Celline]
 
     # Instantiating Cellines class
-
     @classmethod
     def instantiate(cls, *args):
         cellines_list = []
@@ -107,7 +103,6 @@ class Cellines:
 
     # Instantiating Celline class
     # and pre-processing gtrack files in directory
-
     @classmethod
     def from_dir(cls, directory):
         paths = []
@@ -126,17 +121,33 @@ class Cellines:
         return celline_list
 
     @classmethod
-    def print_cellines(cls, cellines_list):
+    def print_celline(cls, celline_list):
         newline = "\n"
-        for cline in cellines_list:
-            print(f"Cellines: {cline.cellines} {newline}")
+        for cline in celline_list:
+            print(f"Strain: {cline.strain} with Nodelist: {cline.nodes} {newline}")
+
+    # @classmethod
+    # def print_cellines(cls, cellines_list):
+    #     newline = "\n"
+    #     for cline in cellines_list:
+    #         print(f"Cellines: {cline.cellines} {newline}")
 
     @classmethod
-    def by_strain(cls, celline_list):
+    def by_strain_dictionary(cls, celline_list):
         cellines_by_strain = {}
         for cline in celline_list:
-            cellines_by_strain[cline.strain, cline]
-        return cellines_by_strain
+            strain_dict = cellines_by_strain[cline.strain, cline]
+        return strain_dict
+
+    @classmethod
+    def with_strain(cls, *args, celline_list):
+        cellines_with_strain = []
+        for arg in args:
+            for cline in celline_list:
+                if arg == cline.strain:
+                    cellines_with_strain.append(cline)
+        return cellines_with_strain
+
 
     @classmethod
     def only_iso_cellines(cls, celline_list):
@@ -147,26 +158,27 @@ class Cellines:
         return list(map(lambda c: c.only_con_nodes(), celline_list))
 
     @classmethod
-    def print_cellines(cls, celline_list):
-        newline = "\n"
-        for cline in celline_list:
-            print(f"Strain: {cline.strain} with Nodelist: {cline.nodes} {newline}")
+    def with_chromosome(cls, celline_list):
+        return list(map(lambda c: c.group_by_chromosome(), celline_list))
 
-    @classmethod
-    def group_chromosomes(cls, celline_list):
-        for cline in celline_list:
-            selected_chromosomes = list(map(lambda c: c.group_by_chromosome, celline_list))
-            return Cellines(selected_chromosomes)
 
 all_cellines = Cellines.from_dir("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy")
-# Cellines.print_cellines(all_cellines)
+
+# K562 = Cellines.with_strain("K562", celline_list=all_cellines)
+
+K562_con = Cellines.with_strain("K562", celline_list=all_cellines)+Cellines.only_con_cellines(all_cellines)
+K562_iso = Cellines.with_strain("K562", celline_list=all_cellines)+Cellines.only_iso_cellines(all_cellines)
+
+
+
+
 
 # Cellines.only_con_cellines().
 
-all_cellines.group_chromosomes("chr18")
+# all_cellines.group_chromosomes("chr18")
 
-
-
+# chr18 = Celline.group_by_chromosome("chr18")
+# print(chr18)
 
 
 # Find overlap between cellines
