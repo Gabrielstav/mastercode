@@ -2,34 +2,39 @@
 Network analysis
 """
 
+import igraph as ig
+import numpy as np
+from igraph import plot
+from matplotlib import pyplot as plt
+
 # Check if we can create graph objects directly without having to create an edgelist format file each time and
 # import it from a different directory.
 
-# # K562 chromosome 18 (just testing iGraph stuff)
-# K562_chr18 = Graph.Load("/Users/GBS/Master/HiC-Data/Processed_Data/HiC_from_Jonas/Chr18/K562_processed_chr18.txt",
-#                         format="ncol")
-# # K562_chr18.save("K562_chr18", format = "ncol") Saving doesn't work?
-# # Finding degree of graph
-# degree_K562_chr18 = K562_chr18.degree()
-# #print(degree_K562_chr18)
-#
-# # Finding betweenness of edges (same as using .es but our graph is not directed)
-# edge_betweenness_K562_chr18 = K562_chr18.edge_betweenness()
-# print(edge_betweenness_K562_chr18)
-#
-# # Finding betweenness of vertices (.vs: nodes)
-# nodes_betweenness_K562_chr18 = K562_chr18.vs.betweenness()
-# print(nodes_betweenness_K562_chr18)
+# K562 chromosome 18 (just testing iGraph stuff)
+K562_chr18 = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Processed_Data/HiC_from_Jonas/Chr18/K562_processed_chr18.txt",
+                           format="ncol")
+# K562_chr18.save("K562_chr18", format = "ncol") Saving doesn't work?
+# Finding degree of graph
+degree_K562_chr18 = K562_chr18.degree()
+# print(degree_K562_chr18)
 
-# # Finding adjacency matrix for graph
-# adjacency_K562_chr18 = K562_chr18.get_adjacency()
+# Finding betweenness of edges (same as using .es but our graph is not directed)
+edge_betweenness_K562_chr18 = K562_chr18.edge_betweenness()
+print(edge_betweenness_K562_chr18)
+
+# Finding betweenness of vertices (.vs: nodes)
+nodes_betweenness_K562_chr18 = K562_chr18.vs.betweenness()
+print(nodes_betweenness_K562_chr18)
+
+# Finding adjacency matrix for graph
+adjacency_K562_chr18 = K562_chr18.get_adjacency()
 # print(adjacency_K562_chr18)
 
-# # Is our graph directed:
-# print("Our graph is directed:", K562_chr18.is_directed())
+# Is our graph directed:
+print("Our graph is directed:", K562_chr18.is_directed())
 
 # Testing if the Cairo package works (it works)
-# g = Graph.Famous("petersen")
+# g = ig.Graph.Famous("petersen")
 # plot(g)
 # And it works on my data
 # plot(K562_chr18, layout = "fr") # 2D layouts can be: circle, drl, fr, kk, lgl, random, rt
@@ -42,7 +47,14 @@ Network analysis
 # Sjekk paper for å se hvordan det skal se ut: https://pubmed.ncbi.nlm.nih.gov/27618581/
 
 # bins = 20
+# # log_data = np.log(K562_chr18)
 # plt.hist(K562_chr18.degree(), bins)
+# plt.yscale("log")
+# plt.xscale("log")
+# plt.ylim(0.1, 100)
+# plt.xlim(9, max(xscale))
+# plt.ylabel("Degree")
+# plt.xlabel("Frequency")
 # plt.show()
 
 # After we standardize nodes, we can run community detection (e.g fast greedy first), then look at
