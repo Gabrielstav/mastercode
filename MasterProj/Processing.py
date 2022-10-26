@@ -94,7 +94,12 @@ class Celline:
 class Cellines:
     cellines: list[Celline]
 
-    # Instantiating Celline class
+    # defualt dir to make calling methods faster
+    @classmethod
+    def from_default(cls):
+        return cls.from_dir("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy")
+
+    # instantiating Celline class
     # and pre-processing gtrack files in directory
     @classmethod
     def from_dir(cls, directory):
@@ -102,10 +107,6 @@ class Cellines:
         for file in os.listdir(directory):
             paths.append(os.path.join(directory, file))
         return Cellines.from_files(paths)
-
-    # def current_dit(cls, dir):
-    #     return from_dir("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy")
-    #     pass
 
     @classmethod
     def from_files(cls, files):
@@ -147,29 +148,23 @@ class Cellines:
     def with_strain(self, *args):
         cellines_with_strain = []
         for strain in args:
-            print(f"looking for strain {strain}")
             for celline in self.cellines:
                 if strain == celline.strain:
-                    print(f"found {celline}")
                     cellines_with_strain.append(celline)
-            else:
-                print(f"not matching: {strain}")
         return Cellines(cellines_with_strain)
 
     def only_iso(self):
         iso_list = list(map(lambda c: c.only_iso_nodes(), self.cellines))
-        return Celline(iso_list)
+        return Cellines(iso_list)
 
     def only_con(self):
-        for celline in self.cellines:
-            con_list = list(map(lambda c: c.only_con_nodes(), celline))
+        con_list = list(map(lambda c: c.only_con_nodes(), self.cellines))
         return Cellines(con_list)
 
     def with_chromosome(self, *args):
         for arg in args:
-            for celline in self.cellines:
-                chromosomes_gotten = list(map(lambda c: c.group_by_chromosome(arg), celline))
-            return Cellines(chromosomes_gotten)
+            chromosomes_gotten = list(map(lambda c: c.group_by_chromosome(arg), self.cellines))
+        return Cellines(chromosomes_gotten)
 
     # @classmethod
     # def with_chromosome(cls, *args, celline_list):
@@ -178,53 +173,16 @@ class Cellines:
     #         return chromosomes_gotten
 
 
-all_cellines = Cellines.from_dir("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy")
+all_cellines = Cellines.from_default()
 
 
-#K562_iso = Cellines.from_dir("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy").with_strain("K562").only_iso()
-K562_con = Cellines.from_dir("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy").with_strain("K562").only_con()
+K562_iso = Cellines.from_dir("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy").with_strain("K562").only_iso()
+HMEC_con = Cellines.from_dir("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy").with_strain("HMEC").only_con()
+
+# print(K562_iso)
+#print(HMEC_con)
 
 
 
+# Returner både connected OG isolated noder for K562 cellelinjen
 
-
-
-
-# Find overlap between cellines
-def node_size(self):
-    pass
-
-
-def sort_nodes_by_size(self):
-    pass
-
-
-def node_overlap(self):
-    pass
-
-
-def standardize_nodes(self):
-    pass
-
-
-# Eller sånn
-
-def segment_node(self):
-    # Divide the node length in bp into segments
-    # Do I need to do this for the whole genome or only the node?
-    # Then find where the nodes are
-    pass
-
-
-def node_size(self):
-    pass
-
-
-def node_overlap(self):
-    pass
-
-
-# Eller dette
-
-def find_overlap_by_pybedtools(self):
-    pass
