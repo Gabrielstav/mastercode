@@ -6,6 +6,10 @@ from Processing import Cellines
 
 HMEC = pbt.BedTool("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy/HMEC_50kb.domain.RAW.no_cen.NCHG_fdr.o_by_e5_to_plot.gtrack")
 K562 = pbt.BedTool("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy/K562_50kb.domain.RAW.no_cen.NCHG_fdr.o_by_e5_to_plot.gtrack")
+
+K562_c = pbt.BedTool(Cellines.from_default().with_strain("K562").only_con())
+HUVEC_c = pbt.BedTool(Cellines.from_default().with_strain("HUVEC").only_con())
+
 # K562_pbt = pbt.BedTool(K562_all)
 
 # a = pbt.example_bedtool("a.bed")
@@ -18,9 +22,19 @@ K562 = pbt.BedTool("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy/K5
 # snps = pbt.example_bedtool("b.bed")
 # exons_with_snps = exons.intersect(snps, u=True)
 
+# Ok this works with the Armatus (original) pipeline
+HMEC_and_K562_intersect = K562.intersect(HMEC, u=True, f=0.5, r=True, sorted=True, header=True, )
 
-HMEC_and_K562_intersect = K562.intersect(HMEC, u=True, f=0.5)
-print(HMEC_and_K562_intersect)
+
+# Testing if it works on my imported classes
+# NO, it doesn't, because my classes are not iterable!!!
+
+# HUVEC_K562_c_intersect = HUVEC.intersect(K562_c, u=True, f=0.8, r=True, sorted=True, header=True)
+# print(HUVEC_K562_c_intersect)
+
+# So this means I need to write iter methods for my classes?
+
+
 
 """ 
 Node read length statistics 

@@ -1,7 +1,6 @@
 from dataclasses import dataclass, astuple
+import pybedtools as pbt
 import os
-import matplotlib as mpl
-import matplotlib.pyplot as plt
 
 
 @dataclass(frozen=True, eq=True)
@@ -125,25 +124,10 @@ class Cellines:
             strain_dict = cellines_by_strain[cline.strain, cline]
         return strain_dict
 
-    # @classmethod
-    # def print_celline(cls, celline_list):
-    #     newline = "\n"
-    #     for cline in celline_list:
-    #         print(f"Strain: {cline.strain} with Nodelist: {cline.nodes} {newline}")
-
     def print(self):
         newline = "\n"
         for cline in self.cellines:
             print(f"Strain: {cline.strain} with Nodelist: {cline.nodes} {newline}")
-
-    # @classmethod
-    # def with_strain(cls, *args, celline_list):
-    #     cellines_with_strain = []
-    #     for arg in args:
-    #         for cline in celline_list:
-    #             if arg == cline.strain:
-    #                 cellines_with_strain.append(cline)
-    #     return cellines_with_strain
 
     def with_strain(self, *args):
         cellines_with_strain = []
@@ -166,23 +150,14 @@ class Cellines:
             chromosomes_gotten = list(map(lambda c: c.group_by_chromosome(arg), self.cellines))
         return Cellines(chromosomes_gotten)
 
-    # @classmethod
-    # def with_chromosome(cls, *args, celline_list):
-    #     for arg in args:
-    #         chromosomes_gotten = list(map(lambda c: c.group_by_chromosome(arg), celline_list))
-    #         return chromosomes_gotten
 
 
+# list of all cellines
 all_cellines = Cellines.from_default()
 
+# examples of use
+K562_iso = Cellines.from_default().with_strain("K562").only_iso()
+HMEC_con = Cellines.from_default().with_strain("HMEC").only_con()
 
-K562_iso = Cellines.from_dir("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy").with_strain("K562").only_iso()
-HMEC_con = Cellines.from_dir("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy").with_strain("HMEC").only_con()
-
-# print(K562_iso)
-#print(HMEC_con)
-
-
-
-# Returner både connected OG isolated noder for K562 cellelinjen
-
+# Write method for chromosome filtering and transposing input
+# HUVEC_chr1_to_10 = Cellines.from_default().with_strain("HUVEC").only_con().with_chromosome("1-10")
