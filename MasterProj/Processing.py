@@ -1,7 +1,5 @@
-from dataclasses import dataclass, astuple
-import pybedtools as pbt
+from dataclasses import dataclass
 import os
-
 
 @dataclass(frozen=True, eq=True)
 class Node:
@@ -24,9 +22,6 @@ class Node:
 
     def get_chromosome(self):
         return self.chr
-
-    # Instantiating Node class
-    # and pre-processing the gtrack data
 
     @classmethod
     def process_file_to_node(cls, *args):
