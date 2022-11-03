@@ -1,7 +1,8 @@
 
 import igraph as ig
-import matplotlib as plt
+import matplotlib.pyplot as plt
 import pandas as pd
+import numpy as np
 import Node_Connectedness
 
 
