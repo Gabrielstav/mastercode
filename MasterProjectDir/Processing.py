@@ -153,6 +153,7 @@ all_cellines = Cellines.from_default()
 # examples of use
 K562_iso = Cellines.from_default().with_strain("K562").only_iso()
 HMEC_con = Cellines.from_default().with_strain("HMEC").only_con()
+print(HMEC_con)
 
 # Write method for chromosome filtering and transposing input
 # HUVEC_chr1_to_10 = Cellines.from_default().with_strain("HUVEC").only_con().with_chromosome("1-10")
