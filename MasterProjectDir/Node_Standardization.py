@@ -1,38 +1,44 @@
 import pybedtools as pbt
 from Processing import Node
-# 562_all
 from Processing import Celline
 from Processing import Cellines
+
+
+
+# 4 cell lines
+
+# K562_c = pbt.BedTool(Cellines.from_default().with_strain("K562").only_con())
+# This doesn't work, need to write custom methods for representing our instances
+# such that iGraph understands this, if it's possible. Low pri RN.
 
 HMEC = pbt.BedTool("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy/HMEC_50kb.domain.RAW.no_cen.NCHG_fdr.o_by_e5_to_plot.gtrack")
 K562 = pbt.BedTool("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy/K562_50kb.domain.RAW.no_cen.NCHG_fdr.o_by_e5_to_plot.gtrack")
 IMR90 = pbt.BedTool("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy/IMR90_50kb.domain.RAW.no_cen.NCHG_fdr.o_by_e5_to_plot.gtrack")
 HUVEC = pbt.BedTool("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy/K562_50kb.domain.RAW.no_cen.NCHG_fdr.o_by_e5_to_plot.gtrack")
 
-K562_c = pbt.BedTool(Cellines.from_default().with_strain("K562").only_con())
-HUVEC_c = pbt.BedTool(Cellines.from_default().with_strain("HUVEC").only_con())
+# Reference genome (change dir location to ref or something later)
 reference_bed = pbt.BedTool("/Users/GBS/Master/reference/GCA_000001405.15_GRCh38_GRC_exclusions.bed")
-# reference_fastq = pbt.bedtool("/Users/GBS/Master/reference/GRCh38_latest_genomic.fna.gz") need to unzip
-# HMEC_500kb = HMEC.intersect(reference_fastq, u=True, f=0.5, header=True)
-# print(HMEC)
 
-# maps = K562.map(HMEC, concat=True, c=4, f=0.8, r=True)
-# print(maps)
+# Segmented 500 bins (file createed by bedtools)
+bins = pbt.BedTool("/Users/GBS/Master/testing_node_standardization/chrom_hg19_test.sizes")
 
-# Trying node overlap for all 4 cellines:
-# her er koden i Bedtools:
-# bedtools intersect -a HMEC_50kb.domain.RAW.no_cen.NCHG_fdr.o_by_e5_to_plot.gtrack -b HUVEC_50kb.domain.RAW.no_cen.NCHG_fdr.o_by_e5_to_plot.gtrack
-# IMR90_50kb.domain.RAW.no_cen.NCHG_fdr.o_by_e5_to_plot.gtrack K562_50kb.domain.RAW.no_cen.NCHG_fdr.o_by_e5_to_plot.gtrack
-# -f 0.80 -r -sorted -wa -wb -names HUVEC IMR90 K562 | head -n 1000
+# But I need to crete the 500 kb bins here
 
-# OK at first glance this seems to almost work, but can look into this later?
-# loj=True is something?
-# where are the names? We still need to know which genomes the nodes that overlap orginate from
-# since this is the information we want to end up with in the end somehow (strain + nodes).
+# So make ethe 500 kb binned genome in pbt
+# Make objects of all cell lines (do this in a function that calls the Processing module, automatically making the pbt bedtool objects)
+# Next we need to write a mapping function, that loops over/uses lambda functions to
+#   - grab each node (position, length, chromosome) and hold this info
+#   - compares the position of the node with the binned genome corresponding to the position of the node
+#   - then comes the logic of the function;
+#       -
 
-# Find overlap between cellines
-tester = HUVEC.intersect(HMEC+IMR90+K562, names=HMEC+IMR90+K562, f=0.80, r=True, sorted=True, wa=True, wb=True)
-tester.head(20)
+# BEDmap to map between the BED objects? Map has multiple statistical operations, check BEDtools documentation.
+# 
+
+
+# # Find overlap between cellines (obsolete?)
+# tester = HUVEC.intersect(HMEC+IMR90+K562, names=HMEC+IMR90+K562, f=0.80, r=True, sorted=True, wa=True, wb=True)
+# tester.head(20)
 
 
 

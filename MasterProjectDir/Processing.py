@@ -47,6 +47,9 @@ class Node:
         for nodes in nodelist:
             print(f"Node: {nodes.id} with edges: {nodes.edges} on chromosome: {nodes.chr} {newline}")
 
+    # @classmethod
+    # def nodelist_oit(cls, nodelist): skriv nodelist_out funksjon for empty nodes
+
 
 @dataclass(frozen=True, eq=True)
 class Celline:
@@ -153,7 +156,12 @@ all_cellines = Cellines.from_default()
 # examples of use
 K562_iso = Cellines.from_default().with_strain("K562").only_iso()
 HMEC_con = Cellines.from_default().with_strain("HMEC").only_con()
-print(HMEC_con)
+HMEC_iso = Cellines.from_default().with_strain("HMEC").only_iso()
+
+
+# Need to add functionality for filtering on chromosomes
+# and maybe write function that creates objects of the cell lines automatically
+# and maybe write function that can "export" the cell line objects in a correct format, check the iGraph API for instance
 
 # Write method for chromosome filtering and transposing input
 # HUVEC_chr1_to_10 = Cellines.from_default().with_strain("HUVEC").only_con().with_chromosome("1-10")
