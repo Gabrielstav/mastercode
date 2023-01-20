@@ -10,6 +10,7 @@ node_ratio_dict = {}
 node_ratio_iso_dict = {}
 node_ratio_con_dict = {}
 
+# Iterate over celline as list
 
 
 def get_nodes_from_chromosome(*args):

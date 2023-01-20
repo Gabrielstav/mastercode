@@ -44,7 +44,7 @@ print("Our graph is directed:", K562_chr18.is_directed())
 # g = ig.Graph.Famous("petersen")
 # plot(g)
 # And it works on my data
-# plot(K562_chr18, layout = "fr") # 2D layouts can be: circle, drl, fr, kk, lgl, random, rt
+# plot(K562_chr18, layout = "fr", directed="false") # 2D layouts can be: circle, drl, fr, kk, lgl, random, rt
 
 # plot(IMR90, layout = "")
 # plot(HUVEC_chr18, layout = "fr")

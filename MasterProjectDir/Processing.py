@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 import os
 
+
 @dataclass(frozen=True, eq=True)
 class Node:
     id: str
@@ -50,11 +51,28 @@ class Node:
     # @classmethod
     # def nodelist_oit(cls, nodelist): skriv nodelist_out funksjon for empty nodes
 
+    @classmethod
+    def nodelist_out(cls, nodelist):
+        for nodes in nodelist:
+            if nodes.edges != ".":
+                print(f"Node: {nodes.id} with edges: {nodes.edges} on chromosome: {nodes.chr} is connected") # need to write this as list
+
+
+    # create function that outputs list of all nodes on a chromosome
+    @classmethod
+    def chromosome_nodes(cls, *args):
+        for arg in args:
+            get_chroms = list(filter(lambda x: arg == str(x.chr), nodes.as_list()))
+            return get_chroms
+
+
+
+
 
 @dataclass(frozen=True, eq=True)
 class Celline:
     strain: str
-    nodes: list[Node]
+    nodes: Node.nodelist # Not just a node, slå sammen nodelist og celline?
 
     def nodes(self):
         return self.nodes
@@ -84,7 +102,7 @@ class Celline:
             selected_chromosomes = list(filter(lambda n: arg == n.get_chromosome(), self.nodes))
             return Celline(self.strain, selected_chromosomes)
 
-
+    #
 
 
 @dataclass(frozen=True, eq=True)
@@ -149,7 +167,6 @@ class Cellines:
         return Cellines(chromosomes_gotten)
 
 
-
 # list of all cellines
 all_cellines = Cellines.from_default()
 
@@ -158,10 +175,16 @@ K562_iso = Cellines.from_default().with_strain("K562").only_iso()
 HMEC_con = Cellines.from_default().with_strain("HMEC").only_con()
 HMEC_iso = Cellines.from_default().with_strain("HMEC").only_iso()
 
-
 # Need to add functionality for filtering on chromosomes
 # and maybe write function that creates objects of the cell lines automatically
 # and maybe write function that can "export" the cell line objects in a correct format, check the iGraph API for instance
 
 # Write method for chromosome filtering and transposing input
 # HUVEC_chr1_to_10 = Cellines.from_default().with_strain("HUVEC").only_con().with_chromosome("1-10")
+
+# what do i google to find solution to sdk not configured error?
+# how do i get the sdk to be configured?
+# how do i get the sdk to be configured on my mac?
+# and the solution is?
+# how do i get the sdk to be configured on my mac?
+# and the solution is?
