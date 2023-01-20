@@ -59,11 +59,11 @@ class Node:
 
 
     # create function that outputs list of all nodes on a chromosome
-    @classmethod
-    def chromosome_nodes(cls, *args):
-        for arg in args:
-            get_chroms = list(filter(lambda x: arg == str(x.chr), nodes.as_list()))
-            return get_chroms
+    # @classmethod
+    # def chromosome_nodes(cls, *args):
+    #     for arg in args:
+    #         get_chroms = list(filter(lambda x: arg == str(x.chr), Node.as_list()))
+    #         return get_chroms
 
 
 
@@ -72,7 +72,7 @@ class Node:
 @dataclass(frozen=True, eq=True)
 class Celline:
     strain: str
-    nodes: Node.nodelist # Not just a node, slå sammen nodelist og celline?
+    nodes: list[Node] # Not just a node, slå sammen nodelist og celline?
 
     def nodes(self):
         return self.nodes
