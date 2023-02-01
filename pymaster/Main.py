@@ -1,6 +1,6 @@
 
-if name(main) == "main":
-    main()
+# if name(main) == "main":
+#     main()
 
 
 
