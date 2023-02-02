@@ -7,6 +7,7 @@ from Processing import Node
 from Processing import Celline
 from Processing import Cellines
 
+# I could see all of this being in a class called "Pre-processing"
 
 
 def default_path_to_raw_data(*args):
@@ -18,7 +19,6 @@ def default_output_dir(*args):
     default_path_to_output_directory = "/Users/GBS/Master/Pipeline/python_pipe_test/bedpe_testing"
     return os.path.join(default_path_to_output_directory, *args)
 
-# Clean opp senere og lagre matrix som armatus input, kanskje skriv amratus output end-inlcusive function så TAD annotation kan gjøres
 
 def read_hicpro_output():
     """
@@ -47,12 +47,16 @@ def read_hicpro_output():
 read_hicpro_output()
 
 # THIS WORKS:
+# But needs to make it able to store/process multiple cell lines and feed them into the "Processing" classes
+# Clean opp senere og lagre matrix som armatus input, kanskje skriv amratus output end-inlcusive function så TAD annotation kan gjøres
 
 def create_bedpe(bed_file, matrix_file, output_file):
     """
     Function to create a BEDPE file from the HiC-Pro output (BED and matrix)
     and write it to a specified directory
     """
+
+    # Split the function: One part for processing, another for writing to file
 
     with open(bed_file, "r") as bed, open(matrix_file, "r") as matrix, open(output_file, "w") as bedpe:
         bed_lines = bed.readlines()
@@ -77,8 +81,37 @@ create_bedpe(default_path_to_raw_data("chr18_50000_abs.bed"), default_path_to_ra
 
 
 
+# This all means that we have the correct thought process, and we finally understand, it is revealed to my by myself.
+# So to summarize:
+# 1. Create BEDPE file (done)
+# 2. Remove regions overlapping blacklisted regions
+# 3. Run NCHG script to find significant interactions
+# 4. Run FDR script to correct for multiple testing
+# 5. Make GTrack format (unclear if I can use one file (beads))
 
-# Use pybedtools to make the beads?, and then to blacklist, then statistical tests and then write to gtrack
+# So, first we need to make a function that removes regions overlapping blacklisted regions
+
+
+# 1. Download and store hg38 and hg19 blacklisted regions (find out how reliable they are), make a function
+# 2. Integrate the blacklisted script (look at it, is it open source? Also find out how reliable it is)
+# 3. Downlaod and store reference genome (hg38 and hg19) and chromosome sizes (hg38 and hg19)
+# 4. Take the BEDPE format and find overlap with the correct blacklisted regions (for the same ref genome)
+# 5. Make a function that removes the overlap and outputs a BEDPE file
+
+
+def remove_blacklisted_regions(bedpe_file, output_file):
+
+    """This function takes the combined regions of the relevant reference genome
+    containing unmappable regions, caps, centromeres etc. and removes the parts of the
+    BEDPE file that overlap with these regions. The output is a BEDPE file"""
+
+
+
+
+
+
+
+
 
 
 
@@ -92,6 +125,7 @@ create_bedpe(default_path_to_raw_data("chr18_50000_abs.bed"), default_path_to_ra
 
 # function that combines all regions of hg38 that should be excluded from the analysis
 # GRC declared regions of hg38 which contain false duplication or contamination
+# We also need Hg19 (if that is the genome we are working with, which in the Jonas data it is at least I tihnk)
 grc_hg38_exclusions = pbt.BedTool("/Users/GBS/Master/reference/GCA_000001405.15_GRCh38_GRC_exclusions.bed")
 encode_blacklist = pbt.BedTool("/Users/GBS/Master/reference/ENCFF356LFX.bed")
 
@@ -114,9 +148,9 @@ def hg38_exclusions():
 def bin_genome(binsize):
     """Create a 500 kb binned genome, using the reference genome as a template"""
 
-    bin_size = 500000
-    bins = reference_bed.window(b=reference_bed, w=bin_size, u=True)
-    return bins
+    # bin_size = 500000
+    # bins = reference_bed.window(b=reference_bed, w=bin_size, u=True)
+    # return bins
 
 
 # Now we need to create a function that maps the beads to the binned genome
