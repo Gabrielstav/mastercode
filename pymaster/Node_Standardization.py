@@ -25,15 +25,31 @@ class Pipeline:
         return os.path.join(default_path_to_output_directory, *args)
 
     @staticmethod
-    def read_hic_output(matrix_file, bed_file):
+    def read_hicpro_output():
+        """
+        Reads raw HiC-Pro output and output dataframes
+        Write dataframes to specified directory
+        """
+
+        matrix_file = os.path.join(Pipeline.default_path_to_raw_data("chr18_50000.matrix"))
+        bed_file = os.path.join(Pipeline.default_path_to_raw_data("chr18_50000_abs.bed"))
+
         matrix_df = pd.read_csv(matrix_file, sep="\t", header=None)
         bed_df = pd.read_csv(bed_file, sep="\t", header=None)
+
         return matrix_df, bed_df
 
-    
+    @staticmethod
+    def print_hicpro_output():
+        """
+        Prints raw HiC-Pro output
+        """
+        matrix_df, bed_df = Pipeline.read_hicpro_output()
+        print(matrix_df)
+        print(bed_df)
 
 
-Pipeline.default_path_to_raw_data("chr18_50000.matrix")
+Pipeline.print_hicpro_output()
 
 
 # @dataclass(frozen=True, eq=True) #doesnt make sense to use dataclasses here
