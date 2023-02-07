@@ -1,6 +1,7 @@
 import pandas as pd
 import pybedtools as pbt
 import os as os
+import bioframe as bf
 
 
 # OK, make everything into a static class called Pipeline
@@ -9,14 +10,19 @@ import os as os
 class Pipeline:
 
     @staticmethod
-    def default_path_to_raw_data(*args):
+    def default_rawdata_path(*args):
         default_path_to_raw_data_directory = "/Users/GBS/Master/Pipeline/INC-tutorial/hicpro_results/hic_results/matrix/chr18/raw/50000"
         return os.path.join(default_path_to_raw_data_directory, *args)
 
     @staticmethod
-    def default_path_to_output(*args):
+    def default_output_path(*args):
         default_path_to_output_directory = "/Users/GBS/Master/Pipeline/python_pipe_test/bedpe_testing"
         return os.path.join(default_path_to_output_directory, *args)
+
+    @staticmethod
+    def default_reference_path(*args):
+        default_path_to_reference_dicrectory = "/Users/GBS/Master/reference"
+        return os.path.join(default_path_to_reference_dicrectory, *args)
 
     @staticmethod
     def read_hicpro_output():
@@ -25,8 +31,8 @@ class Pipeline:
         Write dataframes to specified directory
         """
 
-        matrix_file = os.path.join(Pipeline.default_path_to_raw_data("chr18_50000.matrix"))
-        bed_file = os.path.join(Pipeline.default_path_to_raw_data("chr18_50000_abs.bed"))
+        matrix_file = os.path.join(Pipeline.default_rawdata_path("chr18_50000.matrix"))
+        bed_file = os.path.join(Pipeline.default_rawdata_path("chr18_50000_abs.bed"))
 
         matrix_df = pd.read_csv(matrix_file, sep="\t", header=None)
         bed_df = pd.read_csv(bed_file, sep="\t", header=None)
@@ -49,8 +55,8 @@ class Pipeline:
         """
         bedpe = []
 
-        bed_file = os.path.join(Pipeline.default_path_to_raw_data("chr18_50000_abs.bed"))
-        matrix_file = os.path.join(Pipeline.default_path_to_raw_data("chr18_50000.matrix"))
+        bed_file = os.path.join(Pipeline.default_rawdata_path("chr18_50000_abs.bed"))
+        matrix_file = os.path.join(Pipeline.default_rawdata_path("chr18_50000.matrix"))
 
         bed_lines = open(bed_file, "r").readlines()
         matrix_lines = open(matrix_file, "r").readlines()
@@ -71,6 +77,11 @@ class Pipeline:
 
         return bedpe
 
+    # @staticmethod
+    # def make_bedpe_df():
+    #     bedpe_df = Pipeline.make_bedpe()
+    #     return bedpe_df
+
     @staticmethod
     def print_bedpe():
         print(Pipeline.make_bedpe())
@@ -80,7 +91,7 @@ class Pipeline:
         """
         Writes bedpe file to specified directory
         """
-        bedpe_file = os.path.join(Pipeline.default_path_to_output(*args))
+        bedpe_file = os.path.join(Pipeline.default_output_path(*args))
         with open(bedpe_file, "w") as f:
             f.writelines(Pipeline.make_bedpe())
 
@@ -89,7 +100,34 @@ class Pipeline:
         """
         Returns blacklisted regions
         """
-        pass
+        # Path to blacklist file
+        # Use pandas to read in file
+        # Use pybedtools or bioframe to calculate overlap
+        # Add check to see if there is any overlap, if there is, remove whole bin (meaning whole entry?)
+        # Return new bedpe file
+
+        blacklisted = Pipeline.default_reference_path("hg19/unmappable_blacklist.bed")
+        blacklisted_regions = pbt.BedTool(blacklisted)
+        bedpe_pbt = pbt.BedTool(Pipeline.make_bedpe())
+        overlap = blacklisted_regions.intersect(bedpe_pbt)
+        overlap_df = overlap.to_dataframe()
+        return overlap
+
+    @staticmethod
+    def write_overlap(*args):
+        # overlap = os.path.join(Pipeline.default_output_path(*args))
+        # with open(overlap, "w") as f:
+        #     f.writelines(Pipeline.blacklisted_regions())
+
+        out = Pipeline.blacklisted_regions().saveas("/Users/GBS/Master/Pipeline/python_pipe_test/bedpe_testing/overlap.bed")
+        return out
+
+
+    @staticmethod
+    def print_bedpe_pbt():
+        bedpe_pbt = pbt.BedTool(Pipeline.make_bedpe())
+        print(bedpe_pbt)
+
 
     @staticmethod
     def cytobands():
@@ -109,8 +147,10 @@ class Pipeline:
     def remove_unmappable_regions():
         """
         Removes unmappable regions from bedpe file combining all blacklisted
-        regions into one file and finding overlap with BEDPE file
+        regions into one file and finding overlap with BEDPE file.
+        Any overlap removes the whole interaction (bin), retaining equal bin size acros the genome.
         """
+
         pass
 
     @staticmethod
@@ -133,6 +173,9 @@ class Pipeline:
         Make gtrack file from bedpe file with significant interactions
         """
         pass
+
+
+# Pipeline.write_overlap("testing_overlap")
 
 
 
@@ -158,8 +201,25 @@ class Pipeline:
 
 
 
+# Now write logic to see if the overlap overlaps with the bedpe file, if it does, remove the whole bin (interaction)
 
 
+def remove_overlap():
+
+    blacklisted = open("/Users/GBS/Master/reference/hg19/unmappable_blacklist.bed")
+    blacklised_pbt = pbt.BedTool(blacklisted)
+    bedpe_pbt = pbt.BedTool(Pipeline.make_bedpe())
+    # overlap = bedpe_pbt.intersect(blacklised_pbt, r=True, v=False, w=50000)
+
+    overlap = bedpe_pbt.window(blacklised_pbt, w=50000, r=False, v=True)
+    pbt.BedTool(overlap).saveas("/Users/GBS/Master/Pipeline/python_pipe_test/bedpe_testing/overlap.bed")
+    return print(overlap), print(type(overlap))
+
+remove_overlap()
+
+# I think this actually work, just by looking at the output file.
+# To verify, do the reverse, output only the overlap and use diff to see if the output is the same as the overlap file.
+# But this looks promising.
 
 
 
