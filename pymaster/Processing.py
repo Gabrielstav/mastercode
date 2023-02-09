@@ -171,6 +171,9 @@ K562_iso = Cellines.from_default().with_strain("K562").only_iso()
 HMEC_con = Cellines.from_default().with_strain("HMEC").only_con()
 HMEC_iso = Cellines.from_default().with_strain("HMEC").only_iso()  # .chromosome("1-10").as_dict() OR as.list()
 
+
+
+
 # Need to add functionality for filtering on chromosomes
 # and maybe write function that creates objects of the cell lines automatically
 # and maybe write function that can "export" the cell line objects in a correct format, check the iGraph API for instance

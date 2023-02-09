@@ -5,6 +5,7 @@ import numpy as np
 import scipy as sp
 import math
 import sys
+import statsmodels.api as sm
 from statsmodels.sandbox.stats import multicomp
 
 
@@ -249,7 +250,84 @@ class Pipeline:
         Make gtrack file from bedpe file with significant interactions
         Make this later?
         """
+
+        # OK this can definately be done in python, we can also read in the padj and the NCHG out,
+        # allowing for using p-values/padj as weights in the GTrack file
+
+        # So this can be two things, make normal GTrack, or make GTrack with weights (p-values)
+
+        # But is this really needed? The format is already an edge list with p-value, just read into class
+        # and strip p value, store that in Node, then make networks from that.
+
+
+
         pass
+
+    @staticmethod
+    def NCHG_out():
+        """
+        This is the output from the NCHG script
+        """
+        pass
+
+    @staticmethod
+    def make_edge_list():
+        """
+        Make edge list from bedpe file with significant interactions and padj
+        """
+
+        padj = os.path.join(Pipeline.default_output_path("FDR_chr18_test1")) # This is the output from the FDR script
+        NCHG = os.path.join(Pipeline.default_output_path("NCHG_chr18_test1")) # This is the output from the NCHG script
+
+        edge_list_nop = []
+        edge_list_withp = []
+
+        with open(padj) as file:
+            for line in file:
+                if len(line) == 6:
+                    line = line.split()
+                    edge_list_nop.append(line[0] + ":" + line[1] + "-" + line[2] + " " + line[3] + "-" + line[4] + ":" + line[5])
+                else:
+                    line = line.split()
+                    edge_list_withp.append(line[0] + ":" + line[1] + "-" + line[2] + " " + line[3] + "-" + line[4] + ":" + line[5] + " " + line[6])
+
+        return edge_list_nop, edge_list_withp
+
+    # Split withp and nop into separate methods
+    @staticmethod
+    def make_edgelist_withp():
+        with open(os.path.join(Pipeline.default_output_path("FDR_chr18_test1"))) as file:
+            for line in file:
+                print(line)
+
+    @staticmethod
+    def write_edge_list():
+
+        edge_list_nop, edge_list_withp = Pipeline.make_edge_list()
+
+        with open("edge_list_nop.txt", "w") as file:
+            for line in edge_list_nop:
+                file.write(line + "\n")
+
+        with open("edge_list_withp.txt", "w") as file:
+            for line in edge_list_withp:
+                file.write(line + "\n")
+
+    @staticmethod
+    def print_edge_list_withp():
+
+        edge_list_withp = Pipeline.make_edge_list()
+        for line in edge_list_withp:
+            print(line)
+
+    @staticmethod
+    def print_edge_list_nop():
+
+        edge_list_nop = Pipeline.make_edge_list()
+        for line in edge_list_nop:
+            print(line)
+
+Pipeline.print_edge_list_withp()
 
 
 # Pipeline.remove_cytobands()
@@ -259,11 +337,22 @@ class Pipeline:
 
 
 # 1. Create BEDPE file (done)
-# 2. Remove regions overlapping blacklisted regions (done
-# 3. Run NCHG script to find significant interactions
-# 4. Run FDR script to correct for multiple testing
-# 5. Make GTrack format (unclear if I can use one file (beads))
+# 2. Remove regions overlapping blacklisted regions (done)
+# 3. Run NCHG script to find significant interactions (done)
+# 4. Run FDR script to correct for multiple testing (done)
+# 5. Make GTrack format (unclear if I can use one file (beads) nope, need two files)
 # 6. Make the Pipeline able to read in multiple files (cell lines) and process them
 
+# finish code, clean it up bby, make it nice
+# wrap the executable, so it runs here
+# make the class able to read in data from multiple cell lines
+# make network from test data
+# make code run as standalone script, either with sys.argv, argparse or input
+# make ylm file for the pipeline
 
-Pipeline.adjust_pvalues()
+# automatisk les inn filer: run N-times where N is the number of files in the folder (or a specified number) and run the pipeline on each file
+# ha check for at den ene filen er ferdig processert, før den neste starter
+
+
+
+
