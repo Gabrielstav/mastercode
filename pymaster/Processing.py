@@ -55,8 +55,7 @@ class Node:
     def nodelist_out(cls, nodelist):
         for nodes in nodelist:
             if nodes.edges != ".":
-                print(f"Node: {nodes.id} with edges: {nodes.edges} on chromosome: {nodes.chr} is connected") # need to write this as list
-
+                print(f"Node: {nodes.id} with edges: {nodes.edges} on chromosome: {nodes.chr} is connected")  # need to write this as list
 
     # create function that outputs list of all nodes on a chromosome
     # @classmethod
@@ -66,13 +65,10 @@ class Node:
     #         return get_chroms
 
 
-
-
-
 @dataclass(frozen=True, eq=True)
 class Celline:
     strain: str
-    nodes: list[Node] # Not just a node, slå sammen nodelist og celline?
+    nodes: list[Node]  # Not just a node, slå sammen nodelist og celline?
 
     def nodes(self):
         return self.nodes
@@ -173,7 +169,7 @@ all_cellines = Cellines.from_default()
 # examples of use
 K562_iso = Cellines.from_default().with_strain("K562").only_iso()
 HMEC_con = Cellines.from_default().with_strain("HMEC").only_con()
-HMEC_iso = Cellines.from_default().with_strain("HMEC").only_iso()
+HMEC_iso = Cellines.from_default().with_strain("HMEC").only_iso()  # .chromosome("1-10").as_dict() OR as.list()
 
 # Need to add functionality for filtering on chromosomes
 # and maybe write function that creates objects of the cell lines automatically

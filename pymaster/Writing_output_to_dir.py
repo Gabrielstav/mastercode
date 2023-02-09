@@ -2,6 +2,9 @@
 Writing pre-processed output edge lists to new files in specified directory
 """
 
+# ALL file writing, reading and pathing should be done in a separate class called FileHandler or something like that,
+# however this is lower pri rn
+
 import os
 
 # Not that important now, but nice to make when there is time.
