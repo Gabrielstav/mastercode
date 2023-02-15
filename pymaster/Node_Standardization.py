@@ -1,8 +1,10 @@
 import pandas as pd
 import pybedtools as pbt
 import os as os
+import subprocess as sp
+import tempfile as tf
 import numpy as np
-import scipy as sp
+import scipy as scp
 import math
 import sys
 import statsmodels.api as sm
@@ -29,6 +31,14 @@ class Pipeline:
     def default_reference_path(*args):
         default_path_to_reference_dicrectory = "/Users/GBS/Master/reference"
         return os.path.join(default_path_to_reference_dicrectory, *args)
+
+    @staticmethod
+    def path_to_NCHG():
+        return "/Users/GBS/Master/Pipeline/INC-tutorial/processing_scripts/NCHG_hic/NCHG"
+
+    # @staticmethod
+    # def NCHG_window_size():
+    #     return str("50000")
 
     @staticmethod
     def window_size():
@@ -124,8 +134,33 @@ class Pipeline:
         return no_overlap_bedpe
 
     @staticmethod
+    def remove_blacklist_hg38():
+
+        """
+        Removes blacklisted regions from bedpe file
+        This blacklist is from the ENCODE blacklist of problematic regions in hg38
+        """
+
+        blacklisted = os.path.join(Pipeline.default_reference_path("hg38 blacklist path"))
+        blacklised_pbt = pbt.BedTool(blacklisted)
+        bedpe_pbt = pbt.BedTool(Pipeline.make_bedpe())
+
+        no_overlap_bedpe = bedpe_pbt.window(blacklised_pbt, w=Pipeline.window_size(), r=False, v=True)
+
+        return no_overlap_bedpe
+
+        pass
+
+    @staticmethod
     def write_blacklist_hg19(*args):
         Pipeline.remove_blacklist_hg19().saveas(Pipeline.default_output_path(*args))
+
+    @staticmethod
+    def write_blacklist_hg38(*args):
+        Pipeline.remove_blacklist_hg38().saveas(Pipeline.default_output_path(*args))
+
+
+    # Instead of writing a new function for each blacklist, I could write a check for the genome version
 
     @staticmethod
     def remove_cytobands():
@@ -155,11 +190,9 @@ class Pipeline:
 
     @staticmethod
     def write_remove_cytobands(*args):
-        """
-        This is the input to the NCHG script
-        """
-        Pipeline.remove_cytobands().saveas(Pipeline.default_output_path(*args))
 
+        with open(Pipeline.default_output_path(*args), "w") as f:
+            f.writelines(Pipeline.remove_cytobands().to_dataframe().to_csv(sep="\t", header=False, index=False))
 
     @staticmethod
     def remove_cap():
@@ -171,8 +204,8 @@ class Pipeline:
 
         chrsize = {}
         with open(chrsize_file) as f:
-            for l in f:
-                chrsize[l.split()[0]] = int(float(l.split()[1]))
+            for length in f:
+                chrsize[length.split()[0]] = int(float(length.split()[1]))
 
         for n in sys.stdin:
             n = n.split()
@@ -185,16 +218,55 @@ class Pipeline:
         """
         pass
 
-# Then I think we just need to use the NCHG script from the terminal for now
-# and write to a dir, then use python again to adjust pvalues and make the GTrack format
+    # Then I think we just need to use the NCHG script from the terminal for now
+    # and write to a dir, then use python again to adjust pvalues and make the GTrack format
+
+    @staticmethod
+    def NCHG_input():
+        """
+        This is the input to the NCHG script
+        """
+
+        nchg_input_file = Pipeline.remove_cytobands().to_dataframe().astype(str).to_csv(sep="\t", header=False, index=False)
+        a = tf.NamedTemporaryFile(mode="w", delete=False, suffix=".txt").write(nchg_input_file)
+        return nchg_input_file
+
+
+        # return Pipeline.write_remove_cytobands().as_dataframe().to_csv(sep="\t", header=False, index=False)
+
+
 
     @staticmethod
     def find_siginificant_interactions():
         """
         Find significant interactions using a p-value cutoff using the non-central hypergeometric ditribution
-        Seems hard to port this to python, source is in C++ and I don't want to spend time on that right now
+        The NCHG script is written in C++ and is run from the terminal, here it is wrapped in a python function.
+        The total interactions on the chromosome, the number of interactions for the two bins interacting and the
+        linear genomic distance between the bins are taken into account to calculate the p-value.
+        The arguments are:
+        m = minimum interaction length in bp, should be same as window size used to make the bedpe file
+        p = input file, which is the output of the write_remove_cytobands function
         """
-        pass
+
+        bedpe = Pipeline.write_remove_cytobands("NCHG_chr18_test1_c++")
+
+        # nchg_run = sp.run([Pipeline.path_to_NCHG(), str(Pipeline.window_size()), Pipeline.NCHG_input("testing_nchg_1")]) # str(Pipeline.remove_cytobands())
+        # nchg_run = sp.run(["/Users/GBS/Master/Pipeline/INC-tutorial/processing_scripts/NCHG_hic/NCHG", "-m 50000", "-p /Users/GBS/Master/Pipeline/python_pipe_test/bedpe_testing/NCHG_input.bedpe"])
+
+        # OK this works, providing the absolute paths:
+        # nchg_run = sp.run([Pipeline.path_to_NCHG(), "-m", str(Pipeline.window_size()), "-p", "/Users/GBS/Master/Pipeline/python_pipe_test/bedpe_testing/NCHG_input.bedpe"])
+
+        # but I want to call the -p argument directly from the Pipeline class
+        nchg_run = sp.run([Pipeline.path_to_NCHG(), "-m", str(Pipeline.window_size()), "-p", Pipeline.NCHG_input()])
+        nchg_out = nchg_run.stdout
+        return nchg_out
+
+    @staticmethod
+    def write_siginificant_interactions(*args):
+        with open(Pipeline.find_siginificant_interactions().stdout, "w") as f:
+            f.writelines(Pipeline.find_siginificant_interactions().stdout)
+
+
 
     @staticmethod
     def adjust_pvalues():
@@ -327,7 +399,12 @@ class Pipeline:
         for line in edge_list_nop:
             print(line)
 
-Pipeline.print_edge_list_withp()
+
+print(type(Pipeline.remove_cytobands()))
+print(type(Pipeline.NCHG_input()))
+
+
+Pipeline.find_siginificant_interactions()
 
 
 # Pipeline.remove_cytobands()
