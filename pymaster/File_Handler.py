@@ -46,91 +46,58 @@ class TargetDirectories:
                 return path
             print("Invalid path. Please enter a valid path.")
 
-class FileHandler:
+class FileStruct:
 
     @staticmethod
-    def read_hicpro_output():
-        for dirnames in os.walk(TargetDirectories._hicpro_output_directory()):
-            if dirnames in TargetDirectories._hicpro_output_directory() == "hic_results":
+    def generate_file_struct():
+        for dirnames in os.walk(TargetDirectories.output_directory()):
+            if dirnames in TargetDirectories.output_directory() == "hic_results":
                 print(os.listdir())
 
 
 
 
-TargetDirectories._hicpro_output_directory() # Noe med calling som er feil, kanskje feil usecase, må vi ha instanser?
-FileHandler.read_hicpro_output()
+# Might work, idk if this is a good approach?
+class TempFileManager:
+
+    # stores temp files and the class name that generated them
+    temp_files = {}
+
+    @classmethod
+    # Call this method to register temp files: TempFileManager.register_temp_file(file_path, FileHandler.__name__)
+    def register_temp_file(cls, file_path, class_name):
+        cls.temp_files[file_path] = class_name
 
 
+    @classmethod
+    # Call this method to delete temp files: TempFileManager.delete_temp_files(file_path)
+    def delete_temp_files(cls):
+        for file_path in cls.temp_files:
+            os.unlink(file_path)
+        cls.temp_files.clear()
 
-# class FileHandler:
-#
-#     def __init__(self, path):
-#         self.path = path
-#         self.cell_lines = []
-#         self.chromosomes = []
-#         self.resolutions = []
-#         self.files = []
-#         self.files_per_cell_line = {}
-#         self.files_per_chromosome = {}
-#         self.files_per_resolution = {}
-#
-#     def read_files(self):
-#         for file in os.listdir(self.path):
-#             if file.endswith(".bed") or file.endswith(".matrix"):
-#                 self.files.append(file)
-#
-#     def split_files(self):
-#         for file in self.files:
-#             cell_line = file.split("_")[0]
-#             chromosome = file.split("_")[1]
-#             resolution = file.split("_")[2]
-#
-#             if cell_line not in self.cell_lines:
-#                 self.cell_lines.append(cell_line)
-#                 self.files_per_cell_line[cell_line] = []
-#             if chromosome not in self.chromosomes:
-#                 self.chromosomes.append(chromosome)
-#                 self.files_per_chromosome[chromosome] = []
-#             if resolution not in self.resolutions:
-#                 self.resolutions.append(resolution)
-#                 self.files_per_resolution[resolution] = []
-#
-#             self.files_per_cell_line[cell_line].append(file)
-#             self.files_per_chromosome[chromosome].append(file)
-#             self.files_per_resolution[resolution].append(file)
-#
-#     def run_pipeline(self):
-#         for cell_line in self.cell_lines:
-#             for chromosome in self.chromosomes:
-#                 for resolution in self.resolutions:
-#                     for file in self.files_per_cell_line[cell_line]:
-#                         if file in self.files_per_chromosome[chromosome] and file in self.files_per_resolution[resolution]:
-#                             # Run pipeline on file
-#                             # Create dir for edge list and dir for output from pipeline
-#                             # Write edge list to dir for edge list
-#                             # Write output from pipeline to dir for output from pipeline
-#                             # Move on to next file
-#                             pass
-#
-#     def get_cell_lines(self):
-#         return self.cell_lines
-#
-#     def get_chromosomes(self):
-#         return self.chromosomes
-#
-#     def get_resolutions(self):
-#         return self.resolutions
-#
-#     def get_files(self):
-#         return self.files
-#
-#     def get_files_per_cell_line(self):
-#         return self.files_per_cell_line
-#
-#     def get_files_per_chromosome(self):
-#         return self.files_per_chromosome
-#
-#     def get_files_per_resolution(self):
-#         return self.files_per_resolution
-#
-#
+    @classmethod
+    def get_temp_files(cls):
+        return cls.temp_files.copy()
+
+# TargetDirectories._hicpro_output_directory() # Noe med calling som er feil, kanskje feil usecase, må vi ha instanser?
+
+class FileHandler:
+
+    """This class needs to find the hic pro output files, and split them on name (celline, chromosome)
+    then it needs to open these files, and split again on resolution, and store this information.
+    so to end up we get cell line x and cell line y, with chromosome 1 and 2, and resolution 50000 and 100000.
+    as a result we get 4 files, 2 for each cell line, and 2 for each resolution.
+    these files will be handed 1 by 1 to the pipeline, which will create two directories,
+    the directiories for the output should be handled here, not in the pipeline I think?
+    """
+
+    @staticmethod
+    def locate_root_dir():
+        return TargetDirectories.output_directory()
+
+    @staticmethod
+    def locate_data():
+        for dirnames in os.walk(FileHandler.locate_root_dir()):
+            if dirnames in FileHandler.locate_root_dir() == "hic_results":
+                print(os.listdir())

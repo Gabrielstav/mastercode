@@ -1,6 +1,13 @@
 from dataclasses import dataclass
 import os
 
+# TODO:
+# 1. Make classes able to read in edge lists from Pipeline in addition to GTRack files
+# 2. Finish the select chromosome(s) methods
+# 3. Make "as list" and "as dict" methods
+
+
+
 
 @dataclass(frozen=True, eq=True)
 class Node:

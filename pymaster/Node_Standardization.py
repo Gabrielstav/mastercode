@@ -10,10 +10,17 @@ import sys
 import statsmodels.api as sm
 from statsmodels.sandbox.stats import multicomp
 
+# Pre-processing pipline for Hi-C data:
 
-# OK, make everything into a static class called Pipeline
-# Question now is how read in multiple files (from either multiple chromosomes or multiple cellines)
-# Abstract away the file reading and writing to separate methods later
+# Output by default should be files containing edge lists, named by chromosome/celline and resolution
+# Optionally can also output GTrack files with the same naming convention with or without p-values (for weights)
+
+# TODO:
+# 1. Make automatic file naming, reading and writing in separate module, that feeds the pipeline module with the correct files
+# 2. Make Pipeline handle Hg38 as well, and make it so that the user can specify which reference genome to use and the methods adapt accordingly
+# 3. Make GTRack methods with- and without p-values and map between GTrack and edge list files for visualization purposes
+
+
 
 class Pipeline:
 
@@ -35,10 +42,6 @@ class Pipeline:
     @staticmethod
     def path_to_NCHG():
         return "/Users/GBS/Master/Pipeline/INC-tutorial/processing_scripts/NCHG_hic/NCHG"
-
-    # @staticmethod
-    # def NCHG_window_size():
-    #     return str("50000")
 
     @staticmethod
     def window_size():
@@ -159,7 +162,6 @@ class Pipeline:
     def write_blacklist_hg38(*args):
         Pipeline.remove_blacklist_hg38().saveas(Pipeline.default_output_path(*args))
 
-
     # Instead of writing a new function for each blacklist, I could write a check for the genome version
 
     @staticmethod
@@ -196,11 +198,14 @@ class Pipeline:
 
     @staticmethod
     def remove_cap():
+
+        # Refactor to work with pbt in pipeline
+
         """
         Sets a cap on the length of the chromosomes, any interactions longer than this are removed
         this is only applicable to interactions between chromosomes, this ensures that the interactions
         do not go beyond the end of the chromosome? I think. But we have a constant bin size, we do not mix
-        bin sizes, so this is not necessary maybe? IDK skip for now. Maybe this?:
+        bin sizes, so this is not necessary maybe? IDK skip for now. Refactor this to work with pbt in pipeline?:
 
         chrsize = {}
         with open(chrsize_file) as f:
@@ -218,55 +223,35 @@ class Pipeline:
         """
         pass
 
-    # Then I think we just need to use the NCHG script from the terminal for now
-    # and write to a dir, then use python again to adjust pvalues and make the GTrack format
-
     @staticmethod
-    def NCHG_input():
+    def input_to_nchg():
         """
         This is the input to the NCHG script
         """
-
-        nchg_input_file = Pipeline.remove_cytobands().to_dataframe().astype(str).to_csv(sep="\t", header=False, index=False)
-        a = tf.NamedTemporaryFile(mode="w", delete=False, suffix=".txt").write(nchg_input_file)
-        return nchg_input_file
-
-
-        # return Pipeline.write_remove_cytobands().as_dataframe().to_csv(sep="\t", header=False, index=False)
-
-
+        os.chdir(Pipeline.default_output_path())
+        file = Pipeline.default_output_path("nchg_input.txt")
+        with open(file, "w") as f:
+            f.writelines(Pipeline.remove_cytobands().to_dataframe().astype(str).to_csv(sep="\t", header=False, index=False))
+        return file
 
     @staticmethod
     def find_siginificant_interactions():
         """
-        Find significant interactions using a p-value cutoff using the non-central hypergeometric ditribution
-        The NCHG script is written in C++ and is run from the terminal, here it is wrapped in a python function.
-        The total interactions on the chromosome, the number of interactions for the two bins interacting and the
-        linear genomic distance between the bins are taken into account to calculate the p-value.
-        The arguments are:
+        NCHG script to calculate the significance of interactions:
         m = minimum interaction length in bp, should be same as window size used to make the bedpe file
-        p = input file, which is the output of the write_remove_cytobands function
+        p = input file, which is the output of the remove_cytobands function but reformatted to be compatible with NCHG
         """
 
-        bedpe = Pipeline.write_remove_cytobands("NCHG_chr18_test1_c++")
+        nchg_run = sp.run([Pipeline.path_to_NCHG(), "-m", str(Pipeline.window_size()), "-p", Pipeline.input_to_nchg()])
 
-        # nchg_run = sp.run([Pipeline.path_to_NCHG(), str(Pipeline.window_size()), Pipeline.NCHG_input("testing_nchg_1")]) # str(Pipeline.remove_cytobands())
-        # nchg_run = sp.run(["/Users/GBS/Master/Pipeline/INC-tutorial/processing_scripts/NCHG_hic/NCHG", "-m 50000", "-p /Users/GBS/Master/Pipeline/python_pipe_test/bedpe_testing/NCHG_input.bedpe"])
-
-        # OK this works, providing the absolute paths:
-        # nchg_run = sp.run([Pipeline.path_to_NCHG(), "-m", str(Pipeline.window_size()), "-p", "/Users/GBS/Master/Pipeline/python_pipe_test/bedpe_testing/NCHG_input.bedpe"])
-
-        # but I want to call the -p argument directly from the Pipeline class
-        nchg_run = sp.run([Pipeline.path_to_NCHG(), "-m", str(Pipeline.window_size()), "-p", Pipeline.NCHG_input()])
         nchg_out = nchg_run.stdout
         return nchg_out
 
     @staticmethod
-    def write_siginificant_interactions(*args):
-        with open(Pipeline.find_siginificant_interactions().stdout, "w") as f:
-            f.writelines(Pipeline.find_siginificant_interactions().stdout)
-
-
+    def write_sig_interactions(*args):
+        file = os.path.join(Pipeline.default_output_path(*args))
+        with open(file, "w") as f:
+            f.writelines(Pipeline.find_siginificant_interactions())
 
     @staticmethod
     def adjust_pvalues():
@@ -274,7 +259,15 @@ class Pipeline:
         Adjust p-values using the Benjamini-Hochberg method
         """
 
-        NCHG = os.path.join(Pipeline.default_output_path("NCHG_chr18_test1"))
+        # Take output from NCHG
+        # set method for mutliple testing correction (BH), log ratio and FDR threshold
+        # Read in NCHG output and strip on new line, store in list
+        # Compute the log ratio for each line in list, add it to line as new field the log ratio is the line[9] / line[10] in base 2
+        # Use statmodels multicomp to adjust p-values
+        # Filter p values based on FDR threshold and log ratio (less than FDR, same or greater than log ratio)
+        # Return the filtered lines with only the edge and adjusted p-value
+
+        # NCHG = os.path.join(Pipeline.default_output_path("NCHG_chr18_test1"))
 
         # Dict where keys are chromosome names and values chromosome sizes
         # Then iterate over NCHG file
@@ -320,26 +313,11 @@ class Pipeline:
     def make_gtrack():
         """
         Make gtrack file from bedpe file with significant interactions
-        Make this later?
+        Make this able to output a gtrack file with weights (p-values) and without weights (p-values)
+        Make the pipeline output edge list by default, but optionally GTrack with and without weights
+        Also refactor processing to be Gtrack to edge list converter class
         """
 
-        # OK this can definately be done in python, we can also read in the padj and the NCHG out,
-        # allowing for using p-values/padj as weights in the GTrack file
-
-        # So this can be two things, make normal GTrack, or make GTrack with weights (p-values)
-
-        # But is this really needed? The format is already an edge list with p-value, just read into class
-        # and strip p value, store that in Node, then make networks from that.
-
-
-
-        pass
-
-    @staticmethod
-    def NCHG_out():
-        """
-        This is the output from the NCHG script
-        """
         pass
 
     @staticmethod
@@ -348,8 +326,8 @@ class Pipeline:
         Make edge list from bedpe file with significant interactions and padj
         """
 
-        padj = os.path.join(Pipeline.default_output_path("FDR_chr18_test1")) # This is the output from the FDR script
-        NCHG = os.path.join(Pipeline.default_output_path("NCHG_chr18_test1")) # This is the output from the NCHG script
+        padj = os.path.join(Pipeline.default_output_path("FDR_chr18_test1"))  # This is the output from the FDR script
+        # NCHG = os.path.join(Pipeline.default_output_path("NCHG_chr18_test1"))  # This is the output from the NCHG script
 
         edge_list_nop = []
         edge_list_withp = []
@@ -365,6 +343,7 @@ class Pipeline:
 
         return edge_list_nop, edge_list_withp
 
+    # this is nooby noob, make better!!!:
     # Split withp and nop into separate methods
     @staticmethod
     def make_edgelist_withp():
@@ -400,8 +379,11 @@ class Pipeline:
             print(line)
 
 
-print(type(Pipeline.remove_cytobands()))
-print(type(Pipeline.NCHG_input()))
+
+
+# print(type(Pipeline.remove_cytobands()))
+# print(type(Pipeline.NCHG_input()))
+# print(Pipeline.NCHG_input())
 
 
 Pipeline.find_siginificant_interactions()
@@ -429,7 +411,3 @@ Pipeline.find_siginificant_interactions()
 
 # automatisk les inn filer: run N-times where N is the number of files in the folder (or a specified number) and run the pipeline on each file
 # ha check for at den ene filen er ferdig processert, før den neste starter
-
-
-
-
