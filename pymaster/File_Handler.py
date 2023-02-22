@@ -55,6 +55,33 @@ class FileStruct:
                 print(os.listdir())
 
 
+class FileHandler:
+
+    """This class needs to find the hic pro output files, and split them on name (celline, chromosome)
+    then it needs to open these files, and split again on resolution, and store this information.
+    so to end up we get cell line x and cell line y, with chromosome 1 and 2, and resolution 50000 and 100000.
+    as a result we get 4 files, 2 for each cell line, and 2 for each resolution.
+    these files will be handed 1 by 1 to the pipeline, which will create two directories,
+    the directiories for the output should be handled here, not in the pipeline I think?
+    """
+
+    @staticmethod
+    def write_lines_to_file(file_path, lines, batch_size=1000):
+        with open(file_path, "w") as f:
+            for i in range(0, len(lines), batch_size):
+                f.writelines(lines[i:i + batch_size])
+        return file_path
+
+    @staticmethod
+    def locate_root_dir():
+        return TargetDirectories.output_directory()
+
+    @staticmethod
+    def locate_data():
+        for dirnames in os.walk(FileHandler.locate_root_dir()):
+            if dirnames in FileHandler.locate_root_dir() == "hic_results":
+                print(os.listdir())
+
 
 
 # Might work, idk if this is a good approach?
@@ -67,7 +94,6 @@ class TempFileManager:
     # Call this method to register temp files: TempFileManager.register_temp_file(file_path, FileHandler.__name__)
     def register_temp_file(cls, file_path, class_name):
         cls.temp_files[file_path] = class_name
-
 
     @classmethod
     # Call this method to delete temp files: TempFileManager.delete_temp_files(file_path)
@@ -82,22 +108,3 @@ class TempFileManager:
 
 # TargetDirectories._hicpro_output_directory() # Noe med calling som er feil, kanskje feil usecase, må vi ha instanser?
 
-class FileHandler:
-
-    """This class needs to find the hic pro output files, and split them on name (celline, chromosome)
-    then it needs to open these files, and split again on resolution, and store this information.
-    so to end up we get cell line x and cell line y, with chromosome 1 and 2, and resolution 50000 and 100000.
-    as a result we get 4 files, 2 for each cell line, and 2 for each resolution.
-    these files will be handed 1 by 1 to the pipeline, which will create two directories,
-    the directiories for the output should be handled here, not in the pipeline I think?
-    """
-
-    @staticmethod
-    def locate_root_dir():
-        return TargetDirectories.output_directory()
-
-    @staticmethod
-    def locate_data():
-        for dirnames in os.walk(FileHandler.locate_root_dir()):
-            if dirnames in FileHandler.locate_root_dir() == "hic_results":
-                print(os.listdir())

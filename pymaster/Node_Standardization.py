@@ -2,13 +2,10 @@ import pandas as pd
 import pybedtools as pbt
 import os as os
 import subprocess as sp
-import tempfile as tf
-import numpy as np
-import scipy as scp
 import math
-import sys
-import statsmodels.api as sm
 from statsmodels.sandbox.stats import multicomp
+from File_Handler import FileHandler
+
 
 # Pre-processing pipline for Hi-C data:
 
@@ -19,7 +16,12 @@ from statsmodels.sandbox.stats import multicomp
 # 1. Make automatic file naming, reading and writing in separate module, that feeds the pipeline module with the correct files
 # 2. Make Pipeline handle Hg38 as well, and make it so that the user can specify which reference genome to use and the methods adapt accordingly
 # 3. Make GTRack methods with- and without p-values and map between GTrack and edge list files for visualization purposes
+# 4. Gtrack processing methods allow for selection of specific chromosomes, and also allow for selection of specific cell lines, we want this functionality in the edge list methods as well
+# but without converting to GTrack first, so either make the methods that does this in the Pipeline class with a flag to select between GTrack and edge list, or make a separate class for edge list processing
+# so we do not need to convert to GTrack first. Also include/refactor GTrack methods into Pipeline class.
+# 5. Export p values and padj for plotting
 
+# Maybe best to make the Processing classes handle both GTrack and edge list files, and then make a separate class for file handling that handles the reading and writing of files.
 
 
 class Pipeline:
@@ -54,8 +56,8 @@ class Pipeline:
         Write dataframes to specified directory
         """
 
-        matrix_file = os.path.join(Pipeline.default_rawdata_path("chr18_50000.matrix"))
-        bed_file = os.path.join(Pipeline.default_rawdata_path("chr18_50000_abs.bed"))
+        matrix_file = os.path.join(Pipeline.default_rawdata_path("chr18_50000.matrix"))  # TODO: Make this automatic
+        bed_file = os.path.join(Pipeline.default_rawdata_path("chr18_50000_abs.bed"))  # TODO: Make this automatic
 
         matrix_df = pd.read_csv(matrix_file, sep="\t", header=None)
         bed_df = pd.read_csv(bed_file, sep="\t", header=None)
@@ -78,8 +80,8 @@ class Pipeline:
         """
         bedpe = []
 
-        bed_file = os.path.join(Pipeline.default_rawdata_path("chr18_50000_abs.bed"))
-        matrix_file = os.path.join(Pipeline.default_rawdata_path("chr18_50000.matrix"))
+        bed_file = os.path.join(Pipeline.default_rawdata_path("chr18_50000_abs.bed"))  # TODO: Make this automatic
+        matrix_file = os.path.join(Pipeline.default_rawdata_path("chr18_50000.matrix"))  # TODO: Make this automatic
 
         bed_lines = open(bed_file, "r").readlines()
         matrix_lines = open(matrix_file, "r").readlines()
@@ -110,7 +112,7 @@ class Pipeline:
         print(bedpe_pbt)
 
     @staticmethod
-    def write_bedpe(*args):
+    def write_bedpe(*args):  # TODO: Make this automatic
         """
         Writes bedpe file to specified directory
         """
@@ -155,11 +157,11 @@ class Pipeline:
         pass
 
     @staticmethod
-    def write_blacklist_hg19(*args):
+    def write_blacklist_hg19(*args):  # TODO: Make this automatic
         Pipeline.remove_blacklist_hg19().saveas(Pipeline.default_output_path(*args))
 
     @staticmethod
-    def write_blacklist_hg38(*args):
+    def write_blacklist_hg38(*args):  # TODO: Make this automatic
         Pipeline.remove_blacklist_hg38().saveas(Pipeline.default_output_path(*args))
 
     # Instead of writing a new function for each blacklist, I could write a check for the genome version
@@ -191,37 +193,58 @@ class Pipeline:
         return print(Pipeline.remove_cytobands())
 
     @staticmethod
-    def write_remove_cytobands(*args):
+    def write_remove_cytobands(*args):  # TODO: Make this automatic
 
         with open(Pipeline.default_output_path(*args), "w") as f:
             f.writelines(Pipeline.remove_cytobands().to_dataframe().to_csv(sep="\t", header=False, index=False))
 
     @staticmethod
-    def remove_cap():
-
-        # Refactor to work with pbt in pipeline
+    def cap_chromosomes():
 
         """
-        Sets a cap on the length of the chromosomes, any interactions longer than this are removed
-        this is only applicable to interactions between chromosomes, this ensures that the interactions
-        do not go beyond the end of the chromosome? I think. But we have a constant bin size, we do not mix
-        bin sizes, so this is not necessary maybe? IDK skip for now. Refactor this to work with pbt in pipeline?:
-
-        chrsize = {}
-        with open(chrsize_file) as f:
-            for length in f:
-                chrsize[length.split()[0]] = int(float(length.split()[1]))
-
-        for n in sys.stdin:
-            n = n.split()
-            if int(n[2]) > chrsize[n[0]]:
-                n[2] = chrsize[n[0]]
-            if int(n[5]) > chrsize[n[3]]:
-                n[5] = chrsize[n[3]]
-            n = map(str,n)
-            print('\t'.join(n))
+        Ensures that chromosome interactions do not go beyond the end of the chromosome
         """
-        pass
+
+        # read in chromosome sizes
+        chromosome_size_hg19 = Pipeline.default_reference_path("hg19/chrom_hg19_test.sizes")
+        chromosome_size_dict = {}
+        with open(chromosome_size_hg19) as f:
+            for line in f:
+                chromosome_size_dict[line.split()[0]] = int(line.split()[1])
+        interactions = pbt.BedTool.to_dataframe(Pipeline.remove_cytobands()).to_csv(sep="\t", header=False, index=False)
+        interactions_in = interactions.split("\n")
+
+        # find interactions exceeding chromosome size
+        empty_missing_lines = []
+        for line in interactions_in:
+
+            fields = line.strip().split()
+            if not line.strip():
+                empty_missing_lines.append(line)
+                continue
+            if len(fields) < 7:
+                empty_missing_lines.append(line)
+                continue
+
+            chrom1, start1, end1 = fields[0], int(fields[1]), int(fields[2])
+            chrom2, start2, end2 = fields[3], int(fields[4]), int(fields[5])
+
+            if end1 > chromosome_size_dict.get(chrom1, end1):
+                excess_length = end1 - chromosome_size_dict.get(chrom1, end1)
+                end1 = chromosome_size_dict.get(chrom1, end1)
+                start1 = max(start1 - excess_length, 0)
+
+            if end2 > chromosome_size_dict.get(chrom2, end2):
+                excess_length = end2 - chromosome_size_dict.get(chrom2, end2)
+                end2 = chromosome_size_dict.get(chrom2, end2)
+                start2 = max(start2 - excess_length, 0)
+
+        # cap interactions exceeding chromosome size
+        print(f"{chrom1}:{start1}-{end1} -- {chrom2}:{start2}-{end2}")
+        # 78 077 248 chr18
+        # 78 000 000-78 050 000 chr18
+
+        # Test this with full genome and write to file/output to pbd for input_to_nchg method (or bypass this method by writing as df.str.csv directly?)
 
     @staticmethod
     def input_to_nchg():
@@ -242,9 +265,8 @@ class Pipeline:
         p = input file, which is the output of the remove_cytobands function but reformatted to be compatible with NCHG
         """
 
-        nchg_run = sp.run([Pipeline.path_to_NCHG(), "-m", str(Pipeline.window_size()), "-p", Pipeline.input_to_nchg()])
-
-        nchg_out = nchg_run.stdout
+        nchg_run = sp.run([Pipeline.path_to_NCHG(), "-m", str(Pipeline.window_size()), "-p", Pipeline.input_to_nchg()], stdout=sp.PIPE, stderr=sp.PIPE, text=True)
+        nchg_out = nchg_run.stdout.splitlines()
         return nchg_out
 
     @staticmethod
@@ -254,160 +276,115 @@ class Pipeline:
             f.writelines(Pipeline.find_siginificant_interactions())
 
     @staticmethod
-    def adjust_pvalues():
+    def adjust_pvalues(log_ratio_threshold=2, fdr_threshold=0.05, method="fdr_bh"):
         """
-        Adjust p-values using the Benjamini-Hochberg method
+        Adjust p-values using the Benjamini-Hochberg method from
+        The log-ratio threshold is the observed/expected ratio of interactions
+        The fdr threshold is the false discovery rate threshold for the adjusted p-values
+        The method is the method used to adjust the p-values (here BH, other methods are available)
         """
 
-        # Take output from NCHG
-        # set method for mutliple testing correction (BH), log ratio and FDR threshold
-        # Read in NCHG output and strip on new line, store in list
-        # Compute the log ratio for each line in list, add it to line as new field the log ratio is the line[9] / line[10] in base 2
-        # Use statmodels multicomp to adjust p-values
-        # Filter p values based on FDR threshold and log ratio (less than FDR, same or greater than log ratio)
-        # Return the filtered lines with only the edge and adjusted p-value
+        data = Pipeline.find_siginificant_interactions()
 
-        # NCHG = os.path.join(Pipeline.default_output_path("NCHG_chr18_test1"))
+        pval = []
+        processed = []
+        for line in data:
+            line = line.split()
+            pval.append(float(line[6]))
+            if float(line[9]) == 0 or float(line[10]) == 0:
+                logratio = 0.0
+            else:
+                logratio = math.log(float(line[9]), 2) - math.log(float(line[10]), 2)
 
-        # Dict where keys are chromosome names and values chromosome sizes
-        # Then iterate over NCHG file
+            line = ' '.join(line) + ' ' + str(logratio)
+            processed.append(line)
 
-        # # Get file name
-        # file_name = input("Enter file name: ")
-        #
-        # with open(file_name) as infileH:
-        #     infile = infileH.readlines()
-        #
-        # # Get method
-        # method = input("Enter method: BH")
-        # # Get log ratio
-        # log_ratio = float(input("Enter log ratio: "))
-        # # Get FDR threshold
-        # fdr_thres = float(input("Enter FDR threshold: "))
-        #
-        # infile = [x.strip() for x in infile]
-        #
-        # pval = []
-        # padj = []
-        # processline = []
-        # for line in infile:
-        #     line = line.split()
-        #     pval.append(float(line[6]))
-        #     if float(line[9]) == 0 or float(line[10]) == 0:
-        #         logratio = 0.0
-        #     else:
-        #         logratio = math.log(float(line[9]), 2) - math.log(float(line[10]), 2)
-        #
-        #     line = " ".join(line) + " " + str(logratio)
-        #     processline.append(line)
-        #
-        # padj = list(multicomp.multipletests(pval, method=method))
-        #
-        # for i in range(len(processline)):
-        #     line = processline[i] + " " + str(padj[1][i])
-        #     line = line.split()
-        #     if float(line[11]) >= log_ratio and float(line[12]) <= fdr_thres:
-        #         print(line[0] + "\t" + line[1] + "\t" + line[2] + "\t" + line[3] + "\t" + line[4] + "\t" + line[5] + "\t" + line[12])
+        padj = list(multicomp.multipletests(pval, method=method))
+        padj_out = []
+
+        for i in range(len(processed)):
+            line = processed[i] + " " + str(padj[1][i])
+            line = line.split()
+            if float(line[11]) >= log_ratio_threshold and float(line[12]) <= fdr_threshold:
+                padj_out.append(line[0] + "\t" + line[1] + "\t" + line[2] + "\t" + line[3] + "\t" + line[4] + "\t" + line[5] + "\t" + line[12])
+
+        return padj_out
 
     @staticmethod
     def make_gtrack():
         """
-        Make gtrack file from bedpe file with significant interactions
-        Make this able to output a gtrack file with weights (p-values) and without weights (p-values)
-        Make the pipeline output edge list by default, but optionally GTrack with and without weights
-        Also refactor processing to be Gtrack to edge list converter class
+        I'm not sure if this is possible without TADs as input,
+        and also it's wasteful in the respect to time and space, since we already have the edge lists.
+        But it would in theory be nice to be able to make a GTrack from the edge lists to use in Chrom3D.
         """
 
+        # It looks like this and is made from the "make Gtrack" script:
+        """
+        ##gtrack	version:	1.0
+        ##track	type:	linked	segments
+        ###seqid	 start	   end	     id	                   radius	periphery	edges
+        # chr1        0         750000  chr1: 0 - 750000         1        0           .
+        # chr1        900000   1300000  chr1: 900000 - 1300000   1        0           chr1: 154350000 - 155100000;chr1:228100000-228550000
+        """
+        padj = Pipeline.adjust_pvalues()
         pass
 
     @staticmethod
-    def make_edge_list():
-        """
-        Make edge list from bedpe file with significant interactions and padj
-        """
+    def make_edgelist():
 
-        padj = os.path.join(Pipeline.default_output_path("FDR_chr18_test1"))  # This is the output from the FDR script
-        # NCHG = os.path.join(Pipeline.default_output_path("NCHG_chr18_test1"))  # This is the output from the NCHG script
+        padj = Pipeline.adjust_pvalues()
+        edge_list = []
 
-        edge_list_nop = []
-        edge_list_withp = []
+        for line in padj:
+            line = line.split()
+            edge_list.append(line[0] + ":" + line[1] + "-" + line[2] + " " + line[3] + "-" + line[4] + ":" + line[5])
 
-        with open(padj) as file:
-            for line in file:
-                if len(line) == 6:
-                    line = line.split()
-                    edge_list_nop.append(line[0] + ":" + line[1] + "-" + line[2] + " " + line[3] + "-" + line[4] + ":" + line[5])
-                else:
-                    line = line.split()
-                    edge_list_withp.append(line[0] + ":" + line[1] + "-" + line[2] + " " + line[3] + "-" + line[4] + ":" + line[5] + " " + line[6])
-
-        return edge_list_nop, edge_list_withp
-
-    # this is nooby noob, make better!!!:
-    # Split withp and nop into separate methods
-    @staticmethod
-    def make_edgelist_withp():
-        with open(os.path.join(Pipeline.default_output_path("FDR_chr18_test1"))) as file:
-            for line in file:
-                print(line)
+        return edge_list
 
     @staticmethod
-    def write_edge_list():
+    def make_weighted_edgelist():
 
-        edge_list_nop, edge_list_withp = Pipeline.make_edge_list()
+        padj = Pipeline.adjust_pvalues()
+        edge_list = []
 
-        with open("edge_list_nop.txt", "w") as file:
-            for line in edge_list_nop:
-                file.write(line + "\n")
+        for line in padj:
+            line = line.split()
+            edge_list.append(line[0] + ":" + line[1] + "-" + line[2] + " " + line[3] + "-" + line[4] + ":" + line[5] + " " + line[6])
 
-        with open("edge_list_withp.txt", "w") as file:
-            for line in edge_list_withp:
-                file.write(line + "\n")
-
-    @staticmethod
-    def print_edge_list_withp():
-
-        edge_list_withp = Pipeline.make_edge_list()
-        for line in edge_list_withp:
-            print(line)
+        return edge_list
 
     @staticmethod
-    def print_edge_list_nop():
+    def write_edgelist():
 
-        edge_list_nop = Pipeline.make_edge_list()
-        for line in edge_list_nop:
-            print(line)
+        os.chdir(Pipeline.default_output_path())
+        file = Pipeline.default_output_path("edgelist.txt")  # TODO: this file needs to be handled by filehandler for automatic naming (args from filehanlder), name from input file
+        with open(file, "w") as f:
+            f.writelines(Pipeline.make_edgelist())
+        return file
+
+    # @staticmethod
+    # def write_weighted_edgelist():
+    #
+    #     os.chdir(Pipeline.default_output_path())
+    #     file = Pipeline.default_output_path("weighted_edgelist.txt")
+    #     with open(file, "w") as f:
+    #         f.writelines(Pipeline.make_weighted_edgelist())
+    #     return file
+
+    @staticmethod
+    def write_weighted_edgelist():
+        os.chdir(Pipeline.default_output_path())
+        file_path = Pipeline.default_output_path("weighted_edgelist.txt")
+        lines = Pipeline.make_weighted_edgelist()
+        FileHandler.write_lines_to_file(file_path, lines)
+        return file_path
+
+    # @staticmethod
+    # def write_lines_to_file(file_path, lines, batch_size=1000):
+    #     with open(file_path, "w") as f:
+    #         for i in range(0, len(lines), batch_size):
+    #             f.writelines(lines[i:i + batch_size])
+    #     return file_path
 
 
-
-
-# print(type(Pipeline.remove_cytobands()))
-# print(type(Pipeline.NCHG_input()))
-# print(Pipeline.NCHG_input())
-
-
-Pipeline.find_siginificant_interactions()
-
-
-# Pipeline.remove_cytobands()
-# Pipeline.write_remove_cytobands("testing_cytob")
-
-# exec(open("/Users/GBS/Master/Pipeline/INC-tutorial/processing_scripts/NCHG_hic/NCHG").read())
-
-
-# 1. Create BEDPE file (done)
-# 2. Remove regions overlapping blacklisted regions (done)
-# 3. Run NCHG script to find significant interactions (done)
-# 4. Run FDR script to correct for multiple testing (done)
-# 5. Make GTrack format (unclear if I can use one file (beads) nope, need two files)
-# 6. Make the Pipeline able to read in multiple files (cell lines) and process them
-
-# finish code, clean it up bby, make it nice
-# wrap the executable, so it runs here
-# make the class able to read in data from multiple cell lines
-# make network from test data
-# make code run as standalone script, either with sys.argv, argparse or input
-# make ylm file for the pipeline
-
-# automatisk les inn filer: run N-times where N is the number of files in the folder (or a specified number) and run the pipeline on each file
-# ha check for at den ene filen er ferdig processert, før den neste starter
+print(Pipeline.write_weighted_edgelist())
