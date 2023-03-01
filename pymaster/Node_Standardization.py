@@ -5,7 +5,8 @@ import subprocess as sp
 import math
 from statsmodels.sandbox.stats import multicomp
 from File_Handler import FileHandler
-import glob as glob
+
+
 
 # Pre-processing pipline for Hi-C data:
 
@@ -23,51 +24,131 @@ import glob as glob
 
 # Maybe best to make the Processing classes handle both GTrack and edge list files, and then make a separate class for file handling that handles the reading and writing of files.
 
-class GetFiles:
 
+
+
+
+# TODO: Call this class from main later on, and make it so that the user can specify input and output dirs
+class SetDirectories:
+
+    """
+    SET INPUT, OUTPUT, REFERENCE DIRS AND FULLPATH TO NCHG HERE
+    """
+
+    input_dir = "/Users/GBS/Master/Pipeline/testing_chr18_diff_res/"
+    output_dir = "/Users/GBS/Master/Pipeline/testing_chr18_diff_res/output_dir"
+    reference_dir = "/Users/GBS/Master/reference"
+    nchg_path = "/Users/GBS/Master/Pipeline/INC-tutorial/processing_scripts/NCHG_hic/NCHG"
+
+    @classmethod
+    def set_input_dir(cls, input_dir):
+        cls.input_dir = input_dir
+
+    @classmethod
+    def set_output_dir(cls, output_dir):
+        cls.output_dir = output_dir
+
+    @classmethod
+    def set_reference_dir(cls, reference_dir):
+        cls.reference_dir = reference_dir
+
+    @classmethod
+    def set_NCHG_path(cls, nchg_path):
+        cls.NCHG_path = nchg_path
+
+    @classmethod
+    def get_input_dir(cls):
+        return cls.input_dir
+
+    @classmethod
+    def get_output_dir(cls):
+        return cls.output_dir
+
+    @classmethod
+    def get_reference_dir(cls):
+        return cls.reference_dir
+
+    @classmethod
+    def get_NCHG_path(cls):
+        return cls.nchg_path
+
+
+class Pipeline_Input:
     @staticmethod
-    def read_files(*args):
+    def find_files(*root_directories):
         """
-        This method should be handed an input directory (root dir containing HiC-Pro output files)
-        :param input_directory: OS path to input directory
-        :return: OS path to files
+        Finds all files with the specified suffixes in the specified subdirectory of each root directory.
+        Currently, this does not match several files with the same resolition, so only works for one file per resolution.
+        :param root_directories: one or more root directories to search in
+        :return: a list of file paths for each BED and matrix file found
         """
 
+        subdirectory_name = "raw"
         bedfiles = []
         matrixfiles = []
 
-        # Use glob to get .BED and .matrix files
+        # Find the raw data subdirectory in the root directory
+        raw_subdirectories = []
+        for root_directory in root_directories:
+            for root, _, _ in os.walk(root_directory):
+                if os.path.basename(root) == subdirectory_name:
+                    raw_subdirectories.append(root)
 
-        for file in glob.glob0(*args, "*.bed"):
-            bedfiles.append(file)
-        for file in glob.glob0(*args, "*.matrix"):
-            matrixfiles.append(file)
+        # Recursively search raw data subdirectory for bed and matrix files
+        for subdirectory_path in raw_subdirectories:
+            for root, _, files in os.walk(subdirectory_path):
+                for file in files:
+                    if file.endswith(".bed"):
+                        bedfiles.append(os.path.join(root, file))
+                    if file.endswith(".matrix"):
+                        matrixfiles.append(os.path.join(root, file))
 
-        print(bedfiles)
+        return bedfiles, matrixfiles
+
+    @staticmethod
+    def group_files(*args):
+        """
+        Groups files by resolution and experiment
+        :param args: one or more root directories containing raw data from HiC-Pro
+        :return: dict of file paths for each BED and matrix file found, grouped by resolution and experiment
+        """
+
+        bedfiles = Pipeline_Input.find_files(*args)[0]
+        matrixfiles = Pipeline_Input.find_files(*args)[1]
+        grouped_files = {}
+
+        # Extract resolution and experiment name from file path
+        for matrixfile in matrixfiles:
+            resolution = int(matrixfile.split("/")[-2])
+            experiment = matrixfile.split("/")[-4]
+            key = f"{experiment, resolution}"
+
+            # Group bed file to matrix file
+            for bedfile in bedfiles:
+                if bedfile.startswith(matrixfile[:-len(".matrix")]):
+                    if key not in grouped_files:
+                        grouped_files[key] = (bedfile, matrixfile)
+                    else:
+                        grouped_files[key] += (bedfile, matrixfile)
+
+        return grouped_files
 
 
-        # bedfiles.append(glob(*args, "*.bed"))
-        # matrixfiles.append(glob(*args, "*.matrix"))
-        #
-        # for path in os.scandir(*args):
-        #     if path.is_file() and path.endswith(".bed"):
-        #             # yield os.path.join(dirs, file)
-        #         bedfiles.append(os.path.join(*args, path))
-        #         if file.endswith(".matrix"):
-        #             # yield os.path.join(dirs, file)
-        #             matrixfiles.append(os.path.join(dirs, file))
-        #         else:
-        #             pass
+    @staticmethod
+    def pass_to_pipeline(*args):
+        """
+        Passes the grouped files to the pipeline
+        :param args: one or more root directories containing raw data from HiC-Pro
+        :return: BED and Matrix file, gropued by resolution and experiment
+        """
 
-        return matrixfiles, bedfiles
+        for resolution, file_paths in Pipeline_Input.group_files(*args).items():
+            # call Pipeline?
+            Pipeline.
 
 
-print(GetFiles.read_files("/Users/GBS/Master/Pipeline/testing_chr18_diff_res"))
+        pass
 
-
-# So now there is a list of paths to bed files
-# Then we need to use a for loop to send them one by one to Pipeline? By using the yield function?
-#
 
 
 class Pipeline:
@@ -92,7 +173,8 @@ class Pipeline:
         return "/Users/GBS/Master/Pipeline/INC-tutorial/processing_scripts/NCHG_hic/NCHG"
 
     @staticmethod
-    def window_size(): # TODO: Make this automatically adjust to resulution of current input file
+    def window_size():  # TODO: Make this automatically adjust to resulution of current input file
+        # For resoultion in input files, adjust window size to equal resolution for each file
         return 50000
 
     @staticmethod
@@ -433,8 +515,18 @@ class Pipeline:
     #     return file_path
 
 
-# Calling Pipeline on data
+# Calling Pipeline on data?
 
 def run_pipeline(file):
     for file in FileHandler.get_files_from_directory():
         Pipeline.run_pipeline(file)
+
+# Just call Pipeline above with root dir(s) containing data and output dir
+# End pipeline with outputting the edgelist for each experiment/resolution
+# and then write all edgelists renamed to shortened name to output directory
+
+# Make main module for running pipeline when its done
+# if __name__ == "__main__":
+#     main()
+
+
