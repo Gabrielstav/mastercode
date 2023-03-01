@@ -5,7 +5,7 @@ import subprocess as sp
 import math
 from statsmodels.sandbox.stats import multicomp
 from File_Handler import FileHandler
-
+import glob as glob
 
 # Pre-processing pipline for Hi-C data:
 
@@ -22,6 +22,52 @@ from File_Handler import FileHandler
 # 5. Export p values and padj for plotting
 
 # Maybe best to make the Processing classes handle both GTrack and edge list files, and then make a separate class for file handling that handles the reading and writing of files.
+
+class GetFiles:
+
+    @staticmethod
+    def read_files(*args):
+        """
+        This method should be handed an input directory (root dir containing HiC-Pro output files)
+        :param input_directory: OS path to input directory
+        :return: OS path to files
+        """
+
+        bedfiles = []
+        matrixfiles = []
+
+        # Use glob to get .BED and .matrix files
+
+        for file in glob.glob0(*args, "*.bed"):
+            bedfiles.append(file)
+        for file in glob.glob0(*args, "*.matrix"):
+            matrixfiles.append(file)
+
+        print(bedfiles)
+
+
+        # bedfiles.append(glob(*args, "*.bed"))
+        # matrixfiles.append(glob(*args, "*.matrix"))
+        #
+        # for path in os.scandir(*args):
+        #     if path.is_file() and path.endswith(".bed"):
+        #             # yield os.path.join(dirs, file)
+        #         bedfiles.append(os.path.join(*args, path))
+        #         if file.endswith(".matrix"):
+        #             # yield os.path.join(dirs, file)
+        #             matrixfiles.append(os.path.join(dirs, file))
+        #         else:
+        #             pass
+
+        return matrixfiles, bedfiles
+
+
+print(GetFiles.read_files("/Users/GBS/Master/Pipeline/testing_chr18_diff_res"))
+
+
+# So now there is a list of paths to bed files
+# Then we need to use a for loop to send them one by one to Pipeline? By using the yield function?
+#
 
 
 class Pipeline:
@@ -46,7 +92,7 @@ class Pipeline:
         return "/Users/GBS/Master/Pipeline/INC-tutorial/processing_scripts/NCHG_hic/NCHG"
 
     @staticmethod
-    def window_size():
+    def window_size(): # TODO: Make this automatically adjust to resulution of current input file
         return 50000
 
     @staticmethod
@@ -387,4 +433,8 @@ class Pipeline:
     #     return file_path
 
 
-print(Pipeline.write_weighted_edgelist())
+# Calling Pipeline on data
+
+def run_pipeline(file):
+    for file in FileHandler.get_files_from_directory():
+        Pipeline.run_pipeline(file)

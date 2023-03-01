@@ -1,3 +1,6 @@
+import os as os
+
+
 
 # Place to read in files from custom dir, containing all HiC-Pro output files
 # This code will read in all these files, split them on Celline/Chromosome and resolution, and store this information.
@@ -5,12 +8,147 @@
 # one containing the edge list for that specific cell line/chromosome and resolution, and one containing the
 # output from pipeline for each step like BEDPE, NCHG out etc
 
-# We need to wrap the NCHG script, and include the Gtrack and FDR script in the code or wrap them as well.
-
-# Look at diagram for dir structure.
+# Abstract class for file handling
 
 
-import os as os
+class FiletoPipeline:
+
+    @staticmethod
+    def read_files(input_directory):
+        """
+        This method should be handed an input directory (root dir containing HiC-Pro output files)
+        :param input_directory: OS path to input directory
+        :return: OS path to files
+        """
+
+        bedfiles = []
+
+        for dirs, files in os.walk(input_directory):
+            for file in files:
+                if file.endswith(".bed"):
+                    yield os.path.join(dirs, file)
+                    bedfiles.append(os.path.join(dirs, file))
+
+        return bedfiles
+
+    @staticmethod
+    def send_to_pipeline(input_directory):
+
+        """
+        This method sends the files to the pipeline one by one
+        :param input_directory:
+        :return:
+        """
+
+        for file in FiletoPipeline.read_files(input_directory):
+            Pipeline(file)
+
+        return "Done"
+
+
+class FilefromPipeline:
+
+    @staticmethod
+    def pipeline_return():
+        """
+        This method returns the output from the pipeline
+        :return: os path to output files
+        """
+
+        return Pipeline.output_files
+
+    @staticmethod
+    def files_to_processing():
+        """
+        This method sends the files to the processing class
+        :return:
+        """
+
+        for file in FilefromPipeline.pipeline_return():
+            Processing(file)
+
+        return "Done"
+
+
+
+
+
+
+class FileHandler:
+
+    def __init__(self, input_directory, output_directory):
+        self.input_directory = input_directory
+        self.output_directory = output_directory
+
+    def read_files(self):
+        for root, dirs, files in os.walk(self.input_directory):
+            for file in files:
+                if file.endswith(".bed"):
+                    FileHandler(os.path.join(root, file))
+
+    def read_files_as_list(self):
+        file_list = []
+        for root, dirs, files in os.walk(self.input_directory):
+            for file in files:
+                if file.endswith(".bed"):
+                    file_list.append(os.path.join(root, file))
+        return file_list
+
+    def write_files(self):
+        for root, dirs, files in os.walk(self.output_directory):
+            for file in files:
+                if file.endswith(".bed"):
+                    FileHandler(os.path.join(root, file))
+
+    def write_files_as_list(self):
+        file_list = []
+        for root, dirs, files in os.walk(self.output_directory):
+            for file in files:
+                if file.endswith(".bed"):
+                    file_list.append(os.path.join(root, file))
+        return file_list
+
+
+class DataReader:
+
+    """
+    This class should be handed an input file (root dir containing HiC-Pro output files),
+    and then read in all files in this directory, and split them on cell line, chromosome and resolution.
+    As outout it should, one at a time, give the paths of the files to the Pipeline class, which will
+    then run the pipeline on each file, and write the output to a new directory.
+
+    Use OS module walk and split to get the paths to the files.
+    Then filter the files, rename them? or store them as objects? or in a dict?
+    Then give one file path at a time to Pipeline class, refactor it so that this can work.
+    We need to keep the resolution in the file name, so that we can refactor the Processing class
+    to handle different resolutions and filter on them.
+
+    Må vel også sette output directory, since after the Pipeline is done, we have a lot of output files.
+    So we only need to supply input dir(s) and output dir.
+    It should for any dir traverse the structure and grab .BED files and store them.
+    It needs to be able to handle multiple input dirs.
+    """
+
+    def __init__(self, input_directory, output_directory):
+        self.input_directory = input_directory
+        self.output_directory = output_directory
+
+    def read_files(self):
+        for root, dirs, files in os.walk(self.input_directory):
+            for file in files:
+                if file.endswith(".bed"):
+                    DataReader(os.path.join(root, file))
+
+    def read_files_as_list(self):
+        file_list = []
+        for root, dirs, files in os.walk(self.input_directory):
+            for file in files:
+                if file.endswith(".bed"):
+                    file_list.append(os.path.join(root, file))
+        return file_list
+
+
+
 
 # Example of HIC-Pro diretory:
 # /Users/GBS/Master/Pipeline/python_pipe_test/diff_bedpe_res/HIC_res
