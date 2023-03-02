@@ -9,6 +9,18 @@ from matplotlib import pyplot as plt
 from collections import Counter
 import altair as alt
 
+
+
+
+# Quick look at new method on INC data
+
+
+chr18_inc_pipe = ig.Graph.Load
+
+
+
+
+
 # Check if we can create graph objects directly without having to create an edgelist format file each time and
 # import it from a different directory.
 

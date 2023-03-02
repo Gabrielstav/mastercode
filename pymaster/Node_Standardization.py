@@ -1,4 +1,5 @@
 import pathlib
+import shutil
 
 import pandas as pd
 import pybedtools as pbt
@@ -86,16 +87,12 @@ class SetDirectories:
             os.makedirs(temp_dir)
         return temp_dir
 
-print(SetDirectories.get_input_dir())
-print(type(SetDirectories.get_input_dir()))
-
 class Pipeline_Input:
 
     @staticmethod
     def find_files(*root_directories):
         """
-        Finds all files with the specified suffixes in the specified subdirectory of each root directory.
-        Currently, this does not match several files with the same resolition, so only works for one file per resolution.
+        Finds all files bed and matrix files in the raw data subdirectory of the root directory.
         :param root_directories: one or more root directories to search in
         :return: a list of file paths for each BED and matrix file found
         """
@@ -126,7 +123,7 @@ class Pipeline_Input:
     @staticmethod
     def group_files(*args):
         """
-        Groups files by resolution and experiment
+        Groups bed and matrix files by resolution and experiment.
         :param args: one or more root directories containing raw data from HiC-Pro
         :return: dict of file paths for each BED and matrix file found, grouped by resolution and experiment
         """
@@ -151,29 +148,19 @@ class Pipeline_Input:
 
         return grouped_files
 
+# print(Pipeline_Input.group_files(SetDirectories.get_input_dir()))
 
-print(Pipeline_Input.group_files(SetDirectories.get_input_dir()))
 
 class test:
     @staticmethod
-    def make_bedpe():
+    def make_bedpe(bed_file, matrix_file):
         """
         Makes bedpe file from HiC-Pro output
         """
         bedpe = []
 
-        bed = Pipeline_Input.group_files(SetDirectories.get_input_dir())[0]
-        matrix = Pipeline_Input.group_files(SetDirectories.get_input_dir())[1]
-
-        for range in range(len(bed)):
-            bed_lines = open(bed, "r").readlines()
-            matrix_lines = open(matrix, "r").readlines()
-
-        bed_dict = {}
-
-        for line in bed:
-            line = line.strip().split("\t")
-            bed_dict[line[3]] = line
+        bed_lines = open(bed_file, "r").readlines()
+        matrix_lines = open(matrix_file, "r").readlines()
 
         bed_dict = {}
         for line in bed_lines:
@@ -188,8 +175,56 @@ class test:
                          f"\t{bed_dict[line[1]][1]}"
                          f"\t{bed_dict[line[1]][2]}"
                          f"\t{line[2]}\n")
-
         return bedpe
+
+    @staticmethod
+    def input_to_make_bedpe(grouped_files):
+
+        os.chdir(SetDirectories.get_temp_dir())
+        if not os.path.exists("bedpe"):
+            os.mkdir("bedpe")
+        else:
+            shutil.rmtree("bedpe")
+            os.mkdir("bedpe")
+        os.chdir("bedpe")
+
+        for key, val in grouped_files.items():
+            split_key = key.split(",")
+            experiment = split_key[0]
+            resolution = split_key[1]
+            bedfile = val[0]
+            matrixfile = val[1]
+            bedpe = test.make_bedpe(bedfile, matrixfile)
+            with open(f"{experiment}_{resolution}.bedpe", "w") as f:
+                f.writelines(bedpe)
+                f.close()
+
+    @staticmethod
+    def remove_blacklist(bedpe):
+
+
+        os.chdr(SetDirectories.get_reference_dir())
+        blacklisted_regions = open("hg19-blacklist.v2.bed", "r").readlines()
+        os.chr(SetDirectories.get_temp_dir())
+
+        blacklisted = os.path.join(Pipeline.default_reference_path("hg19/hg19-blacklist.v2.bed"))
+        blacklised_pbt = pbt.BedTool(blacklisted)
+        bedpe_pbt = pbt.BedTool(Pipeline.make_bedpe())
+
+        no_overlap_bedpe = bedpe_pbt.window(blacklised_pbt, w=Pipeline.window_size(), r=False, v=True)
+
+        return no_overlap_bedpe
+
+
+# test.remove_blacklist(test.input_to_make_bedpe(Pipeline_Input.group_files(SetDirectories.get_input_dir())) ???
+
+
+# test.input_to_make_bedpe(Pipeline_Input.group_files(SetDirectories.get_input_dir()))
+
+# make_bedpe processes one matrix file and one bed file into bedpe, outputs the bedpe file
+# another method, input_to_make_bedpe, calls the make_bedpe method for each matrix and bed file in the grouped_files dict in a loop,
+# and writes the output to a file in the temp directory, naming it after the experiment and resolution.
+
 
 
 
@@ -270,6 +305,8 @@ class Pipeline:
                          f"\t{bed_dict[line[1]][2]}"
                          f"\t{line[2]}\n")
 
+        # print(bed_dict)
+        # print(bedpe)
         return bedpe
 
     @staticmethod
@@ -467,7 +504,7 @@ class Pipeline:
 
         for line in padj:
             line = line.split()
-            edge_list.append(line[0] + ":" + line[1] + "-" + line[2] + " " + line[3] + "-" + line[4] + ":" + line[5])
+            edge_list.append(line[0] + ":" + line[1] + "-" + line[2] + "  " + line[3] + "-" + line[4] + ":" + line[5])
 
         return edge_list
 
@@ -487,7 +524,7 @@ class Pipeline:
     def write_edgelist():
 
         os.chdir(Pipeline.default_output_path())
-        file = Pipeline.default_output_path("edgelist.txt")  # TODO: this file needs to be handled by filehandler for automatic naming (args from filehanlder), name from input file
+        file = Pipeline.default_output_path("edgelist.txt")
         with open(file, "w") as f:
             f.writelines(Pipeline.make_edgelist())
         return file
@@ -501,16 +538,9 @@ class Pipeline:
         return file_path
 
 
-# Calling Pipeline on data?
+# print(Pipeline.make_bedpe())
+# Pipeline.make_bedpe()
 
-
-# Just call Pipeline above with root dir(s) containing data and output dir
-# End pipeline with outputting the edgelist for each experiment/resolution
-# and then write all edgelists renamed to shortened name to output directory
-
-# Make main module for running pipeline when its done
-# if __name__ == "__main__":
-#     main()
 
 
 
