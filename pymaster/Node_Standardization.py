@@ -1,3 +1,5 @@
+import pathlib
+
 import pandas as pd
 import pybedtools as pbt
 import os as os
@@ -29,51 +31,66 @@ from File_Handler import FileHandler
 
 
 # TODO: Call this class from main later on, and make it so that the user can specify input and output dirs
+
 class SetDirectories:
 
     """
-    SET INPUT, OUTPUT, REFERENCE DIRS AND FULLPATH TO NCHG HERE
+    SET INPUT-, OUTPUT- AND REFERENCE DIRS AND FULLPATH TO NCHG HERE
     """
 
-    input_dir = "/Users/GBS/Master/Pipeline/testing_chr18_diff_res/"
-    output_dir = "/Users/GBS/Master/Pipeline/testing_chr18_diff_res/output_dir"
-    reference_dir = "/Users/GBS/Master/reference"
-    nchg_path = "/Users/GBS/Master/Pipeline/INC-tutorial/processing_scripts/NCHG_hic/NCHG"
+    input_dir = os.path.abspath("/Users/GBS/Master/Pipeline/diff_res")
+    output_dir = os.path.abspath("/Users/GBS/Master/Pipeline/diff_res/output")
+    reference_dir = os.path.abspath("/Users/GBS/Master/reference")
+    nchg_path = os.path.abspath("/Users/GBS/Master/Pipeline/INC-tutorial/processing_scripts/NCHG_hic/NCHG")
 
     @classmethod
     def set_input_dir(cls, input_dir):
-        cls.input_dir = input_dir
-
-    @classmethod
-    def set_output_dir(cls, output_dir):
-        cls.output_dir = output_dir
-
-    @classmethod
-    def set_reference_dir(cls, reference_dir):
-        cls.reference_dir = reference_dir
-
-    @classmethod
-    def set_NCHG_path(cls, nchg_path):
-        cls.NCHG_path = nchg_path
+        cls.input_dir = os.path.abspath(input_dir)
 
     @classmethod
     def get_input_dir(cls):
         return cls.input_dir
 
     @classmethod
+    def set_output_dir(cls, output_dir):
+        cls.output_dir = os.path.abspath(output_dir)
+
+    @classmethod
     def get_output_dir(cls):
         return cls.output_dir
+
+    @classmethod
+    def set_reference_dir(cls, reference_dir):
+        cls.reference_dir = os.path.abspath(reference_dir)
 
     @classmethod
     def get_reference_dir(cls):
         return cls.reference_dir
 
     @classmethod
+    def set_NCHG_path(cls, nchg_path):
+        cls.NCHG_path = os.path.abspath(nchg_path)
+
+    @classmethod
     def get_NCHG_path(cls):
         return cls.nchg_path
 
+    @classmethod
+    def set_temp_dir(cls, temp_dir):
+        cls.temp_dir = os.path.abspath(temp_dir)
+
+    @staticmethod
+    def get_temp_dir():
+        temp_dir = SetDirectories.get_output_dir() + "/temp_dir"
+        if not os.path.exists(temp_dir):
+            os.makedirs(temp_dir)
+        return temp_dir
+
+print(SetDirectories.get_input_dir())
+print(type(SetDirectories.get_input_dir()))
 
 class Pipeline_Input:
+
     @staticmethod
     def find_files(*root_directories):
         """
@@ -102,6 +119,7 @@ class Pipeline_Input:
                         bedfiles.append(os.path.join(root, file))
                     if file.endswith(".matrix"):
                         matrixfiles.append(os.path.join(root, file))
+
 
         return bedfiles, matrixfiles
 
@@ -134,20 +152,44 @@ class Pipeline_Input:
         return grouped_files
 
 
+print(Pipeline_Input.group_files(SetDirectories.get_input_dir()))
+
+class test:
     @staticmethod
-    def pass_to_pipeline(*args):
+    def make_bedpe():
         """
-        Passes the grouped files to the pipeline
-        :param args: one or more root directories containing raw data from HiC-Pro
-        :return: BED and Matrix file, gropued by resolution and experiment
+        Makes bedpe file from HiC-Pro output
         """
+        bedpe = []
 
-        for resolution, file_paths in Pipeline_Input.group_files(*args).items():
-            # call Pipeline?
-            Pipeline.
+        bed = Pipeline_Input.group_files(SetDirectories.get_input_dir())[0]
+        matrix = Pipeline_Input.group_files(SetDirectories.get_input_dir())[1]
 
+        for range in range(len(bed)):
+            bed_lines = open(bed, "r").readlines()
+            matrix_lines = open(matrix, "r").readlines()
 
-        pass
+        bed_dict = {}
+
+        for line in bed:
+            line = line.strip().split("\t")
+            bed_dict[line[3]] = line
+
+        bed_dict = {}
+        for line in bed_lines:
+            line = line.strip().split("\t")
+            bed_dict[line[3]] = line
+        for line in matrix_lines:
+            line = line.strip().split("\t")
+            bedpe.append(f"{bed_dict[line[0]][0]}"
+                         f"\t{bed_dict[line[0]][1]}"
+                         f"\t{bed_dict[line[0]][2]}"
+                         f"\t{bed_dict[line[1]][0]}"
+                         f"\t{bed_dict[line[1]][1]}"
+                         f"\t{bed_dict[line[1]][2]}"
+                         f"\t{line[2]}\n")
+
+        return bedpe
 
 
 
@@ -255,7 +297,6 @@ class Pipeline:
         Removes blacklisted regions from bedpe file
         This blacklist is from the ENCODE blacklist of problematic regions in hg19
         https://github.com/Boyle-Lab/Blacklist
-
         """
 
         blacklisted = os.path.join(Pipeline.default_reference_path("hg19/hg19-blacklist.v2.bed"))
@@ -267,30 +308,9 @@ class Pipeline:
         return no_overlap_bedpe
 
     @staticmethod
-    def remove_blacklist_hg38():
-
-        """
-        Removes blacklisted regions from bedpe file
-        This blacklist is from the ENCODE blacklist of problematic regions in hg38
-        """
-
-        blacklisted = os.path.join(Pipeline.default_reference_path("hg38 blacklist path"))
-        blacklised_pbt = pbt.BedTool(blacklisted)
-        bedpe_pbt = pbt.BedTool(Pipeline.make_bedpe())
-
-        no_overlap_bedpe = bedpe_pbt.window(blacklised_pbt, w=Pipeline.window_size(), r=False, v=True)
-
-        return no_overlap_bedpe
-
-        pass
-
-    @staticmethod
     def write_blacklist_hg19(*args):  # TODO: Make this automatic
         Pipeline.remove_blacklist_hg19().saveas(Pipeline.default_output_path(*args))
 
-    @staticmethod
-    def write_blacklist_hg38(*args):  # TODO: Make this automatic
-        Pipeline.remove_blacklist_hg38().saveas(Pipeline.default_output_path(*args))
 
     # Instead of writing a new function for each blacklist, I could write a check for the genome version
 
@@ -438,24 +458,6 @@ class Pipeline:
 
         return padj_out
 
-    @staticmethod
-    def make_gtrack():
-        """
-        I'm not sure if this is possible without TADs as input,
-        and also it's wasteful in the respect to time and space, since we already have the edge lists.
-        But it would in theory be nice to be able to make a GTrack from the edge lists to use in Chrom3D.
-        """
-
-        # It looks like this and is made from the "make Gtrack" script:
-        """
-        ##gtrack	version:	1.0
-        ##track	type:	linked	segments
-        ###seqid	 start	   end	     id	                   radius	periphery	edges
-        # chr1        0         750000  chr1: 0 - 750000         1        0           .
-        # chr1        900000   1300000  chr1: 900000 - 1300000   1        0           chr1: 154350000 - 155100000;chr1:228100000-228550000
-        """
-        padj = Pipeline.adjust_pvalues()
-        pass
 
     @staticmethod
     def make_edgelist():
@@ -490,15 +492,6 @@ class Pipeline:
             f.writelines(Pipeline.make_edgelist())
         return file
 
-    # @staticmethod
-    # def write_weighted_edgelist():
-    #
-    #     os.chdir(Pipeline.default_output_path())
-    #     file = Pipeline.default_output_path("weighted_edgelist.txt")
-    #     with open(file, "w") as f:
-    #         f.writelines(Pipeline.make_weighted_edgelist())
-    #     return file
-
     @staticmethod
     def write_weighted_edgelist():
         os.chdir(Pipeline.default_output_path())
@@ -507,19 +500,9 @@ class Pipeline:
         FileHandler.write_lines_to_file(file_path, lines)
         return file_path
 
-    # @staticmethod
-    # def write_lines_to_file(file_path, lines, batch_size=1000):
-    #     with open(file_path, "w") as f:
-    #         for i in range(0, len(lines), batch_size):
-    #             f.writelines(lines[i:i + batch_size])
-    #     return file_path
-
 
 # Calling Pipeline on data?
 
-def run_pipeline(file):
-    for file in FileHandler.get_files_from_directory():
-        Pipeline.run_pipeline(file)
 
 # Just call Pipeline above with root dir(s) containing data and output dir
 # End pipeline with outputting the edgelist for each experiment/resolution
@@ -528,5 +511,6 @@ def run_pipeline(file):
 # Make main module for running pipeline when its done
 # if __name__ == "__main__":
 #     main()
+
 
 
