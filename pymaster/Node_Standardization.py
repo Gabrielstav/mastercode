@@ -311,41 +311,68 @@ class test:
 
         window_size = bedpe_file.strip(".bedpe").split("_")[2]
         print(window_size)
-        nchg_run = sp.run([SetDirectories.get_NCHG_path(), "-m", window_size, "-p", Pipeline.input_to_nchg()], capture_output=True)
+        nchg_run = sp.run([SetDirectories.get_NCHG_path(), "-m", window_size, "-p", bedpe_file], capture_output=True)
+
         return nchg_run.stdout.decode("utf-8").split("\t")
-
-    # Driver å skriver NCHG nå, refactore de tre metodene til to, en som tar input fil og kjører NCHG,
-    # og en som kjører den metoden for alle filene i no_cytobands mappen og skriver til en fil i nchg out mappen
-
-
 
     @staticmethod
     def input_to_nchg():
         """
         This is the input to the NCHG script
         """
-        os.chdir(Pipeline.default_output_path())
-        file = Pipeline.default_output_path("nchg_input.txt")
-        with open(file, "w") as f:
-            f.writelines(Pipeline.remove_cytobands().to_dataframe().astype(str).to_csv(sep="\t", header=False, index=False))
-        return file
+
+        no_cytobands_dir = os.listdir(SetDirectories.get_temp_dir() + "/no_cytobands")
+
+        # Create the output directory if it doesn't exist
+        output_dir = os.path.join(SetDirectories.get_temp_dir(), "NCHG_output")
+        if not os.path.exists(output_dir):
+            os.mkdir(output_dir)
+        else:
+            shutil.rmtree(output_dir)
+            os.mkdir(output_dir)
+
+        # Iterate over input files and process/save them
+        for no_cytobands_file in no_cytobands_dir:
+            os.chdir(SetDirectories.get_temp_dir() + "/no_cytobands")
+            nchg_output = test.find_siginificant_interactions(no_cytobands_file)
+
+            os.chdir(output_dir)
+            output_filename = f"{no_cytobands_file[:-len('.bedpe')]}_nchg_output.txt"
+            with open(os.path.join(output_dir, output_filename), "w") as f:
+                f.writelines(nchg_output)
 
     @staticmethod
-    def find_siginificant_interactions():
+    def adjust_pvalues():
         """
-        NCHG script to calculate the significance of interactions:
-        m = minimum interaction length in bp, should be same as window size used to make the bedpe file
-        p = input file, which is the output of the remove_cytobands function but reformatted to be compatible with NCHG
+        Adjusts the p-values using the Benjamini-Hochberg method
         """
 
-        nchg_run = sp.run([Pipeline.path_to_NCHG(), "-m", str(Pipeline.window_size()), "-p", Pipeline.input_to_nchg()], stdout=sp.PIPE, stderr=sp.PIPE, text=True)
-        nchg_out = nchg_run.stdout.splitlines()
-        return nchg_out
+        nchg_dir = os.listdir(SetDirectories.get_temp_dir() + "/NCHG_output")
 
+        # Create the output directory if it doesn't exist
+        output_dir = os.path.join(SetDirectories.get_temp_dir(), "adjusted_pvalues")
+        if not os.path.exists(output_dir):
+            os.mkdir(output_dir)
+        else:
+            shutil.rmtree(output_dir)
+            os.mkdir(output_dir)
 
+        # Iterate over input files and process/save them
+        for nchg_file in nchg_dir:
+            os.chdir(SetDirectories.get_temp_dir() + "/NCHG_output")
+            pvalues = open(nchg_file, "r").readlines()
+            pvalues = [float(line.strip().split("\t")[1]) for line in pvalues]
+            adjusted_pvalues = multipletests(pvalues, alpha=0.05, method="fdr_bh")
 
+            os.chdir(output_dir)
+            output_filename = f"{nchg_file[:-len('_nchg_output.txt')]}_adjusted_pvalues.txt"
+            with open(os.path.join(output_dir, output_filename), "w") as f:
+                f.writelines(adjusted_pvalues[1])
 
-
+test.input_to_nchg() # Check files, but think this worked splendidly
+# Now writing the function to adjust the p-values
+# Then we only need the edge-lists and then it's done for the first part of the pipeline
+# After that write function to call the methods of the pipeline class in the correct order 
 
 
 
