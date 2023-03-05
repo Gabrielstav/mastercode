@@ -10,28 +10,15 @@ from statsmodels.sandbox.stats import multicomp
 from File_Handler import FileHandler
 
 
-
 # Pre-processing pipline for Hi-C data:
 
 # Output by default should be files containing edge lists, named by chromosome/celline and resolution
 # Optionally can also output GTrack files with the same naming convention with or without p-values (for weights)
 
-# TODO:
-# 1. Make automatic file naming, reading and writing in separate module, that feeds the pipeline module with the correct files
-# 2. Make Pipeline handle Hg38 as well, and make it so that the user can specify which reference genome to use and the methods adapt accordingly
-# 3. Make GTRack methods with- and without p-values and map between GTrack and edge list files for visualization purposes
-# 4. Gtrack processing methods allow for selection of specific chromosomes, and also allow for selection of specific cell lines, we want this functionality in the edge list methods as well
-# but without converting to GTrack first, so either make the methods that does this in the Pipeline class with a flag to select between GTrack and edge list, or make a separate class for edge list processing
-# so we do not need to convert to GTrack first. Also include/refactor GTrack methods into Pipeline class.
-# 5. Export p values and padj for plotting
-
-# Maybe best to make the Processing classes handle both GTrack and edge list files, and then make a separate class for file handling that handles the reading and writing of files.
+# TODO: Make automatic
+# TODO: Implement ICE normalization or binless normalization before making BEDPE? (ICE is default in HiC-Pro, python implementation is available)
 
 
-
-
-
-# TODO: Call this class from main later on, and make it so that the user can specify input and output dirs
 
 class SetDirectories:
 
@@ -157,6 +144,7 @@ class test:
         """
         Makes bedpe file from HiC-Pro output
         """
+
         bedpe = []
 
         bed_lines = open(bed_file, "r").readlines()
@@ -189,43 +177,187 @@ class test:
         os.chdir("bedpe")
 
         for key, val in grouped_files.items():
+
             split_key = key.split(",")
-            experiment = split_key[0]
-            resolution = split_key[1]
+            experiment = split_key[0].replace("'", "").replace("(", "").replace(")", "").replace(" ", "_")
+            resolution = split_key[1].replace("'", "").replace("(", "").replace(")", "").replace(" ", "_")
+            # Remove trailing underscore or space
+            if experiment[-1] in ("_", " "):
+                experiment = experiment[:-1]
+            if resolution[-1] in ("_", " "):
+                resolution = resolution[:-1]
+            # Replace consecutive underscores with a single underscore
+            experiment = '_'.join(filter(None, experiment.split('_')))
+            resolution = '_'.join(filter(None, resolution.split('_')))
+
             bedfile = val[0]
             matrixfile = val[1]
             bedpe = test.make_bedpe(bedfile, matrixfile)
-            with open(f"{experiment}_{resolution}.bedpe", "w") as f:
+            with open(experiment + "_" + resolution + ".bedpe", "w") as f:
                 f.writelines(bedpe)
                 f.close()
 
     @staticmethod
-    def remove_blacklist(bedpe):
+    def remove_blacklisted_regions(bedpe_file):
 
+        os.chdir(SetDirectories.get_reference_dir())
+        blacklisted_regions = open("hg19/hg19-blacklist.v2.bed", "r").readlines()
+        blacklisted_pbt = pbt.BedTool(blacklisted_regions)
 
-        os.chdr(SetDirectories.get_reference_dir())
-        blacklisted_regions = open("hg19-blacklist.v2.bed", "r").readlines()
-        os.chr(SetDirectories.get_temp_dir())
-
-        blacklisted = os.path.join(Pipeline.default_reference_path("hg19/hg19-blacklist.v2.bed"))
-        blacklised_pbt = pbt.BedTool(blacklisted)
-        bedpe_pbt = pbt.BedTool(Pipeline.make_bedpe())
-
-        no_overlap_bedpe = bedpe_pbt.window(blacklised_pbt, w=Pipeline.window_size(), r=False, v=True)
+        os.chdir(SetDirectories.get_temp_dir() + "/bedpe")
+        blacklisted_bedpe = pbt.BedTool(bedpe_file)
+        window_size = bedpe_file.strip(".bedpe").split("_")[2]
+        no_overlap_bedpe = blacklisted_bedpe.window(blacklisted_pbt, w=int(window_size), r=False, v=True)
 
         return no_overlap_bedpe
 
+    @staticmethod
+    def input_to_remove_blacklist():
+        bedpe_dir = os.listdir(SetDirectories.get_temp_dir() + "/bedpe")
 
-# test.remove_blacklist(test.input_to_make_bedpe(Pipeline_Input.group_files(SetDirectories.get_input_dir())) ???
+        # Create the output directory if it doesn't exist
+        output_dir = os.path.join(SetDirectories.get_temp_dir(), "blacklisted")
+        if not os.path.exists(output_dir):
+            os.mkdir(output_dir)
+        else:
+            shutil.rmtree(output_dir)
+            os.mkdir(output_dir)
+
+        # Iterate over input files and process/save them
+        for bedpe_file in bedpe_dir:
+            os.chdir(SetDirectories.get_temp_dir() + "/bedpe")
+            no_blacklist_bedpe = test.remove_blacklisted_regions(bedpe_file)
+
+            os.chdir(output_dir)
+            output_filename = f"{bedpe_file[:-len('.bedpe')]}_no_blacklist.bedpe"
+            converted_nbl_bedpe = no_blacklist_bedpe.to_dataframe().to_csv(sep="\t", index=False, header=False)
+            with open(os.path.join(output_dir, output_filename), "w") as f:
+                f.writelines(converted_nbl_bedpe)
+
+    @staticmethod
+    def remove_cytobands(blacklisted_bedpe_file):
+        """
+        Cytoband locations are determined in this case by Giemsa staining
+        and are located and removed from the BEDPE file
+        """
+
+        os.chdir(SetDirectories.get_reference_dir())
+        cytobands = os.path.join(SetDirectories.get_reference_dir(), "hg19/cytoBand_hg19.txt")
+        centromeric_regions = []
+        with open(cytobands, "r") as f:
+            cytobands = f.readlines()
+            for line in cytobands:
+                line = line.strip().split("\t")
+                if line[4] == "acen":
+                    centromeric_regions.append(line[0:5])
+
+        os.chdir(SetDirectories.get_temp_dir() + "/blacklisted")
+        blacklisted_pbt = pbt.BedTool(blacklisted_bedpe_file)
+        window_size = blacklisted_bedpe_file.strip(".bedpe").split("_")[2]
+        print(window_size)
+        no_cytobands = blacklisted_pbt.window(centromeric_regions, w=int(window_size), r=False, v=True)
+
+        return no_cytobands
 
 
+    @staticmethod
+    def input_to_remove_cytobands():
+        blacklisted_dir = os.listdir(SetDirectories.get_temp_dir() + "/blacklisted")
+
+        # Create the output directory if it doesn't exist
+        output_dir = os.path.join(SetDirectories.get_temp_dir(), "no_cytobands")
+        if not os.path.exists(output_dir):
+            os.mkdir(output_dir)
+        else:
+            shutil.rmtree(output_dir)
+            os.mkdir(output_dir)
+
+        # Iterate over input files and process/save them
+        for blacklisted_file in blacklisted_dir:
+            os.chdir(SetDirectories.get_temp_dir() + "/blacklisted")
+            no_cytoband_bedpe = test.remove_cytobands(blacklisted_file)
+
+            os.chdir(output_dir)
+            output_filename = f"{blacklisted_file[:-len('.bedpe')]}_no_cytobands.bedpe"
+            converted_nc_bedpe = no_cytoband_bedpe.to_dataframe().to_csv(sep="\t", index=False, header=False)
+            with open(os.path.join(output_dir, output_filename), "w") as f:
+                f.writelines(converted_nc_bedpe)
+
+
+    # @staticmethod
+    # def check_interaction_sizes(bedpe_file):
+    #     """
+    #     Checks the size of the interactions in the BEDPE file
+    #     and returns a list of interactions that are too large
+    #     """
+    #
+    #     os.chdir(SetDirectories.get_temp_dir() + "/no_cytobands")
+    #     bedpe = open(bedpe_file, "r").readlines()
+    #     too_large = []
+    #     for line in bedpe:
+    #         line = line.strip().split("\t")
+    #         if int(line[2]) - int(line[1]) > 1000000 or int(line[5]) - int(line[4]) > 1000000:
+    #             too_large.append(line)
+    #
+    #     return too_large
+
+    @staticmethod
+    def find_siginificant_interactions(bedpe_file):
+        """
+        NCHG script to calculate the significance of interactions:
+        m = minimum interaction length in bp, should be same as window size used to make the bedpe file
+        p = input file, which is the output of the remove_cytobands function but reformatted to be compatible with NCHG
+        """
+
+        window_size = bedpe_file.strip(".bedpe").split("_")[2]
+        print(window_size)
+        nchg_run = sp.run([SetDirectories.get_NCHG_path(), "-m", window_size, "-p", Pipeline.input_to_nchg()], capture_output=True)
+        return nchg_run.stdout.decode("utf-8").split("\t")
+
+    # Driver å skriver NCHG nå, refactore de tre metodene til to, en som tar input fil og kjører NCHG,
+    # og en som kjører den metoden for alle filene i no_cytobands mappen og skriver til en fil i nchg out mappen
+
+
+
+    @staticmethod
+    def input_to_nchg():
+        """
+        This is the input to the NCHG script
+        """
+        os.chdir(Pipeline.default_output_path())
+        file = Pipeline.default_output_path("nchg_input.txt")
+        with open(file, "w") as f:
+            f.writelines(Pipeline.remove_cytobands().to_dataframe().astype(str).to_csv(sep="\t", header=False, index=False))
+        return file
+
+    @staticmethod
+    def find_siginificant_interactions():
+        """
+        NCHG script to calculate the significance of interactions:
+        m = minimum interaction length in bp, should be same as window size used to make the bedpe file
+        p = input file, which is the output of the remove_cytobands function but reformatted to be compatible with NCHG
+        """
+
+        nchg_run = sp.run([Pipeline.path_to_NCHG(), "-m", str(Pipeline.window_size()), "-p", Pipeline.input_to_nchg()], stdout=sp.PIPE, stderr=sp.PIPE, text=True)
+        nchg_out = nchg_run.stdout.splitlines()
+        return nchg_out
+
+
+
+
+
+
+
+
+
+# This works perfectly
 # test.input_to_make_bedpe(Pipeline_Input.group_files(SetDirectories.get_input_dir()))
 
-# make_bedpe processes one matrix file and one bed file into bedpe, outputs the bedpe file
-# another method, input_to_make_bedpe, calls the make_bedpe method for each matrix and bed file in the grouped_files dict in a loop,
-# and writes the output to a file in the temp directory, naming it after the experiment and resolution.
+# Calling input_to_remove_blacklist() on the output of input_to_make_bedpe() does not work
 
+# test.input_to_remove_blacklist(test.input_to_make_bedpe(Pipeline_Input.group_files(SetDirectories.get_input_dir())))
 
+# /Users/GBS/Master/Pipeline/diff_res/output/temp_dir/bedpe/('chr18_lowres'_ 50000).bedpe
 
 
 class Pipeline:

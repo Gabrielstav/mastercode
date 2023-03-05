@@ -1,12 +1,10 @@
 from dataclasses import dataclass
 import os
 
-# TODO:
-# This is deprecated, since it only reads in GTrack files. It needs to be able to read in edge lists from Pipeline.
-# 1. Maybe make classes able to read in edge lists from Pipeline in addition to GTRack files, or just refactor to only read in edge listts, or just split into two classes.
-# 2. Finish the chromosome filter methods
-# 3. Make "as list" and "as dict" methods
-
+# TODO: Refactor to read in edge lists from Pipeline
+# TODO: Finish chromosome and resolution filter methods
+# TODO: Make "as list" and "as dict" methods
+# TODO: Calculate overlap between nodes across cell lines, might not have any overlap in nodes
 
 
 

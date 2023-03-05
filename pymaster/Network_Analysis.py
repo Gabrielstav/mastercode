@@ -21,6 +21,8 @@ chr18_inc_pipe = ig.Graph.Load
 
 
 
+
+
 # Check if we can create graph objects directly without having to create an edgelist format file each time and
 # import it from a different directory.
 
@@ -57,6 +59,12 @@ print("Our graph is directed:", K562_chr18.is_directed())
 # plot(g)
 # And it works on my data
 # plot(K562_chr18, layout = "fr", directed="false") # 2D layouts can be: circle, drl, fr, kk, lgl, random, rt
+
+
+
+#
+
+
 
 # plot(IMR90, layout = "")
 # plot(HUVEC_chr18, layout = "fr")
