@@ -1,33 +1,26 @@
-import pathlib
+# Import modules
 import shutil
-
-import pandas as pd
 import pybedtools as pbt
 import os as os
 import subprocess as sp
 import math
 from statsmodels.sandbox.stats import multicomp
-from File_Handler import FileHandler
+import time as time
+from tqdm import tqdm
 
 
-# Pre-processing pipline for Hi-C data:
-
-# Output by default should be files containing edge lists, named by chromosome/celline and resolution
-# Optionally can also output GTrack files with the same naming convention with or without p-values (for weights)
-
-# TODO: Make automatic
-# TODO: Implement ICE normalization or binless normalization before making BEDPE? (ICE is default in HiC-Pro, python implementation is available)
-
-
+########################################################
+# Pre-processing pipeline for raw Hi-C data from HiC-Pro
+########################################################
 
 class SetDirectories:
-
     """
     SET INPUT-, OUTPUT- AND REFERENCE DIRS AND FULLPATH TO NCHG HERE
+    For each run, change the input and output directories to the appropriate directories
     """
 
     input_dir = os.path.abspath("/Users/GBS/Master/Pipeline/diff_res")
-    output_dir = os.path.abspath("/Users/GBS/Master/Pipeline/diff_res/output")
+    output_dir = os.path.abspath("/Users/GBS/Master/Pipeline/testing_automated_pipeline")
     reference_dir = os.path.abspath("/Users/GBS/Master/reference")
     nchg_path = os.path.abspath("/Users/GBS/Master/Pipeline/INC-tutorial/processing_scripts/NCHG_hic/NCHG")
 
@@ -74,6 +67,7 @@ class SetDirectories:
             os.makedirs(temp_dir)
         return temp_dir
 
+
 class Pipeline_Input:
 
     @staticmethod
@@ -103,7 +97,6 @@ class Pipeline_Input:
                         bedfiles.append(os.path.join(root, file))
                     if file.endswith(".matrix"):
                         matrixfiles.append(os.path.join(root, file))
-
 
         return bedfiles, matrixfiles
 
@@ -135,10 +128,7 @@ class Pipeline_Input:
 
         return grouped_files
 
-# print(Pipeline_Input.group_files(SetDirectories.get_input_dir()))
-
-
-class test:
+class Pipeline:
     @staticmethod
     def make_bedpe(bed_file, matrix_file):
         """
@@ -167,6 +157,11 @@ class test:
 
     @staticmethod
     def input_to_make_bedpe(grouped_files):
+        """
+        Makes bedpe files from HiC-Pro output and saves them to the temp directory
+        :param grouped_files: Output of Pipeline_Input.group_files()
+        :return: BEDPE files saved to temp directory
+        """
 
         os.chdir(SetDirectories.get_temp_dir())
         if not os.path.exists("bedpe"):
@@ -192,13 +187,16 @@ class test:
 
             bedfile = val[0]
             matrixfile = val[1]
-            bedpe = test.make_bedpe(bedfile, matrixfile)
+            bedpe = Pipeline.make_bedpe(bedfile, matrixfile)
             with open(experiment + "_" + resolution + ".bedpe", "w") as f:
                 f.writelines(bedpe)
                 f.close()
 
     @staticmethod
     def remove_blacklisted_regions(bedpe_file):
+        """
+        Removes blacklisted regions from bedpe file
+        """
 
         os.chdir(SetDirectories.get_reference_dir())
         blacklisted_regions = open("hg19/hg19-blacklist.v2.bed", "r").readlines()
@@ -213,6 +211,9 @@ class test:
 
     @staticmethod
     def input_to_remove_blacklist():
+        """
+        Calls remove_blacklisted_regions() on all bedpe files in the bedpe directory
+        """
         bedpe_dir = os.listdir(SetDirectories.get_temp_dir() + "/bedpe")
 
         # Create the output directory if it doesn't exist
@@ -226,7 +227,7 @@ class test:
         # Iterate over input files and process/save them
         for bedpe_file in bedpe_dir:
             os.chdir(SetDirectories.get_temp_dir() + "/bedpe")
-            no_blacklist_bedpe = test.remove_blacklisted_regions(bedpe_file)
+            no_blacklist_bedpe = Pipeline.remove_blacklisted_regions(bedpe_file)
 
             os.chdir(output_dir)
             output_filename = f"{bedpe_file[:-len('.bedpe')]}_no_blacklist.bedpe"
@@ -238,7 +239,7 @@ class test:
     def remove_cytobands(blacklisted_bedpe_file):
         """
         Cytoband locations are determined in this case by Giemsa staining
-        and are located and removed from the BEDPE file
+        and are located and removed from the BEDPE file.
         """
 
         os.chdir(SetDirectories.get_reference_dir())
@@ -254,15 +255,15 @@ class test:
         os.chdir(SetDirectories.get_temp_dir() + "/blacklisted")
         blacklisted_pbt = pbt.BedTool(blacklisted_bedpe_file)
         window_size = blacklisted_bedpe_file.strip(".bedpe").split("_")[2]
-        print(window_size)
         no_cytobands = blacklisted_pbt.window(centromeric_regions, w=int(window_size), r=False, v=True)
 
         return no_cytobands
 
-
     @staticmethod
     def input_to_remove_cytobands():
-        blacklisted_dir = os.listdir(SetDirectories.get_temp_dir() + "/blacklisted")
+        """
+        Calls the remove_cytobands function on each file in the blacklisted directory
+        """
 
         # Create the output directory if it doesn't exist
         output_dir = os.path.join(SetDirectories.get_temp_dir(), "no_cytobands")
@@ -273,33 +274,16 @@ class test:
             os.mkdir(output_dir)
 
         # Iterate over input files and process/save them
+        blacklisted_dir = os.listdir(SetDirectories.get_temp_dir() + "/blacklisted")
         for blacklisted_file in blacklisted_dir:
             os.chdir(SetDirectories.get_temp_dir() + "/blacklisted")
-            no_cytoband_bedpe = test.remove_cytobands(blacklisted_file)
+            no_cytoband_bedpe = Pipeline.remove_cytobands(blacklisted_file)
 
             os.chdir(output_dir)
             output_filename = f"{blacklisted_file[:-len('.bedpe')]}_no_cytobands.bedpe"
             converted_nc_bedpe = no_cytoband_bedpe.to_dataframe().to_csv(sep="\t", index=False, header=False)
             with open(os.path.join(output_dir, output_filename), "w") as f:
                 f.writelines(converted_nc_bedpe)
-
-
-    # @staticmethod
-    # def check_interaction_sizes(bedpe_file):
-    #     """
-    #     Checks the size of the interactions in the BEDPE file
-    #     and returns a list of interactions that are too large
-    #     """
-    #
-    #     os.chdir(SetDirectories.get_temp_dir() + "/no_cytobands")
-    #     bedpe = open(bedpe_file, "r").readlines()
-    #     too_large = []
-    #     for line in bedpe:
-    #         line = line.strip().split("\t")
-    #         if int(line[2]) - int(line[1]) > 1000000 or int(line[5]) - int(line[4]) > 1000000:
-    #             too_large.append(line)
-    #
-    #     return too_large
 
     @staticmethod
     def find_siginificant_interactions(bedpe_file):
@@ -310,7 +294,6 @@ class test:
         """
 
         window_size = bedpe_file.strip(".bedpe").split("_")[2]
-        print(window_size)
         nchg_run = sp.run([SetDirectories.get_NCHG_path(), "-m", window_size, "-p", bedpe_file], capture_output=True)
 
         return nchg_run.stdout.decode("utf-8").split("\t")
@@ -318,7 +301,7 @@ class test:
     @staticmethod
     def input_to_nchg():
         """
-        This is the input to the NCHG script
+        Calls the NCHG script on all files in the no_cytobands directory to find significant interactions
         """
 
         no_cytobands_dir = os.listdir(SetDirectories.get_temp_dir() + "/no_cytobands")
@@ -334,7 +317,7 @@ class test:
         # Iterate over input files and process/save them
         for no_cytobands_file in no_cytobands_dir:
             os.chdir(SetDirectories.get_temp_dir() + "/no_cytobands")
-            nchg_output = test.find_siginificant_interactions(no_cytobands_file)
+            nchg_output = Pipeline.find_siginificant_interactions(no_cytobands_file)
 
             os.chdir(output_dir)
             output_filename = f"{no_cytobands_file[:-len('.bedpe')]}_nchg_output.txt"
@@ -342,310 +325,30 @@ class test:
                 f.writelines(nchg_output)
 
     @staticmethod
-    def adjust_pvalues():
+    def adjust_pvalues(nchg_file, fdr_threshold=0.01, log_ratio_threshold=2, method="fdr_bh"):
         """
         Adjusts the p-values using the Benjamini-Hochberg method
         """
 
-        nchg_dir = os.listdir(SetDirectories.get_temp_dir() + "/NCHG_output")
-
-        # Create the output directory if it doesn't exist
-        output_dir = os.path.join(SetDirectories.get_temp_dir(), "adjusted_pvalues")
-        if not os.path.exists(output_dir):
-            os.mkdir(output_dir)
-        else:
-            shutil.rmtree(output_dir)
-            os.mkdir(output_dir)
-
-        # Iterate over input files and process/save them
-        for nchg_file in nchg_dir:
-            os.chdir(SetDirectories.get_temp_dir() + "/NCHG_output")
-            pvalues = open(nchg_file, "r").readlines()
-            pvalues = [float(line.strip().split("\t")[1]) for line in pvalues]
-            adjusted_pvalues = multipletests(pvalues, alpha=0.05, method="fdr_bh")
-
-            os.chdir(output_dir)
-            output_filename = f"{nchg_file[:-len('_nchg_output.txt')]}_adjusted_pvalues.txt"
-            with open(os.path.join(output_dir, output_filename), "w") as f:
-                f.writelines(adjusted_pvalues[1])
-
-test.input_to_nchg() # Check files, but think this worked splendidly
-# Now writing the function to adjust the p-values
-# Then we only need the edge-lists and then it's done for the first part of the pipeline
-# After that write function to call the methods of the pipeline class in the correct order 
-
-
-
-
-# This works perfectly
-# test.input_to_make_bedpe(Pipeline_Input.group_files(SetDirectories.get_input_dir()))
-
-# Calling input_to_remove_blacklist() on the output of input_to_make_bedpe() does not work
-
-# test.input_to_remove_blacklist(test.input_to_make_bedpe(Pipeline_Input.group_files(SetDirectories.get_input_dir())))
-
-# /Users/GBS/Master/Pipeline/diff_res/output/temp_dir/bedpe/('chr18_lowres'_ 50000).bedpe
-
-
-class Pipeline:
-
-    @staticmethod
-    def default_rawdata_path(*args):
-        default_path_to_raw_data_directory = "/Users/GBS/Master/Pipeline/INC-tutorial/hicpro_results/hic_results/matrix/chr18/raw/50000"
-        return os.path.join(default_path_to_raw_data_directory, *args)
-
-    @staticmethod
-    def default_output_path(*args):
-        default_path_to_output_directory = "/Users/GBS/Master/Pipeline/python_pipe_test/bedpe_testing"
-        return os.path.join(default_path_to_output_directory, *args)
-
-    @staticmethod
-    def default_reference_path(*args):
-        default_path_to_reference_dicrectory = "/Users/GBS/Master/reference"
-        return os.path.join(default_path_to_reference_dicrectory, *args)
-
-    @staticmethod
-    def path_to_NCHG():
-        return "/Users/GBS/Master/Pipeline/INC-tutorial/processing_scripts/NCHG_hic/NCHG"
-
-    @staticmethod
-    def window_size():  # TODO: Make this automatically adjust to resulution of current input file
-        # For resoultion in input files, adjust window size to equal resolution for each file
-        return 50000
-
-    @staticmethod
-    def read_hicpro_output():
-        """
-        Reads raw HiC-Pro output and output dataframes
-        Write dataframes to specified directory
-        """
-
-        matrix_file = os.path.join(Pipeline.default_rawdata_path("chr18_50000.matrix"))  # TODO: Make this automatic
-        bed_file = os.path.join(Pipeline.default_rawdata_path("chr18_50000_abs.bed"))  # TODO: Make this automatic
-
-        matrix_df = pd.read_csv(matrix_file, sep="\t", header=None)
-        bed_df = pd.read_csv(bed_file, sep="\t", header=None)
-
-        return matrix_df, bed_df
-
-    @staticmethod
-    def print_hicpro_output():
-        """
-        Prints raw HiC-Pro output
-        """
-        matrix_df, bed_df = Pipeline.read_hicpro_output()
-        print(matrix_df)
-        print(bed_df)
-
-    @staticmethod
-    def make_bedpe():
-        """
-        Makes bedpe file from HiC-Pro output
-        """
-        bedpe = []
-
-        bed_file = os.path.join(Pipeline.default_rawdata_path("chr18_50000_abs.bed"))  # TODO: Make this automatic
-        matrix_file = os.path.join(Pipeline.default_rawdata_path("chr18_50000.matrix"))  # TODO: Make this automatic
-
-        bed_lines = open(bed_file, "r").readlines()
-        matrix_lines = open(matrix_file, "r").readlines()
-
-        bed_dict = {}
-        for line in bed_lines:
-            line = line.strip().split("\t")
-            bed_dict[line[3]] = line
-        for line in matrix_lines:
-            line = line.strip().split("\t")
-            bedpe.append(f"{bed_dict[line[0]][0]}"
-                         f"\t{bed_dict[line[0]][1]}"
-                         f"\t{bed_dict[line[0]][2]}"
-                         f"\t{bed_dict[line[1]][0]}"
-                         f"\t{bed_dict[line[1]][1]}"
-                         f"\t{bed_dict[line[1]][2]}"
-                         f"\t{line[2]}\n")
-
-        # print(bed_dict)
-        # print(bedpe)
-        return bedpe
-
-    @staticmethod
-    def print_bedpe():
-        print(Pipeline.make_bedpe())
-
-    @staticmethod
-    def print_bedpe_pbt():
-        bedpe_pbt = pbt.BedTool(Pipeline.make_bedpe())
-        print(bedpe_pbt)
-
-    @staticmethod
-    def write_bedpe(*args):  # TODO: Make this automatic
-        """
-        Writes bedpe file to specified directory
-        """
-        bedpe_file = os.path.join(Pipeline.default_output_path(*args))
-        with open(bedpe_file, "w") as f:
-            f.writelines(Pipeline.make_bedpe())
-
-    @staticmethod
-    def remove_blacklist_hg19():
-
-        """
-        Removes blacklisted regions from bedpe file
-        This blacklist is from the ENCODE blacklist of problematic regions in hg19
-        https://github.com/Boyle-Lab/Blacklist
-        """
-
-        blacklisted = os.path.join(Pipeline.default_reference_path("hg19/hg19-blacklist.v2.bed"))
-        blacklised_pbt = pbt.BedTool(blacklisted)
-        bedpe_pbt = pbt.BedTool(Pipeline.make_bedpe())
-
-        no_overlap_bedpe = bedpe_pbt.window(blacklised_pbt, w=Pipeline.window_size(), r=False, v=True)
-
-        return no_overlap_bedpe
-
-    @staticmethod
-    def write_blacklist_hg19(*args):  # TODO: Make this automatic
-        Pipeline.remove_blacklist_hg19().saveas(Pipeline.default_output_path(*args))
-
-
-    # Instead of writing a new function for each blacklist, I could write a check for the genome version
-
-    @staticmethod
-    def remove_cytobands():
-        """
-        Cytoband locations are determined in this case by Giemsa staining (I think)
-        and are located and removed from the BEDPE file
-        """
-
-        cytobands = os.path.join(Pipeline.default_reference_path("hg19/cytoBand_hg19.txt"))
-
-        centromeric_regions = []
-        with open(cytobands, "r") as f:
-            cytobands = f.readlines()
-            for line in cytobands:
-                line = line.strip().split("\t")
-                if line[4] == "acen":
-                    centromeric_regions.append(line[0:5])
-
-        centromeric_regions_pbt = pbt.BedTool(centromeric_regions)
-        no_cytobands_bedpe = Pipeline.remove_blacklist_hg19().window(centromeric_regions_pbt, w=Pipeline.window_size(), r=False, v=True)
-
-        return no_cytobands_bedpe
-
-    @staticmethod
-    def print_remove_cytobands():
-        return print(Pipeline.remove_cytobands())
-
-    @staticmethod
-    def write_remove_cytobands(*args):  # TODO: Make this automatic
-
-        with open(Pipeline.default_output_path(*args), "w") as f:
-            f.writelines(Pipeline.remove_cytobands().to_dataframe().to_csv(sep="\t", header=False, index=False))
-
-    @staticmethod
-    def cap_chromosomes():
-
-        """
-        Ensures that chromosome interactions do not go beyond the end of the chromosome
-        """
-
-        # read in chromosome sizes
-        chromosome_size_hg19 = Pipeline.default_reference_path("hg19/chrom_hg19_test.sizes")
-        chromosome_size_dict = {}
-        with open(chromosome_size_hg19) as f:
-            for line in f:
-                chromosome_size_dict[line.split()[0]] = int(line.split()[1])
-        interactions = pbt.BedTool.to_dataframe(Pipeline.remove_cytobands()).to_csv(sep="\t", header=False, index=False)
-        interactions_in = interactions.split("\n")
-
-        # find interactions exceeding chromosome size
-        empty_missing_lines = []
-        for line in interactions_in:
-
-            fields = line.strip().split()
-            if not line.strip():
-                empty_missing_lines.append(line)
-                continue
-            if len(fields) < 7:
-                empty_missing_lines.append(line)
-                continue
-
-            chrom1, start1, end1 = fields[0], int(fields[1]), int(fields[2])
-            chrom2, start2, end2 = fields[3], int(fields[4]), int(fields[5])
-
-            if end1 > chromosome_size_dict.get(chrom1, end1):
-                excess_length = end1 - chromosome_size_dict.get(chrom1, end1)
-                end1 = chromosome_size_dict.get(chrom1, end1)
-                start1 = max(start1 - excess_length, 0)
-
-            if end2 > chromosome_size_dict.get(chrom2, end2):
-                excess_length = end2 - chromosome_size_dict.get(chrom2, end2)
-                end2 = chromosome_size_dict.get(chrom2, end2)
-                start2 = max(start2 - excess_length, 0)
-
-        # cap interactions exceeding chromosome size
-        print(f"{chrom1}:{start1}-{end1} -- {chrom2}:{start2}-{end2}")
-        # 78 077 248 chr18
-        # 78 000 000-78 050 000 chr18
-
-        # Test this with full genome and write to file/output to pbd for input_to_nchg method (or bypass this method by writing as df.str.csv directly?)
-
-    @staticmethod
-    def input_to_nchg():
-        """
-        This is the input to the NCHG script
-        """
-        os.chdir(Pipeline.default_output_path())
-        file = Pipeline.default_output_path("nchg_input.txt")
-        with open(file, "w") as f:
-            f.writelines(Pipeline.remove_cytobands().to_dataframe().astype(str).to_csv(sep="\t", header=False, index=False))
-        return file
-
-    @staticmethod
-    def find_siginificant_interactions():
-        """
-        NCHG script to calculate the significance of interactions:
-        m = minimum interaction length in bp, should be same as window size used to make the bedpe file
-        p = input file, which is the output of the remove_cytobands function but reformatted to be compatible with NCHG
-        """
-
-        nchg_run = sp.run([Pipeline.path_to_NCHG(), "-m", str(Pipeline.window_size()), "-p", Pipeline.input_to_nchg()], stdout=sp.PIPE, stderr=sp.PIPE, text=True)
-        nchg_out = nchg_run.stdout.splitlines()
-        return nchg_out
-
-    @staticmethod
-    def write_sig_interactions(*args):
-        file = os.path.join(Pipeline.default_output_path(*args))
-        with open(file, "w") as f:
-            f.writelines(Pipeline.find_siginificant_interactions())
-
-    @staticmethod
-    def adjust_pvalues(log_ratio_threshold=2, fdr_threshold=0.05, method="fdr_bh"):
-        """
-        Adjust p-values using the Benjamini-Hochberg method from
-        The log-ratio threshold is the observed/expected ratio of interactions
-        The fdr threshold is the false discovery rate threshold for the adjusted p-values
-        The method is the method used to adjust the p-values (here BH, other methods are available)
-        """
-
-        data = Pipeline.find_siginificant_interactions()
-
+        # Finds the p-values and log ratios of the interactions
         pval = []
         processed = []
-        for line in data:
-            line = line.split()
-            pval.append(float(line[6]))
-            if float(line[9]) == 0 or float(line[10]) == 0:
-                logratio = 0.0
-            else:
-                logratio = math.log(float(line[9]), 2) - math.log(float(line[10]), 2)
+        with open(nchg_file, "r") as nchg_file:
+            for line in nchg_file:
+                line = line.split()
+                pval.append(float(line[6]))
+                if float(line[9]) == 0 or float(line[10]) == 0:
+                    logratio = 0.0
+                else:
+                    logratio = math.log(float(line[9]), 2) - math.log(float(line[10]), 2)
 
-            line = ' '.join(line) + ' ' + str(logratio)
-            processed.append(line)
+                line = ' '.join(line) + ' ' + str(logratio)
+                processed.append(line)
 
         padj = list(multicomp.multipletests(pval, method=method))
         padj_out = []
 
+        # Filters the interactions based on the log ratio and FDR thresholds
         for i in range(len(processed)):
             line = processed[i] + " " + str(padj[1][i])
             line = line.split()
@@ -654,52 +357,192 @@ class Pipeline:
 
         return padj_out
 
+    @staticmethod
+    def input_to_adjust_pvalues():
+        """
+        calls the adjust_pvalues function on all files in the NCHG_output directory
+        """
+
+        nchg_dir = os.listdir(SetDirectories.get_temp_dir() + "/NCHG_output")
+        # Create the output directory if it doesn't exist
+        output_dir = os.path.join(SetDirectories.get_temp_dir(), "padj")
+        if not os.path.exists(output_dir):
+            os.mkdir(output_dir)
+        else:
+            shutil.rmtree(output_dir)
+            os.mkdir(output_dir)
+
+        for nchg_file in nchg_dir:
+            os.chdir(SetDirectories.get_temp_dir() + "/NCHG_output")
+            padj = Pipeline.adjust_pvalues(nchg_file)
+
+            os.chdir(output_dir)
+            output_filename = f"{nchg_file[:-len('_nchg_output.txt')]}_padj.txt"
+            with open(os.path.join(output_dir, output_filename), "w") as f:
+                for line in padj:
+                    f.write(line + "\n")
 
     @staticmethod
-    def make_edgelist():
+    def make_weighted_edgelist(padj_file):
+        """
+        makes a weighted edgelist from padj file, padj values are weights
+        """
 
-        padj = Pipeline.adjust_pvalues()
         edge_list = []
-
-        for line in padj:
-            line = line.split()
-            edge_list.append(line[0] + ":" + line[1] + "-" + line[2] + "  " + line[3] + "-" + line[4] + ":" + line[5])
+        with open(padj_file, "r") as padj_file:
+            for line in padj_file:
+                line = line.split()
+                edge_list.append(line[0] + ":" + line[1] + "-" + line[2] + " " + line[3] + "-" + line[4] + ":" + line[5] + " " + line[6])
 
         return edge_list
 
     @staticmethod
-    def make_weighted_edgelist():
+    def input_to_make_weighted_edgelist():
+        """
+        calls make_weighted_edgelist on all padj files
+        """
 
-        padj = Pipeline.adjust_pvalues()
+        os.chdir(SetDirectories.get_temp_dir() + "/padj")
+        padj_dir = os.listdir(SetDirectories.get_temp_dir() + "/padj")
+        # Create the output directory if it doesn't exist
+        output_dir = os.path.join(SetDirectories.get_temp_dir(), "weighted_edgelists")
+        if not os.path.exists(output_dir):
+            os.mkdir(output_dir)
+        else:
+            shutil.rmtree(output_dir)
+            os.mkdir(output_dir)
+
+        for padj_file in padj_dir:
+            os.chdir(SetDirectories.get_temp_dir() + "/padj")
+            weighted_edgelist = Pipeline.make_weighted_edgelist(padj_file)
+
+            os.chdir(output_dir)
+            output_filename = f"{padj_file[:-len('_no_blacklist_no_cytobands_padj.txt')]}_weighted_edgelist.txt"
+            with open(os.path.join(output_dir, output_filename), "w") as f:
+                for line in weighted_edgelist:
+                    f.write(line + "\n")
+
+
+    @staticmethod
+    def make_edgelist(padj_file):
+        """Makes edge list from padj file"""
+
         edge_list = []
-
-        for line in padj:
-            line = line.split()
-            edge_list.append(line[0] + ":" + line[1] + "-" + line[2] + " " + line[3] + "-" + line[4] + ":" + line[5] + " " + line[6])
+        with open(padj_file, "r") as padj_file:
+            for line in padj_file:
+                line = line.split()
+                edge_list.append(line[0] + ":" + line[1] + "-" + line[2] + "  " + line[3] + "-" + line[4] + ":" + line[5])
 
         return edge_list
 
     @staticmethod
-    def write_edgelist():
+    def input_to_make_edgelist():
+        """
+        Calls make_edgelist on all padj files
+        """
 
-        os.chdir(Pipeline.default_output_path())
-        file = Pipeline.default_output_path("edgelist.txt")
-        with open(file, "w") as f:
-            f.writelines(Pipeline.make_edgelist())
-        return file
+        os.chdir(SetDirectories.get_temp_dir() + "/padj")
+        padj_dir = os.listdir(SetDirectories.get_temp_dir() + "/padj")
+        # Create the output directory if it doesn't exist
+        output_dir = os.path.join(SetDirectories.get_output_dir(), "edgelists")
+        if not os.path.exists(output_dir):
+            os.mkdir(output_dir)
+        else:
+            shutil.rmtree(output_dir)
+            os.mkdir(output_dir)
+
+        for padj_file in padj_dir:
+            os.chdir(SetDirectories.get_temp_dir() + "/padj")
+            edgelist = Pipeline.make_edgelist(padj_file)
+
+            os.chdir(output_dir)
+            output_filename = f"{padj_file[:-len('_no_blacklist_no_cytobands_padj.txt')]}_edgelist.txt"
+            with open(os.path.join(output_dir, output_filename), "w") as f:
+                for line in edgelist:
+                    f.write(line + "\n")
 
     @staticmethod
-    def write_weighted_edgelist():
-        os.chdir(Pipeline.default_output_path())
-        file_path = Pipeline.default_output_path("weighted_edgelist.txt")
-        lines = Pipeline.make_weighted_edgelist()
-        FileHandler.write_lines_to_file(file_path, lines)
-        return file_path
+    def interactions_per_resolution(edge_list_file):
+        """
+        :input: edgelist files
+        :output: Dictionary with resolution as key, and number of bins as value
+        """
+
+        resolution = edge_list_file.split("_")[3]
+        interaction_count = []
+        if os.path.exists(edge_list_file):
+            with open(edge_list_file, "r") as f:
+                for line in f:
+                    interaction_count.append(line)
+
+            interactions_per_resolution = {resolution: len(interaction_count)}
+            return interactions_per_resolution
+        else:
+            print(f"File not found: {edge_list_file}")
+            return {}
+
+    @staticmethod
+    def call_interactions_per_resolution():
+
+        # Create the output directory if it doesn't exist
+        output_dir = os.path.join(SetDirectories.get_temp_dir(), "interactions_per_resolution")
+        if not os.path.exists(output_dir):
+            os.mkdir(output_dir)
+        else:
+            shutil.rmtree(output_dir)
+            os.mkdir(output_dir)
+
+        output_file = os.path.join(output_dir, "interactions_per_resolution.txt")
+
+        # Get the list of edgelist files and sort them based on resolution
+        edge_list_files = os.listdir(SetDirectories.get_output_dir() + "/edgelists")
+        edge_list_files.sort(key=lambda x: int(x.split("_")[2]))
+
+        # Iterate over the sorted list of edgelist files and process/save them
+        with open(output_file, "w") as f:
+            os.chdir(SetDirectories.get_output_dir() + "/edgelists")
+            for edge_list_file in edge_list_files:
+                interactions_per_resolution = Pipeline.interactions_per_resolution(os.path.join(SetDirectories.get_output_dir(), "edgelists", edge_list_file))
+                for key, val in interactions_per_resolution.items():
+                    f.write("{:<30} {:<10}{:<10}\n".format(edge_list_file, key, str(val)))
+
+                # Check if the number of lines in the file matches the value of the dictionary key
+                with open(edge_list_file) as edgelist:
+                    line_count = sum(1 for _ in edgelist)
+                    if line_count != val:
+                        print(f"Warning: {edge_list_file} has {line_count} lines, expected {val}.")
 
 
-# print(Pipeline.make_bedpe())
-# Pipeline.make_bedpe()
 
+def run_pipeline():
+    """
+    Call selected methods of the Pipeline, in the order specified
+    :return:
+    """
 
+    start_time = time.time()
 
+    # List of static method names to call
+    method_names = [
+        (lambda: Pipeline.input_to_make_bedpe(Pipeline_Input.group_files(SetDirectories.get_input_dir()))),
+        "input_to_remove_blacklist",
+        "input_to_remove_cytobands",
+        "input_to_nchg",
+        "input_to_adjust_pvalues",
+        "input_to_make_edgelist",
+        "input_to_make_weighted_edgelist",
+        "call_interactions_per_resolution"
+    ]
+
+    # Call each method once
+    for method in tqdm(method_names):
+        if type(method) == str:  # Check if method name is a string
+            method = getattr(Pipeline, method)  # Get the method reference
+        method()  # Call the method
+
+    # Print end time and total time elapsed
+    end_time = time.time()
+    print(f"Pipeline completed in {end_time - start_time:.2f} seconds.")
+
+run_pipeline()
 
