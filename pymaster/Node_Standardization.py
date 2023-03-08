@@ -9,6 +9,12 @@ import time as time
 from tqdm import tqdm
 
 
+# import iced as iced
+
+# TODO: Enable reading in of different file structures (eg only raw folder, or only matrix folder)
+# TODO: Adapt to read in normalized ICE matrices as well
+
+
 ########################################################
 # Pre-processing pipeline for raw Hi-C data from HiC-Pro
 ########################################################
@@ -19,10 +25,19 @@ class SetDirectories:
     For each run, change the input and output directories to the appropriate directories
     """
 
-    input_dir = os.path.abspath("/Users/GBS/Master/Pipeline/diff_res")
-    output_dir = os.path.abspath("/Users/GBS/Master/Pipeline/testing_automated_pipeline")
+    input_dir = os.path.abspath("/Users/GBS/Master/Pipeline/testing_iced/chr18_lowres_iced/output_iced")
+    output_dir = os.path.abspath("/Users/GBS/Master/Pipeline/testing_atuomaticed_pipeline_ICE")
     reference_dir = os.path.abspath("/Users/GBS/Master/reference")
     nchg_path = os.path.abspath("/Users/GBS/Master/Pipeline/INC-tutorial/processing_scripts/NCHG_hic/NCHG")
+    normalized_data = False  # Set to True if you want to process normalized data (ICE matrices), False if you want to process raw data
+
+    @classmethod
+    def set_normalized_data(cls, normalized_data):
+        cls.normalized_data = normalized_data
+
+    @classmethod
+    def get_normalized_data(cls):
+        return cls.normalized_data
 
     @classmethod
     def set_input_dir(cls, input_dir):
@@ -78,15 +93,17 @@ class Pipeline_Input:
         :return: a list of file paths for each BED and matrix file found
         """
 
-        subdirectory_name = "raw"
+        raw_subdirectory_name = "raw"
+        iced_subdirectory_name = "iced"
         bedfiles = []
         matrixfiles = []
+        iced_matrixfiles = []
 
         # Find the raw data subdirectory in the root directory
         raw_subdirectories = []
         for root_directory in root_directories:
             for root, _, _ in os.walk(root_directory):
-                if os.path.basename(root) == subdirectory_name:
+                if os.path.basename(root) == raw_subdirectory_name:
                     raw_subdirectories.append(root)
 
         # Recursively search raw data subdirectory for bed and matrix files
@@ -98,10 +115,24 @@ class Pipeline_Input:
                     if file.endswith(".matrix"):
                         matrixfiles.append(os.path.join(root, file))
 
-        return bedfiles, matrixfiles
+        # Find the ICE-normalized data subdirectory in the root directory
+        iced_subdirectories = []
+        for root_directory in root_directories:
+            for root, _, _ in os.walk(root_directory):
+                if os.path.basename(root) == iced_subdirectory_name:
+                    iced_subdirectories.append(root)
+
+        # Recursively search ICE-normalized data subdirectory for matrix files
+        for subdirectory_path in iced_subdirectories:
+            for root, _, files in os.walk(subdirectory_path):
+                for file in files:
+                    if file.endswith(".matrix"):
+                        iced_matrixfiles.append(os.path.join(root, file))
+
+        return bedfiles, matrixfiles, iced_matrixfiles
 
     @staticmethod
-    def group_files(*args):
+    def group_files_iced(*args):
         """
         Groups bed and matrix files by resolution and experiment.
         :param args: one or more root directories containing raw data from HiC-Pro
@@ -110,23 +141,52 @@ class Pipeline_Input:
 
         bedfiles = Pipeline_Input.find_files(*args)[0]
         matrixfiles = Pipeline_Input.find_files(*args)[1]
-        grouped_files = {}
+        iced_matrixfiles = Pipeline_Input.find_files(*args)[2]
 
-        # Extract resolution and experiment name from file path
+        grouped_raw_files = {}
+        grouped_iced_files = {}
+
+        # Extract resolution and experiment name from raw file path
         for matrixfile in matrixfiles:
             resolution = int(matrixfile.split("/")[-2])
             experiment = matrixfile.split("/")[-4]
             key = f"{experiment, resolution}"
 
-            # Group bed file to matrix file
+            # Group raw bed file to raw matrix file
             for bedfile in bedfiles:
                 if bedfile.startswith(matrixfile[:-len(".matrix")]):
-                    if key not in grouped_files:
-                        grouped_files[key] = (bedfile, matrixfile)
+                    if key not in grouped_raw_files:
+                        grouped_raw_files[key] = (bedfile, matrixfile)
                     else:
-                        grouped_files[key] += (bedfile, matrixfile)
+                        grouped_raw_files[key] += (bedfile, matrixfile)
 
-        return grouped_files
+        # Extract resolution and experiment name from ICE-normalized file path
+        for iced_matrixfile in iced_matrixfiles:
+            resolution = int(iced_matrixfile.split("/")[-2])
+            experiment = iced_matrixfile.split("/")[-4]
+            key_prefix = "/".join(iced_matrixfile.split("/")[:-3])  # common part of file path excluding /raw/ and /iced/
+            key_suffix = iced_matrixfile.split("/")[-1][:-len("_iced.matrix")]  # common part of file name excluding _iced.matrix
+            key = f"{experiment, resolution}"
+
+            # Group ICE-normalized matrix file
+            for bedfile in bedfiles:
+                bedfile_prefix = "/".join(bedfile.split("/")[:-3])
+                bedfile_suffix = bedfile.split("/")[-1][:-len("_abs.bed")]
+                if bedfile_prefix == key_prefix and bedfile_suffix == key_suffix:
+                    if key not in grouped_iced_files:
+                        grouped_iced_files[key] = (bedfile, iced_matrixfile)
+                    else:
+                        grouped_iced_files[key] += (bedfile, iced_matrixfile)
+
+        # Checks if Pipeline should be run on raw or ICE-normalized data
+        grouped_files_checked = None
+        if SetDirectories.get_normalized_data():
+            grouped_files_checked = grouped_iced_files
+        if not SetDirectories.get_normalized_data():
+            grouped_files_checked = grouped_raw_files
+
+        return grouped_files_checked
+
 
 class Pipeline:
     @staticmethod
@@ -422,7 +482,6 @@ class Pipeline:
                 for line in weighted_edgelist:
                     f.write(line + "\n")
 
-
     @staticmethod
     def make_edgelist(padj_file):
         """Makes edge list from padj file"""
@@ -513,7 +572,6 @@ class Pipeline:
                         print(f"Warning: {edge_list_file} has {line_count} lines, expected {val}.")
 
 
-
 def run_pipeline():
     """
     Call selected methods of the Pipeline, in the order specified
@@ -540,9 +598,19 @@ def run_pipeline():
             method = getattr(Pipeline, method)  # Get the method reference
         method()  # Call the method
 
-    # Print end time and total time elapsed
+    # Print runtime on completion
     end_time = time.time()
     print(f"Pipeline completed in {end_time - start_time:.2f} seconds.")
 
-run_pipeline()
+
+# run_pipeline()
+
+
+
+
+
+
+
+
+
 

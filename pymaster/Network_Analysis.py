@@ -8,8 +8,10 @@ from igraph import plot
 from matplotlib import pyplot as plt
 from collections import Counter
 import altair as alt
+import seaborn as sb
 
 
+# Make class to read in files and create graph objects from them, naming them after
 
 
 # Quick look at new method on INC data
