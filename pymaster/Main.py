@@ -1,6 +1,1 @@
-
-# if name(main) == "main":
-#     main()
-
-
-
+# Call things from here later

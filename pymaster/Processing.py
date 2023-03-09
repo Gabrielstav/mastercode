@@ -1,16 +1,17 @@
+# Import modules
 from dataclasses import dataclass
 from Node_Standardization import SetDirectories
 import os as os
 
 # TODO: Refactor to read in edge lists from Pipeline
 # TODO: Finish chromosome and resolution filter methods
-# TODO: Make "as list" and "as dict" methods
+# TODO: Make "as list" and "as dict" methods (not needed just save as files, to avoid using 10 different APIs)
 # TODO: Calculate overlap between nodes across cell lines, might not have any overlap in nodes
 
 # Set directories containing edge lists (theycan be names anything, but if they come from the Pipeline class they follow the standard naming convention.
 # So check if they follow the standard naming convention, if they do,
 # Standard naming: experiment_resolution_edgelist.txt, eg: IMR90_10000_edgelist.txt or chr18_lowres_500000_edgelist.txt
-# The root folder containing each set of raw data is the experiment name, eg in out case chr18_lowres (can be for celline as well).
+# The root folder containing each set of raw data is the experiment name, e.g in out case chr18_lowres (can be for celline as well).
 
 # Where experiment is the Job name in HiC-Pro, and resolution is the resolution of the Hi-C data in bp.
 # But IDK what I'll name things yet when I run things on HPC yet, so just leave as is now I think, and then refactor later.
@@ -29,6 +30,9 @@ import os as os
 # Method can be used to calculate overlap between nodes across experiments, and the filtering things defined in the experiment/Node class.
 
 # TODO: The goal of this (and the only thing I NEED to do) is to be able to calculate overlap between nodes across experiments. So start with that.
+# TODO: Make comparisons between normalized and raw data somehow? Nah idk... the only point of these classes should be to filter data on crieria:
+#  (chr, res, experiment (cell lines), and then calculate things like overlap between nodes across experiments.
+#  all the networking occurs using other packages.
 
 class SetInputDir:
     """

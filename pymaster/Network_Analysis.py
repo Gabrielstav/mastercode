@@ -1,7 +1,5 @@
-"""
-Network analysis
-"""
 
+# Import modules
 import igraph as ig
 import numpy as np
 from igraph import plot
@@ -10,8 +8,26 @@ from collections import Counter
 import altair as alt
 import seaborn as sb
 
+# TODO: Eventually make class to read in edgelists, pass those to another class that makes graph objects, and then pass those to a metric class that calculates the metrics we want to plot.
+#       This class then passes the metrics to a plotting class that plots the metrics. Which can be saved to an output directory in the end. 
 
-# Make class to read in files and create graph objects from them, naming them after
+# TODO: Read in data, just set as hardcoded paths to begin with (later on we can make a class to read in data)
+
+# Normalized data:
+# Some path
+
+# Raw data:
+# Some path
+
+# TODO: Create graph objects from data per resolution
+# Maybe make function to split data into different resolutions per root dir provided? Quick fix.
+
+# TODO: Figure out what metrics to calculate, and what to plot.
+# think about what we want to show in the end.
+# Maybe we can make a function that takes in a graph object and calculates the metrics we want to plot? IDk about speed tho, but definiatey for commong stuff like degree and betweenness etc.
+
+# TODO: Then do plotting quick for now, that is, just plot the metrics we want to show without making the code automatic and flexible.
+
 
 
 # Quick look at new method on INC data

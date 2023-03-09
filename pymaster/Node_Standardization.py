@@ -7,29 +7,29 @@ import math
 from statsmodels.sandbox.stats import multicomp
 import time as time
 from tqdm import tqdm
+import re as re
 
-
-# import iced as iced
 
 # TODO: Enable reading in of different file structures (eg only raw folder, or only matrix folder)
-# TODO: Adapt to read in normalized ICE matrices as well
 
-
-########################################################
-# Pre-processing pipeline for raw Hi-C data from HiC-Pro
-########################################################
+####################################################
+# Pre-processing pipeline for Hi-C data from HiC-Pro
+####################################################
 
 class SetDirectories:
     """
     SET INPUT-, OUTPUT- AND REFERENCE DIRS AND FULLPATH TO NCHG HERE
+
     For each run, change the input and output directories to the appropriate directories
+    Set input dir to root dir containing HiC-Pro output folders (raw, matrix).
+    Set normalized data = True to process ICE matrices, False to process raw data.
     """
 
-    input_dir = os.path.abspath("/Users/GBS/Master/Pipeline/testing_iced/chr18_lowres_iced/output_iced")
-    output_dir = os.path.abspath("/Users/GBS/Master/Pipeline/testing_atuomaticed_pipeline_ICE")
-    reference_dir = os.path.abspath("/Users/GBS/Master/reference")
-    nchg_path = os.path.abspath("/Users/GBS/Master/Pipeline/INC-tutorial/processing_scripts/NCHG_hic/NCHG")
-    normalized_data = False  # Set to True if you want to process normalized data (ICE matrices), False if you want to process raw data
+    input_dir = os.path.abspath("/Users/GBS/Master/HiC-Data/HiC-Pro_out/chr18_inc/chr18_raw")
+    output_dir = os.path.abspath("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw_icedpipe")
+    reference_dir = os.path.abspath("/Users/GBS/Master/Reference")
+    nchg_path = os.path.abspath("/Users/GBS/Master/Scripts/NCHG_hic/NCHG")
+    normalized_data = False
 
     @classmethod
     def set_normalized_data(cls, normalized_data):
@@ -132,7 +132,7 @@ class Pipeline_Input:
         return bedfiles, matrixfiles, iced_matrixfiles
 
     @staticmethod
-    def group_files_iced(*args):
+    def group_files(*args):
         """
         Groups bed and matrix files by resolution and experiment.
         :param args: one or more root directories containing raw data from HiC-Pro
@@ -252,6 +252,8 @@ class Pipeline:
                 f.writelines(bedpe)
                 f.close()
 
+    # window_size = bedpe_file.strip(".bedpe").split("_")[2]
+
     @staticmethod
     def remove_blacklisted_regions(bedpe_file):
         """
@@ -264,7 +266,11 @@ class Pipeline:
 
         os.chdir(SetDirectories.get_temp_dir() + "/bedpe")
         blacklisted_bedpe = pbt.BedTool(bedpe_file)
-        window_size = bedpe_file.strip(".bedpe").split("_")[2]
+
+        window_size = int(re.search(r"(\d+)[^/\d]*$", bedpe_file).group(1))
+        if not isinstance(window_size, int):
+            raise ValueError(f"Window size must be an integer, {window_size} is not an integer.")
+
         no_overlap_bedpe = blacklisted_bedpe.window(blacklisted_pbt, w=int(window_size), r=False, v=True)
 
         return no_overlap_bedpe
@@ -314,7 +320,11 @@ class Pipeline:
 
         os.chdir(SetDirectories.get_temp_dir() + "/blacklisted")
         blacklisted_pbt = pbt.BedTool(blacklisted_bedpe_file)
-        window_size = blacklisted_bedpe_file.strip(".bedpe").split("_")[2]
+
+        window_size = int(re.search(r"(\d+)[^/\d]*$", blacklisted_bedpe_file).group(1))
+        if not isinstance(window_size, int):
+            raise ValueError(f"Window size must be an integer, {window_size} is not an integer.")
+
         no_cytobands = blacklisted_pbt.window(centromeric_regions, w=int(window_size), r=False, v=True)
 
         return no_cytobands
@@ -349,12 +359,19 @@ class Pipeline:
     def find_siginificant_interactions(bedpe_file):
         """
         NCHG script to calculate the significance of interactions:
-        m = minimum interaction length in bp, should be same as window size used to make the bedpe file
+        m = minimum interaction length in bp, should be same as window size used to make the bedpe file (resolution)
         p = input file, which is the output of the remove_cytobands function but reformatted to be compatible with NCHG
         """
 
-        window_size = bedpe_file.strip(".bedpe").split("_")[2]
-        nchg_run = sp.run([SetDirectories.get_NCHG_path(), "-m", window_size, "-p", bedpe_file], capture_output=True)
+        # TODO: Fix this, there is something wrong with types in the NCHG script, it doesn't like the window size.
+        # This could be because
+
+        # Setting window size to be the same as the resolution
+        window_size = int(re.search(r"(\d+)[^/\d]*$", bedpe_file).group(1))
+        if not isinstance(window_size, int):
+            raise ValueError(f"Window size must be an integer, {window_size} is not an integer.")
+
+        nchg_run = sp.run([SetDirectories.get_NCHG_path(), "-m", str(window_size), "-p", bedpe_file], capture_output=True)
 
         return nchg_run.stdout.decode("utf-8").split("\t")
 
@@ -376,13 +393,43 @@ class Pipeline:
 
         # Iterate over input files and process/save them
         for no_cytobands_file in no_cytobands_dir:
-            os.chdir(SetDirectories.get_temp_dir() + "/no_cytobands")
-            nchg_output = Pipeline.find_siginificant_interactions(no_cytobands_file)
+            # check if "iced" is in the file path (if the data is normalized)
 
-            os.chdir(output_dir)
-            output_filename = f"{no_cytobands_file[:-len('.bedpe')]}_nchg_output.txt"
-            with open(os.path.join(output_dir, output_filename), "w") as f:
-                f.writelines(nchg_output)
+            if "iced" in no_cytobands_file:
+                # open the file and round the interaction values
+                bedpe_inted = []
+                with open(os.path.join(SetDirectories.get_temp_dir(), "no_cytobands", no_cytobands_file), "r") as file:
+                    for line in file:
+                        fields = line.split()
+                        if len(fields) >= 7 and "." in fields[6]:  # rounds float iced matrix
+                            fields[6] = str(int(round(float(fields[6]))))
+                        bedpe_inted.append("\t".join(fields))
+
+                # save the rounded bedpe file
+                bedpe_inted_file = no_cytobands_file.replace(".bedpe", "_inted.bedpe")
+                with open(os.path.join(SetDirectories.get_temp_dir(), "no_cytobands", bedpe_inted_file), "w") as file:
+                    file.write("\n".join(bedpe_inted))
+
+                # run the NCHG script on the rounded bedpe file
+                os.chdir(SetDirectories.get_temp_dir() + "/no_cytobands")
+                nchg_output = Pipeline.find_siginificant_interactions(bedpe_inted_file)
+
+                # save the NCHG output to a file
+                os.chdir(output_dir)
+                output_filename = f"{no_cytobands_file[:-len('.bedpe')]}_nchg_output.txt"
+                with open(os.path.join(output_dir, output_filename), "w") as f:
+                    f.writelines(nchg_output)
+
+            else:
+                # run the NCHG script on the input bedpe file
+                os.chdir(SetDirectories.get_temp_dir() + "/no_cytobands")
+                nchg_output = Pipeline.find_siginificant_interactions(no_cytobands_file)
+
+                # save the NCHG output to a file
+                os.chdir(output_dir)
+                output_filename = f"{no_cytobands_file[:-len('.bedpe')]}_nchg_output.txt"
+                with open(os.path.join(output_dir, output_filename), "w") as f:
+                    f.writelines(nchg_output)
 
     @staticmethod
     def adjust_pvalues(nchg_file, fdr_threshold=0.01, log_ratio_threshold=2, method="fdr_bh"):
@@ -390,6 +437,7 @@ class Pipeline:
         Adjusts the p-values using the Benjamini-Hochberg method
         """
 
+        # TODO: Check if float points in pval of 0.0 fix yields correct results:
         # Finds the p-values and log ratios of the interactions
         pval = []
         processed = []
@@ -527,7 +575,10 @@ class Pipeline:
         :output: Dictionary with resolution as key, and number of bins as value
         """
 
-        resolution = edge_list_file.split("_")[3]
+        resolution = int(re.search(r"(\d+)[^/\d]*$", edge_list_file).group(1))
+        if not isinstance(resolution, int):
+            raise ValueError(f"Resolution must be an integer, {resolution} is not an integer.")
+
         interaction_count = []
         if os.path.exists(edge_list_file):
             with open(edge_list_file, "r") as f:
@@ -537,8 +588,7 @@ class Pipeline:
             interactions_per_resolution = {resolution: len(interaction_count)}
             return interactions_per_resolution
         else:
-            print(f"File not found: {edge_list_file}")
-            return {}
+            raise FileNotFoundError(f"File not found: {edge_list_file}")
 
     @staticmethod
     def call_interactions_per_resolution():
@@ -555,7 +605,7 @@ class Pipeline:
 
         # Get the list of edgelist files and sort them based on resolution
         edge_list_files = os.listdir(SetDirectories.get_output_dir() + "/edgelists")
-        edge_list_files.sort(key=lambda x: int(x.split("_")[2]))
+        edge_list_files.sort(key=lambda x: int(re.search(r"(\d+)[^/\d]*$", edge_list_file).group(1)))
 
         # Iterate over the sorted list of edgelist files and process/save them
         with open(output_file, "w") as f:
@@ -575,7 +625,6 @@ class Pipeline:
 def run_pipeline():
     """
     Call selected methods of the Pipeline, in the order specified
-    :return:
     """
 
     start_time = time.time()
@@ -603,14 +652,5 @@ def run_pipeline():
     print(f"Pipeline completed in {end_time - start_time:.2f} seconds.")
 
 
-# run_pipeline()
-
-
-
-
-
-
-
-
-
+run_pipeline()
 
