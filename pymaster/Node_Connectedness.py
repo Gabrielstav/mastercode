@@ -1,6 +1,6 @@
-from Processing import Node
-from Processing import Celline
-from Processing import Cellines
+from Filtering import Node
+from Filtering import Celline
+from Filtering import Cellines
 
 # Lists for isolated and connected nodes across all chromosomes called in the get_nodes_from_chromosomes function
 chromlist_isolated_nodes = []

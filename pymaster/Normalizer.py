@@ -5,7 +5,7 @@ import iced as iced
 # Reuse code from pipeline.py to read in files.
 # End point after normalization should be normalized files in a directory
 
-# TODO: ICED normalization
+# TODO: ICED normalization here instead of in HiC-Pro?
 
 import matplotlib.pyplot as plt
 from matplotlib import colors

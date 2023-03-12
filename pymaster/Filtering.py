@@ -1,7 +1,11 @@
 # Import modules
 from dataclasses import dataclass
-from Node_Standardization import SetDirectories
+from Pipeline import SetDirectories
 import os as os
+
+# TODO:
+#   Write down structure of classes and methods, start broadly with what they need to do and what they should output...
+#   Think about what each class represents, the levels of abstraction, and the output of each class.
 
 # TODO: Refactor to read in edge lists from Pipeline
 # TODO: Finish chromosome and resolution filter methods

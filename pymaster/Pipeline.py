@@ -652,5 +652,5 @@ def run_pipeline():
     print(f"Pipeline completed in {end_time - start_time:.2f} seconds.")
 
 
-run_pipeline()
+# run_pipeline()
 
