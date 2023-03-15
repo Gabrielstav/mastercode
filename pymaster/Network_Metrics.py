@@ -91,6 +91,9 @@ class CreateGraphsFromDirectory:
 
         return filtered_graph_dict
 
+################################
+# Creating graphs from edgelists
+################################
 
 # Creating graph objects from raw and normalized edge lists, as well as filtered on resolution and chromosome:
 # Move this to another module later.
@@ -118,8 +121,11 @@ def chr18_inc_raw_graphs_50kb():
     root_dir = Path("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists")
     graph_creator = CreateGraphsFromDirectory(root_dir)
     graph_creator.from_edgelists()
-    filtered_graphs = graph_creator.filter_graphs(resolutions=["50000", "40000"], chromosomes="chr18")
+    filtered_graphs = graph_creator.filter_graphs(resolutions=["50000"], chromosomes="chr18")
     return filtered_graphs
+
+
+# TODO: make methods to calculate largest connected component, and pass this to the Network metrics class.
 
 
 class NetworkMetrics:
@@ -136,21 +142,27 @@ class NetworkMetrics:
 
     available_metrics = {
         "size": lambda g: g.vcount(),
-        "density": lambda g: g.density,
-        "modularity": lambda g: g.modularity,
-        "community": lambda g: g.community_multilevel,
-        "assortativity": lambda g: g.assortativity,
-        "betweenness": lambda g: g.betweenness,
-        "degree": lambda g: g.degree,
-        "closeness": lambda g: g.closeness,
-        "eigen_centrality": lambda g: g.eigenvector_centrality,
-        "shortest_path_length": lambda g: g.shortest_paths,
-        "radius": lambda g: g.radius,
-        "diameter": lambda g: g.diameter,
-        "average_path_length": lambda g: g.average_path_length,
-        "clustering_coefficient": lambda g: g.transitivity_undirected,
-        "jaccard_coefficient": lambda g: g.similarity_jaccard,
-        "pagerank": lambda g: g.pagerank
+        "density": lambda g: g.density(),
+        "fg_communities": lambda g: g.community_fastgreedy(),
+        "community": lambda g: g.community_multilevel(),
+        "assortativity": lambda g: g.assortativity_degree(),
+        "betweenness": lambda g: g.betweenness(),
+        "degree": lambda g: g.degree(),
+        "closeness": lambda g: g.closeness(),
+        "eigen_centrality": lambda g: g.eigenvector_centrality(),
+        "shortest_path_length": lambda g: g.shortest_paths(),
+        "radius": lambda g: g.radius(),
+        "diameter": lambda g: g.diameter(),
+        "average_path_length": lambda g: g.average_path_length(),
+        "clustering_coefficient": lambda g: g.transitivity_undirected(),
+        "jaccard_coefficient": lambda g: g.similarity_jaccard(),
+        "pagerank": lambda g: g.pagerank(),
+        "fg_modularity": lambda g: g.community_fastgreedy().as_clustering(),
+        "average_neighbor_degree": lambda g: g.average_neighbor_degree(),
+        "average_degree_connectivity": lambda g: g.average_degree_connectivity(),
+        "average_clustering": lambda g: g.transitivity_avglocal_undirected(),
+        "average_local_clustering": lambda g: g.transitivity_local_undirected(),
+        "transitivity_undirected": lambda g: g.transitivity_undirected(),
     }
 
     # Calculate metrics for all graphs passed to class
@@ -211,50 +223,74 @@ class NetworkMetrics:
         for graph_name, graph in graph_dict.items():
             metrics_data[graph_name] = {}
             for metric_name, metric_function in metrics.items():
-                metrics_data[graph_name][metric_name] = metric_function(graph)
+                metric_value = metric_function(graph)
+                metrics_data[graph_name][metric_name] = metric_value
 
-        return cls(graph_dict_or_function, metrics_data)
+        return metrics_data
 
-    def print_metrics(self):
-        for graph_name, metrics in self.metrics_dict.items():
+    @classmethod
+    def print_metrics(cls, metrics_dict, metric_names=None):
+        if metric_names is None:
+            metric_names = []
+
+        for graph_name, metrics in metrics_dict.items():
             print(f"Metrics for {graph_name}:")
             for metric_name, metric_value in metrics.items():
-                if callable(metric_value):
-                    if isinstance(metric_value, types.MethodType):
-                        if metric_value.__self__ is None:  # It's a class method
-                            metric_value = metric_value.__func__(type(self))
-                        else:  # It's an instance method
-                            if metric_name == "modularity":
-                                membership = metric_value.__self__.community_multilevel()
-                                metric_value = metric_value.__func__(metric_value.__self__, membership)
-                            else:
-                                metric_value = metric_value.__func__(metric_value.__self__)
-                    else:
+                if metric_name in metric_names and callable(metric_value):
+                    try:
                         metric_value = metric_value()
+                    except TypeError:
+                        if metric_name == "fg_modularity":
+                            membership = metric_value.community_multilevel().membership
+                            metric_value = metric_value.modularity(membership)
+                        else:
+                            raise ValueError(f"Unsupported metric '{metric_name}' with additional arguments")
                 print(f"  {metric_name}: {metric_value}")
             print()
 
 
-
-# TODO: Fix the rest of print method, and then make functions to print and compare metrics for all graphs
+###################
+# Calculate metrics
+###################
 
 # From function returning dictionary containign graph objects (or from dictionary):
 def chr18_50kb_metrics():
-    return NetworkMetrics.get_metrics(graph_dict_or_function=chr18_inc_raw_graphs_50kb)
-chr18_50kb_metrics().print_metrics()
+    metrics = NetworkMetrics.get_metrics(
+        graph_dict_or_function=chr18_inc_raw_graphs_50kb,
+        metrics=[
+            "size", "fg_communities", "assortativity", "clustering_coefficient", "radius", "diameter", "average_path_length", "fg_modularity"
+        ])
+    return NetworkMetrics.print_metrics(metrics)
+
+chr18_50kb_metrics()
 
 # Or calculate metrics from root directory containing edge lists:
 def chr18_size_mod_from_directory():
-    return NetworkMetrics.get_metrics(chromosome="chr18", resolution="50000", metrics=["size", "modularity"], root_dir=Path("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists")).print_metrics()
+    metrics = NetworkMetrics.get_metrics(chromosome="chr18", resolution="50000", metrics=["size", "fg_communities"], root_dir=Path("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists"))
+    return NetworkMetrics.print_metrics(metrics)
+# chr18_size_mod_from_directory()
+
+
+class largest_connected_components():
+    """
+    This class should be used to calculate metrics for the largest connected components of a graph.
+    Can atomatically do community detection, and find the largest connected component for all graphs in CreateGraphsFromDirectory?
+    Or you can pass graph objects to the class, and it will calculate metrics for the largest connected component.
+    Maybe it could filter out all smaller communities, name them based on size, and do metrics for each community?
+    Another question is what community detection algorithms to use?
+
+    """
 
 
 
+# TODO: Make a class for plotting graphs, and compare largest connected components with whole network.
 
-def plot_chr18_50kb():
-    h = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists/chr18_hires_20000_edgelist.txt", format="ncol", directed=False)  # very messy
-    ig.plot(h, edge_width=0.07, node_size=0.5, node_color="red")
-    plt.show()
-    plt.close()
+
+# def plot_chr18_50kb():
+#     h = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists/chr18_hires_20000_edgelist.txt", format="ncol", directed=False)  # very messy
+#     ig.plot(h, edge_width=0.07, node_size=0.5, node_color="red")
+#     plt.show()
+#     plt.close()
 
 
 # PLotting class
