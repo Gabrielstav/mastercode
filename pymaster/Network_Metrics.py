@@ -1,15 +1,18 @@
 # Import modules
-import math
-import networkx as nx
 import igraph as ig
 from matplotlib import pyplot as plt
 from pathlib import Path
 import re as re
+import types as types
+from typing import Union
+
+# Set backend of igraph to matplotlib:
 ig.config["plotting.backend"] = "matplotlib"
 
-
+# Maybe used later?
+import math
+import networkx as nx
 import numpy as np
-# from igraph import plot as iplot
 from collections import Counter
 import altair as alt
 import pandas as pd
@@ -25,98 +28,265 @@ import pandas as pd
 # TODO: Eventually make class to read in edgelists, pass those to another class that makes graph objects, and then pass those to a metric class that calculates the metrics we want to plot.
 #       This class then passes the metrics to a plotting class that plots the metrics. Which can be saved to an output directory in the end.
 #       Also need to include overlapping nodes into networks, since we do not want to compare nodes not overlapping, but for this we need filtering classes first.
+#       Big unknown is the overlap between the networks, since we do not know how the overlap from full ganome data yet. But we can use synthetic data to test this.
 
-# TODO: Read in data, just set as hardcoded paths to begin with (later on we can make a class to read in data)
 
-class Directories:
+# TODO: The chromosome filtering wont work on full genome data, because now the graph name contains the chromosome, but it wont for full genome data.
+#      So we need to make a class that can filter the graphs based on the chromosome, and then we can use the graph name to filter the graphs.
+
+
+class CreateGraphsFromDirectory:
     """
-    Set input directories containing edge lists here,
-    and output directories to save figures to.
+    Class to create igraph objects from edgelists in a directory.
+    Set exclude_weighted = False in from_edgelist method to create graphs from weighted edgelists.
     """
 
-    root_dir = Path("/Users/GBS/Master/HiC-Data/Pipeline_out")
-    norm_dir = Path("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm/edgelists")
-    raw_dir = Path("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists")
-    fig_dir = Path("/Users/GBS/Master/Figures/Network_metrics/chr18_inc")
+    def __init__(self, input_directory):
+        self.input_directory = input_directory
+        self.graph_dict = {}
+
+    def get_files(self, pattern):
+        files = (file_path for file_path in self.input_directory.rglob(pattern) if file_path.is_file())
+        files_list = [str(file_path.resolve()) for file_path in files]
+        return files_list
+
+    def from_edgelists(self, pattern='**/*edgelist*.txt', exclude_weighted=True):
+        if exclude_weighted:
+            pattern = f"**/*[^weighted]*edgelist*.txt"
+        edgelist_files = self.get_files(pattern)
+
+        for edgelist in edgelist_files:
+            graph_name = re.findall(r".*/(.+)_edgelist\.txt$", str(edgelist))[0]
+            self.graph_dict[graph_name] = ig.Graph.Load(edgelist, format="ncol", directed=False)
+
+    def from_weighted_edgelists(self, pattern='**/*weighted*.txt'):
+        weighted_files = self.get_files(pattern)
+
+        for edgelist in weighted_files:
+            graph_name = re.findall(r".*/(.+)_weighted_edgelist\.txt$", str(edgelist))[0]
+            self.graph_dict[graph_name] = ig.Graph.Load(edgelist, format="ncol", directed=False)
+
+    def filter_graphs(self, chromosomes=None, resolutions=None):
+        if chromosomes:
+            if isinstance(chromosomes, str):
+                chromosomes = [chromosomes]
+            chromosomes = set(chromosomes)
+        if resolutions:
+            if isinstance(resolutions, str):
+                resolutions = [resolutions]
+            resolutions = set(resolutions)
+
+        filtered_graph_dict = {}
+
+        for graph_name, graph in self.graph_dict.items():
+            if chromosomes is not None and not any(chrom in graph_name for chrom in chromosomes):
+                continue
+
+            if resolutions is not None:
+                graph_name_resolution = re.search(r"_([^_]+)$", graph_name).group(1)
+                if graph_name_resolution not in resolutions:
+                    continue
+
+            filtered_graph_dict[graph_name] = graph
+
+        return filtered_graph_dict
+
+
+# Creating graph objects from raw and normalized edge lists, as well as filtered on resolution and chromosome:
+# Move this to another module later.
+
+def chr18_inc_norm_graphs():
+    root_dir = Path("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm/edgelists")
+    graph_creator = CreateGraphsFromDirectory(root_dir)
+    graph_creator.from_edgelists()
+    chr18_inc_graphs_norm = graph_creator.graph_dict
+    return chr18_inc_graphs_norm
+
+
+# print(chr18_inc_norm_graphs())
+
+def chr18_inc_raw_graphs():
+    root_dir = Path("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists")
+    graph_creator = CreateGraphsFromDirectory(root_dir)
+    graph_creator.from_edgelists()
+    chr18_inc_graphs_raw = graph_creator.graph_dict
+    return chr18_inc_graphs_raw
+
+
+# Filter on resolution and chromosome:
+def chr18_inc_raw_graphs_50kb():
+    root_dir = Path("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists")
+    graph_creator = CreateGraphsFromDirectory(root_dir)
+    graph_creator.from_edgelists()
+    filtered_graphs = graph_creator.filter_graphs(resolutions=["50000", "40000"], chromosomes="chr18")
+    return filtered_graphs
+
+
+class NetworkMetrics:
+    """
+    Class to calculate network metrics for a given graph object.
+    """
+
+    def __init__(self, graph_dict_or_function, metrics=None):
+        if isinstance(graph_dict_or_function, types.FunctionType):
+            self.graph_dict = graph_dict_or_function()
+        else:
+            self.graph_dict = graph_dict_or_function
+        self.metrics_dict = metrics if metrics is not None else {}
+
+    available_metrics = {
+        "size": lambda g: g.vcount(),
+        "density": lambda g: g.density,
+        "modularity": lambda g: g.modularity,
+        "community": lambda g: g.community_multilevel,
+        "assortativity": lambda g: g.assortativity,
+        "betweenness": lambda g: g.betweenness,
+        "degree": lambda g: g.degree,
+        "closeness": lambda g: g.closeness,
+        "eigen_centrality": lambda g: g.eigenvector_centrality,
+        "shortest_path_length": lambda g: g.shortest_paths,
+        "radius": lambda g: g.radius,
+        "diameter": lambda g: g.diameter,
+        "average_path_length": lambda g: g.average_path_length,
+        "clustering_coefficient": lambda g: g.transitivity_undirected,
+        "jaccard_coefficient": lambda g: g.similarity_jaccard,
+        "pagerank": lambda g: g.pagerank
+    }
+
+    # Calculate metrics for all graphs passed to class
+    def calculate_metrics(self, selected_metrics=None):
+        if selected_metrics is None:
+            selected_metrics = self.available_metrics.keys()
+
+        calculated_metrics = {}
+
+        for graph_name, graph in self.graph_dict.items():
+            metrics_for_graph = {}
+            for metric in selected_metrics:
+                metric_function = self.available_metrics[metric]
+                metrics_for_graph[metric] = metric_function(graph)
+            calculated_metrics[graph_name] = metrics_for_graph
+
+        return calculated_metrics
 
     @classmethod
-    def root_directory(cls, root_dir=None):
+    def get_metrics(cls, graph_dict_or_function=None, chromosome=None, resolution=None, metrics: Union[None, dict, list] = None, root_dir=None, **kwargs):
+        """
+        Filter metrics from dict, function returning dict or from root directory containing edge lists
+        :param graph_dict_or_function: input as dictionary or function returning dictionary
+        :param chromosome: chromosome to filter on
+        :param resolution: specific resolution to filter on
+        :param metrics: network metrics to calculate
+        :param root_dir: root dir containing edge lists (if calculating metrics from edge lists)
+        :return: dict containing graph objects and metrics
+        """
+
+        # Create an instance of NetworkMetrics
+        network_metrics = cls(graph_dict_or_function)
+
+        graph_dict = {}
+
+        # If graph_dict_or_function is a function, call it to get the graph_dict
+        if callable(graph_dict_or_function):
+            graph_dict = graph_dict_or_function()
+        # If graph_dict_or_function is a dictionary, use it directly
+        elif isinstance(graph_dict_or_function, dict):
+            graph_dict = graph_dict_or_function
+
+        # If root_dir is provided, create graph_dict from the directory
         if root_dir is not None:
-            cls.root_dir = root_dir
-        return cls.root_dir
+            graph_creator = CreateGraphsFromDirectory(root_dir)
+            graph_creator.from_edgelists()
+            graph_creator.filter_graphs(chromosomes=chromosome, resolutions=resolution)
+            graph_dict = graph_creator.graph_dict
 
-    @classmethod
-    def normalized_directory(cls, norm_dir=None):
-        if norm_dir is not None:
-            cls.norm_dir = norm_dir
-        return cls.norm_dir
+        # If metrics is None, use all available metrics
+        if metrics is None:
+            metrics = cls.available_metrics
+        # If metrics is a list, filter the default_metrics dictionary
+        elif isinstance(metrics, list):
+            metrics = {metric.lower(): cls.available_metrics[metric.lower()] for metric in metrics}
 
-    @classmethod
-    def raw_directory(cls, raw_dir=None):
-        if raw_dir is not None:
-            cls.raw_dir = raw_dir
-        return cls.raw_dir
+        metrics_data = {}
+        for graph_name, graph in graph_dict.items():
+            metrics_data[graph_name] = {}
+            for metric_name, metric_function in metrics.items():
+                metrics_data[graph_name][metric_name] = metric_function(graph)
 
-    @classmethod
-    def figure_directory(cls, fig_dir=None):
-        if fig_dir is not None:
-            cls.fig_dir = fig_dir
-        return cls.fig_dir
+        return cls(graph_dict_or_function, metrics_data)
 
-
-class Create_graphs:
-
-    @staticmethod
-    def get_files():
-        edgelist_files = (file_path for file_path in Directories.root_directory().rglob('**/*edgelist*.txt') if file_path.is_file() and "weighted" not in file_path.name)
-        edgelist_files_list = [str(file_path.resolve()) for file_path in edgelist_files]
-        for file_path in edgelist_files_list:
-            print(f"Processing file: {file_path}")
-        return edgelist_files_list
-
-    @staticmethod
-    def get_weighted_files():
-        weighted_files = (file_path for file_path in Directories.root_directory().rglob('**/*weighted*.txt') if file_path.is_file())
-        weighted_files_list = [str(file_path.resolve()) for file_path in weighted_files]
-        for file_path in weighted_files_list:
-            print(f"Processing file: {file_path}")
-        return weighted_files_list
-
-    @staticmethod
-    def from_edgelists():
-        graph_objects = {}
-        for edgelist in Create_graphs.get_files():
-            # Extract graph name from file path
-            pattern = r".*/(.+)_edgelist\.txt$"
-            match = re.match(pattern, str(edgelist))
-            graph_name = match.group(1)
-            graph_objects[graph_name] = ig.Graph.Load(edgelist, format="ncol")
-
-        return graph_objects
-
-    @staticmethod
-    def from_weighted_edgelists():
-        graph_objects = {}
-        for edgelist in Create_graphs.get_weighted_files():
-            # Extract graph name from file path
-            pattern = r".*/(.+)_weighted_edgelist\.txt$"
-            match = re.match(pattern, str(edgelist))
-            graph_name = match.group(1)
-            graph_objects[graph_name] = ig.Graph.Load(edgelist, format="ncol")
-
-        return graph_objects
+    def print_metrics(self):
+        for graph_name, metrics in self.metrics_dict.items():
+            print(f"Metrics for {graph_name}:")
+            for metric_name, metric_value in metrics.items():
+                if callable(metric_value):
+                    if isinstance(metric_value, types.MethodType):
+                        if metric_value.__self__ is None:  # It's a class method
+                            metric_value = metric_value.__func__(type(self))
+                        else:  # It's an instance method
+                            if metric_name == "modularity":
+                                membership = metric_value.__self__.community_multilevel()
+                                metric_value = metric_value.__func__(metric_value.__self__, membership)
+                            else:
+                                metric_value = metric_value.__func__(metric_value.__self__)
+                    else:
+                        metric_value = metric_value()
+                print(f"  {metric_name}: {metric_value}")
+            print()
 
 
-# TODO: This is messy RN; automate so each method takes the previous method as input, and then the last method returns the final output (plots).
-#    calculate largest connected ocmponent, and then calculate metrics for that component only. Compare with metrics for whole network?
+
+# TODO: Fix the rest of print method, and then make functions to print and compare metrics for all graphs
+
+# From function returning dictionary containign graph objects (or from dictionary):
+def chr18_50kb_metrics():
+    return NetworkMetrics.get_metrics(graph_dict_or_function=chr18_inc_raw_graphs_50kb)
+chr18_50kb_metrics().print_metrics()
+
+# Or calculate metrics from root directory containing edge lists:
+def chr18_size_mod_from_directory():
+    return NetworkMetrics.get_metrics(chromosome="chr18", resolution="50000", metrics=["size", "modularity"], root_dir=Path("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists")).print_metrics()
+
+
+
+
+def plot_chr18_50kb():
+    h = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists/chr18_hires_20000_edgelist.txt", format="ncol", directed=False)  # very messy
+    ig.plot(h, edge_width=0.07, node_size=0.5, node_color="red")
+    plt.show()
+    plt.close()
+
+
+# PLotting class
+
+# class NetworkPlots:
+#     @staticmethod
+#     def plot_degree_distribution(graph_dict, title=None):
+#         for graph_name, graph in graph_dict.items():
+#             degree_distribution = graph.degree_distribution()
+#             x = [left + (width / 2) for left, _, width in degree_distribution.bins()]
+#             y = [count for _, count, _ in degree_distribution.bins()]
+#             plt.plot(x, y, marker='o', linestyle='-', label=graph_name)
+#
+#         plt.xlabel("Degree")
+#         plt.ylabel("Frequency")
+#         plt.legend()
+#         if title:
+#             plt.title(title)
+#         plt.show()
+#
+# # Usage
+# network_plots = NetworkPlots()
+# network_plots.plot_degree_distribution(chr18_inc_graphs_norm, title="Degree Distribution")
+
+#
+# # TODO: This is messy RN; automate so each method takes the previous method as input, and then the last method returns the final output (plots).
+# #    calculate largest connected ocmponent, and then calculate metrics for that component only. Compare with metrics for whole network?
+# #
 #
 
 
-
 # Need to make the graph objects for each file read in, and then pass them to a class
-
-
-
 
 
 # {'chr18_lowres_500000': <igraph.Graph object at 0x12122e340>, ...}
@@ -127,16 +297,18 @@ class Create_graphs:
 # plt.show()
 
 def plot_20kb_hires_raw():
-    h = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists/chr18_hires_20000_edgelist.txt", format="ncol", directed=False) # very messy
+    h = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists/chr18_hires_20000_edgelist.txt", format="ncol", directed=False)  # very messy
     ig.plot(h, edge_width=0.07, node_size=0.5, node_color="red")
     plt.show()
     plt.close()
 
+
 def plot_20kb_hires_norm():
-    g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm/edgelists/chr18_hires_iced_20000_edgelist.txt", format="ncol", directed=False) # every node connected
+    g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm/edgelists/chr18_hires_iced_20000_edgelist.txt", format="ncol", directed=False)  # every node connected
     ig.plot(g, edge_width=0.07, node_size=0.5, node_color="red")
     plt.show()
     plt.close()
+
 
 def plot_500kb_raw():
     g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists/chr18_lowres_500000_edgelist.txt", format="ncol", directed=False)
@@ -144,11 +316,13 @@ def plot_500kb_raw():
     plt.show()
     plt.close()
 
+
 def plot_500kb_norm():
     g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm/edgelists/chr18_lowres_iced_500000_edgelist.txt", format="ncol", directed=False)
     ig.plot(g, edge_width=0.07, node_size=0.5, node_color="red")
     plt.show()
     plt.close()
+
 
 def plot_50kb_raw():
     g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists/chr18_lowres_50000_edgelist.txt", format="ncol", directed=False)
@@ -156,11 +330,13 @@ def plot_50kb_raw():
     plt.show()
     plt.close()
 
+
 def plot_50kb_norm():
     g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm/edgelists/chr18_lowres_iced_50000_edgelist.txt", format="ncol", directed=False)
     ig.plot(g, edge_width=0.1, node_size=0.9, node_color="red")
     plt.show()
     plt.close()
+
 
 def plot_120kb_raw():
     g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists/chr18_hires_120000_edgelist.txt", format="ncol", directed=False)
@@ -168,11 +344,13 @@ def plot_120kb_raw():
     plt.show()
     plt.close()
 
+
 def plot_120kb_norm():
     g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm/edgelists/chr18_hires_iced_120000_edgelist.txt", format="ncol", directed=False)
     ig.plot(g, edge_width=0.1, node_size=0.9, node_color="red")
     plt.show()
     plt.close()
+
 
 def plot_250kb_raw():
     g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists/chr18_lowres_250000_edgelist.txt", format="ncol", directed=False)
@@ -180,26 +358,31 @@ def plot_250kb_raw():
     plt.show()
     plt.close()
 
+
 def plot_250kb_norm():
     g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm/edgelists/chr18_lowres_iced_250000_edgelist.txt", format="ncol", directed=False)
     ig.plot(g, edge_width=0.1, node_size=0.9, node_color="red")
     plt.show()
     plt.close()
 
-plot_50kb_raw()
+
+# plot_50kb_raw()
 
 kb50_raw = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists/chr18_lowres_50000_edgelist.txt", format="ncol", directed=False)
 kb50_norm = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm/edgelists/chr18_lowres_iced_50000_edgelist.txt", format="ncol", directed=False)
+
 
 def fg_kb50_raww():
     fg_kb50_raw = kb50_raw.community_fastgreedy()
     communities_kb50_raw = fg_kb50_raw.as_clustering()
     print(communities_kb50_raw.modularity)
 
+
 def fg_kb50_normm():
     fg_kb50_norm = kb50_norm.community_fastgreedy()
     communities_kb50_norm = fg_kb50_norm.as_clustering()
     print(communities_kb50_norm.modularity)
+
 
 # fg_kb50_normm()
 
@@ -209,23 +392,27 @@ def fg_kb500_raww():
     communities_kb50_raw = fg_kb50_raw.as_clustering()
     print(communities_kb50_raw.modularity)
 
+
 def fg_kb500_normm():
     g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm/edgelists/chr18_lowres_iced_500000_edgelist.txt", format="ncol", directed=False)
     fg_kb50_norm = g.community_fastgreedy()
     communities_kb50_norm = fg_kb50_norm.as_clustering()
     print(communities_kb50_norm.modularity)
 
+
 def fg_kb20_raww():
-    h = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists/chr18_hires_20000_edgelist.txt", format="ncol", directed=False) # very messy
+    h = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists/chr18_hires_20000_edgelist.txt", format="ncol", directed=False)  # very messy
     fg_kb50_raw = h.community_fastgreedy()
     communities_kb50_raw = fg_kb50_raw.as_clustering()
     print(communities_kb50_raw.modularity)
 
+
 def fg_kb20_normm():
-    g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm/edgelists/chr18_hires_iced_20000_edgelist.txt", format="ncol", directed=False) # every node connected
+    g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm/edgelists/chr18_hires_iced_20000_edgelist.txt", format="ncol", directed=False)  # every node connected
     fg_kb50_norm = g.community_fastgreedy()
     communities_kb50_norm = fg_kb50_norm.as_clustering()
     print(communities_kb50_norm.modularity)
+
 
 def fg_kb120_raww():
     g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists/chr18_hires_120000_edgelist.txt", format="ncol", directed=False)
@@ -233,11 +420,13 @@ def fg_kb120_raww():
     communities_kb50_raw = fg_kb50_raw.as_clustering()
     print(communities_kb50_raw.modularity)
 
+
 def fg_kb120_normm():
     g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm/edgelists/chr18_hires_iced_120000_edgelist.txt", format="ncol", directed=False)
     fg_kb50_norm = g.community_fastgreedy()
     communities_kb50_norm = fg_kb50_norm.as_clustering()
     print(communities_kb50_norm.modularity)
+
 
 def fg_kb250_raww():
     g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists/chr18_lowres_250000_edgelist.txt", format="ncol", directed=False)
@@ -245,14 +434,15 @@ def fg_kb250_raww():
     communities_kb50_raw = fg_kb50_raw.as_clustering()
     print(communities_kb50_raw.modularity)
 
+
 def fg_kb250_normm():
     g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm/edgelists/chr18_lowres_iced_250000_edgelist.txt", format="ncol", directed=False)
     fg_kb50_norm = g.community_fastgreedy()
     communities_kb50_norm = fg_kb50_norm.as_clustering()
     print(communities_kb50_norm.modularity)
 
-fg_kb250_raww()
-fg_kb250_normm()
+# fg_kb250_raww()
+# fg_kb250_normm()
 
 # kb50_norm.isomorphic(kb50_raw)
 #

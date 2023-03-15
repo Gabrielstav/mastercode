@@ -38,6 +38,16 @@ import os as os
 #  (chr, res, experiment (cell lines), and then calculate things like overlap between nodes across experiments.
 #  all the networking occurs using other packages.
 
+
+class edgelist:
+    def __init__(self, input_dir):
+        self.input_dir = input_dir
+
+    def pattern(self):
+        pass
+
+
+
 class SetInputDir:
     """
     Sets input directory for processing, by default same as output directory used in Pipeline.
@@ -310,6 +320,8 @@ class Node:
 #
 # print(HMEC_con)
 #
+
+# K562 = chromosome_nodes.chromosome(1-10).only_overlap() as_dict()
 
 # Need to add functionality for filtering on chromosomes
 # and maybe write function that creates objects of the cell lines automatically

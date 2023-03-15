@@ -10,7 +10,9 @@ from tqdm import tqdm
 import re as re
 
 
-# TODO: Enable reading in of different file structures (eg only raw folder, or only matrix folder)
+# TODO: Enable reading in of different file structures (eg only raw folder as root dir, or only matrix folder)
+# TODO: Enable hg38 as well (need chrom sizes, blacklisted regions, centromeres, and reference data for running HiC-Pro)
+
 
 ####################################################
 # Pre-processing pipeline for Hi-C data from HiC-Pro
@@ -363,14 +365,12 @@ class Pipeline:
         p = input file, which is the output of the remove_cytobands function but reformatted to be compatible with NCHG
         """
 
-        # TODO: Fix this, there is something wrong with types in the NCHG script, it doesn't like the window size.
-        # This could be because
-
         # Setting window size to be the same as the resolution
         window_size = int(re.search(r"(\d+)[^/\d]*$", bedpe_file).group(1))
         if not isinstance(window_size, int):
             raise ValueError(f"Window size must be an integer, {window_size} is not an integer.")
 
+        # Run NCHG
         nchg_run = sp.run([SetDirectories.get_NCHG_path(), "-m", str(window_size), "-p", bedpe_file], capture_output=True)
 
         return nchg_run.stdout.decode("utf-8").split("\t")
@@ -393,8 +393,8 @@ class Pipeline:
 
         # Iterate over input files and process/save them
         for no_cytobands_file in no_cytobands_dir:
-            # check if "iced" is in the file path (if the data is normalized)
 
+            # check if "iced" is in the file path (if the data is normalized)
             if "iced" in no_cytobands_file:
                 # open the file and round the interaction values
                 bedpe_inted = []
@@ -437,7 +437,6 @@ class Pipeline:
         Adjusts the p-values using the Benjamini-Hochberg method
         """
 
-        # TODO: Check if float points in pval of 0.0 fix yields correct results:
         # Finds the p-values and log ratios of the interactions
         pval = []
         processed = []

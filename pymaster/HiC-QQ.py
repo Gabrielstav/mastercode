@@ -17,6 +17,16 @@ def bedpe_directory():
     raw_chr18_inc = os.path.abspath("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/temp_dir/bedpe")
     return norm_chr18_inc, raw_chr18_inc
 
+def padj_edgelist_directory():
+    pvals_chr18_raw = os.path.abspath("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/temp_dir/weighted_edgelists")
+    pvals_chr18_iced = os.path.abspath("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm/temp_dir/weighted_edgelists")
+    return pvals_chr18_raw, pvals_chr18_iced
+
+def pval_directory():
+    pvals_chr18_raw = os.path.abspath("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/temp_dir/NCHG_output")
+    pvals_chr18_iced = os.path.abspath("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm/temp_dir/NCHG_output")
+    return pvals_chr18_raw, pvals_chr18_iced
+
 class import_bedpe:
     @staticmethod
     def get_bedpe_files():
@@ -59,3 +69,30 @@ class convert_bedpe:
 class plot_hic:
     pass
 
+class plot_pvals:
+
+    @staticmethod
+    def get_pvals_files():
+        pvals_files = []
+        os.chdir(pval_directory()[0])
+        for files in pval_directory():
+            if files.endswith(".txt"):
+                pvals_files.append(files)
+        print(pvals_files)
+        return pvals_files
+
+    @staticmethod
+    def make_pvals_df():
+        for pvals_file in plot_pvals.get_pvals_files():
+            pvals_df = pd.read_csv(pvals_file, sep="\t", header=None)
+            print(pvals_df)
+            return pvals_df
+
+    @staticmethod
+    def plot_pvals():
+        pvals = []
+        for pval in plot_pvals.make_pvals_df():
+            pvals.append(pval[6])
+        return pvals
+
+plot_pvals.make_pvals_df()
