@@ -91,6 +91,7 @@ class CreateGraphsFromDirectory:
 
         return filtered_graph_dict
 
+
 ################################
 # Creating graphs from edgelists
 ################################
@@ -104,7 +105,6 @@ def chr18_inc_norm_graphs():
     graph_creator.from_edgelists()
     chr18_inc_graphs_norm = graph_creator.graph_dict
     return chr18_inc_graphs_norm
-
 
 # print(chr18_inc_norm_graphs())
 
@@ -125,7 +125,37 @@ def chr18_inc_raw_graphs_50kb():
     return filtered_graphs
 
 
-# TODO: make methods to calculate largest connected component, and pass this to the Network metrics class.
+# TODO: Make "find largest connected component" here so it can be passed to NetworkMetrics class.
+#      Or just do this in the NetworkMetrics class? Write upsides/downsides with this.
+
+class LargestComponent:
+    """
+    Class to find the LCC in a given graph.
+    Pass any graph obj dict and return largest conected component.
+    """
+    def __init__(self, graph_dict_or_function):
+        if isinstance(graph_dict_or_function, types.FunctionType):
+            self.graph_dict = graph_dict_or_function()
+        else:
+            self.graph_dict = graph_dict_or_function
+
+    def largest_component(self):
+        largest_component_dict = {}
+        for graph_name, graph in self.graph_dict.items():
+            largest_component = graph.connected_components().giant()  # or g.clusters().giant() or graph.components().giant()?
+            largest_component_dict[graph_name] = largest_component
+        return largest_component_dict
+
+    # TODO: Make print method
+    @classmethod
+    def print(cls, graph_dict_or_function):
+        return print(cls(largest_connected_components))
+
+    # TODO:
+
+
+print(LargestComponent(chr18_inc_raw_graphs_50kb()).largest_component())
+
 
 
 class NetworkMetrics:
