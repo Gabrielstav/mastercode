@@ -9,17 +9,19 @@ from typing import Union
 # Set backend of igraph to matplotlib:
 ig.config["plotting.backend"] = "matplotlib"
 
+
 # Maybe used later?
-import math
-import networkx as nx
-import numpy as np
-from collections import Counter
-import altair as alt
-import pandas as pd
-import seaborn as sb
-import os as os
-import scipy.stats as stats
-import pandas as pd
+# import math
+# import networkx as nx
+# import numpy as np
+# from collections import Counter
+# import altair as alt
+# import pandas as pd
+# import seaborn as sb
+# import os as os
+# import scipy.stats as stats
+# import pandas as pd
+# import netZooPy as nz
 
 
 # import pycairo as pc
@@ -33,6 +35,7 @@ import pandas as pd
 
 # TODO: The chromosome filtering wont work on full genome data, because now the graph name contains the chromosome, but it wont for full genome data.
 #      So we need to make a class that can filter the graphs based on the chromosome, and then we can use the graph name to filter the graphs.
+#      Need to figure out the filtering when fg data is available, can probably just ook at node names, since they are always containing "chr".
 
 
 class CreateGraphsFromDirectory:
@@ -66,6 +69,7 @@ class CreateGraphsFromDirectory:
             graph_name = re.findall(r".*/(.+)_weighted_edgelist\.txt$", str(edgelist))[0]
             self.graph_dict[graph_name] = ig.Graph.Load(edgelist, format="ncol", directed=False)
 
+    # rename to with_filter
     def filter_graphs(self, chromosomes=None, resolutions=None):
         if chromosomes:
             if isinstance(chromosomes, str):
@@ -106,6 +110,7 @@ def chr18_inc_norm_graphs():
     chr18_inc_graphs_norm = graph_creator.graph_dict
     return chr18_inc_graphs_norm
 
+
 # print(chr18_inc_norm_graphs())
 
 def chr18_inc_raw_graphs():
@@ -130,9 +135,10 @@ def chr18_inc_raw_graphs_50kb():
 
 class LargestComponent:
     """
-    Class to find the LCC in a given graph.
+    Class to find the LCC from a given graph object.
     Pass any graph obj dict and return largest conected component.
     """
+
     def __init__(self, graph_dict_or_function):
         if isinstance(graph_dict_or_function, types.FunctionType):
             self.graph_dict = graph_dict_or_function()
@@ -146,16 +152,13 @@ class LargestComponent:
             largest_component_dict[graph_name] = largest_component
         return largest_component_dict
 
-    # TODO: Make print method
-    @classmethod
-    def print(cls, graph_dict_or_function):
-        return print(cls(largest_connected_components))
-
-    # TODO:
 
 
-print(LargestComponent(chr18_inc_raw_graphs_50kb()).largest_component())
 
+
+
+
+# print(LargestComponent(chr18_inc_raw_graphs_50kb()).largest_component())
 
 
 class NetworkMetrics:
@@ -212,7 +215,7 @@ class NetworkMetrics:
         return calculated_metrics
 
     @classmethod
-    def get_metrics(cls, graph_dict_or_function=None, chromosome=None, resolution=None, metrics: Union[None, dict, list] = None, root_dir=None, **kwargs):
+    def get_metrics(cls, graph_dict_or_function=None, chromosome=None, resolution=None, metrics: Union[None, dict, list] = None, root_dir=None):  # ,**kwargs):
         """
         Filter metrics from dict, function returning dict or from root directory containing edge lists
         :param graph_dict_or_function: input as dictionary or function returning dictionary
@@ -224,7 +227,7 @@ class NetworkMetrics:
         """
 
         # Create an instance of NetworkMetrics
-        network_metrics = cls(graph_dict_or_function)
+        # network_metrics = cls(graph_dict_or_function)
 
         graph_dict = {}
 
@@ -283,7 +286,7 @@ class NetworkMetrics:
 # Calculate metrics
 ###################
 
-# From function returning dictionary containign graph objects (or from dictionary):
+# From function returning dictionary containing graph objects (or from dictionary):
 def chr18_50kb_metrics():
     metrics = NetworkMetrics.get_metrics(
         graph_dict_or_function=chr18_inc_raw_graphs_50kb,
@@ -292,28 +295,69 @@ def chr18_50kb_metrics():
         ])
     return NetworkMetrics.print_metrics(metrics)
 
-chr18_50kb_metrics()
+
+# chr18_50kb_metrics()
+
 
 # Or calculate metrics from root directory containing edge lists:
 def chr18_size_mod_from_directory():
     metrics = NetworkMetrics.get_metrics(chromosome="chr18", resolution="50000", metrics=["size", "fg_communities"], root_dir=Path("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists"))
     return NetworkMetrics.print_metrics(metrics)
+
+
 # chr18_size_mod_from_directory()
 
 
-class largest_connected_components():
+class largest_connected_component:
     """
     This class should be used to calculate metrics for the largest connected components of a graph.
     Can atomatically do community detection, and find the largest connected component for all graphs in CreateGraphsFromDirectory?
     Or you can pass graph objects to the class, and it will calculate metrics for the largest connected component.
     Maybe it could filter out all smaller communities, name them based on size, and do metrics for each community?
     Another question is what community detection algorithms to use?
-
     """
 
 
+# TODO: Make differential community detection class that takes two graphs, and calculates the difference in community detection metrics
+#   Class methods can be the different metrics (Jaccard, Alpaca, genomic(?)) and the class can be initialized with the two graphs?
+#   Or, we make separate class for each metric? This allows for more flexibility, but also more code duplication.
 
-# TODO: Make a class for plotting graphs, and compare largest connected components with whole network.
+
+class JaccardIndex:
+    """
+    Calculate Jaccard index for two graphs
+    """
+
+    def __init__(self, graph1, graph2):
+        self.graph1 = graph1
+        self.graph2 = graph2
+
+    def calculate(self):
+        pass
+
+
+class DifferentialCommunityDetection:
+    """
+    Calculate the difference in community detection metrics between two graphs using Alpaca R package
+    """
+
+    def __init__(self, graph1, graph2):
+        self.graph1 = graph1
+        self.graph2 = graph2
+
+    def calculate(self):
+        pass
+
+
+# TODO: Make a class for plotting graphs, and compare largest connected components with whole network (move to network_plots.py later)
+
+class plot_lcc_to_graph_ratio:
+    """
+    Plot the ratio of the size of the largest connected component to the size of the whole graph
+    pass graph object and get out stacked bar chart with the ratio for each network
+    """
+    def something(self):
+        pass
 
 
 # def plot_chr18_50kb():

@@ -27,11 +27,11 @@ class SetDirectories:
     Set normalized data = True to process ICE matrices, False to process raw data.
     """
 
-    input_dir = os.path.abspath("/Users/GBS/Master/HiC-Data/HiC-Pro_out/chr18_inc/chr18_raw")
-    output_dir = os.path.abspath("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw_icedpipe")
+    input_dir = os.path.abspath("/Users/GBS/Master/HiC-Data/HiC-Pro_out/chr18_inc")
+    output_dir = os.path.abspath("/Users/GBS/Master/HiC-Data/Pipeline_out/testing_pipe_chr18")
     reference_dir = os.path.abspath("/Users/GBS/Master/Reference")
     nchg_path = os.path.abspath("/Users/GBS/Master/Scripts/NCHG_hic/NCHG")
-    normalized_data = False
+    normalized_data = True  # Checks for ICE normalized data in matrix folder
 
     @classmethod
     def set_normalized_data(cls, normalized_data):
@@ -144,6 +144,41 @@ class Pipeline_Input:
         bedfiles = Pipeline_Input.find_files(*args)[0]
         matrixfiles = Pipeline_Input.find_files(*args)[1]
         iced_matrixfiles = Pipeline_Input.find_files(*args)[2]
+        inted_iced_matrixfiles = []
+
+        # Round floats in ICE-normalized matrix files to integers if using ICE normalization
+        if SetDirectories.get_normalized_data():
+            # Create output directory
+            output_dir = os.path.join(SetDirectories.get_temp_dir(), "inted_matrixfiles")
+            if not os.path.exists(output_dir):
+                os.mkdir(output_dir)
+            else:
+                shutil.rmtree(output_dir)
+                os.mkdir(output_dir)
+
+            # Round floats to integers
+            for iced_matrixfile in iced_matrixfiles:
+                with open(iced_matrixfile) as f:
+                    lines = f.readlines()
+
+                    new_lines = []
+                    for line in lines:
+                        cols = line.strip().split()
+                        cols[2] = str(round(float(cols[2])))
+                        new_line = cols[0] + "\t" + cols[1] + "\t" + cols[2] + "\n"
+                        new_lines.append(new_line)
+
+                    file_name = os.path.basename(iced_matrixfile)
+
+                    # Create the output file path with the same name as the original file
+                    output_file_path = os.path.join(output_dir, file_name)
+
+                    # Save the modified matrix file to the new directory
+                    with open(output_file_path, "w") as f_out:
+                        f_out.writelines(new_lines)
+
+                    # Add the output file path to the rounded_iced_matrixfiles list
+                    inted_iced_matrixfiles.append(output_file_path)
 
         grouped_raw_files = {}
         grouped_iced_files = {}
@@ -163,22 +198,23 @@ class Pipeline_Input:
                         grouped_raw_files[key] += (bedfile, matrixfile)
 
         # Extract resolution and experiment name from ICE-normalized file path
-        for iced_matrixfile in iced_matrixfiles:
-            resolution = int(iced_matrixfile.split("/")[-2])
-            experiment = iced_matrixfile.split("/")[-4]
-            key_prefix = "/".join(iced_matrixfile.split("/")[:-3])  # common part of file path excluding /raw/ and /iced/
-            key_suffix = iced_matrixfile.split("/")[-1][:-len("_iced.matrix")]  # common part of file name excluding _iced.matrix
+        for inted_matrixfile in inted_iced_matrixfiles:
+            file_name = os.path.basename(inted_matrixfile)
+            experiment, resolution, _ = file_name.rsplit("_", 2)
+            resolution = int(resolution)
             key = f"{experiment, resolution}"
 
             # Group ICE-normalized matrix file
             for bedfile in bedfiles:
-                bedfile_prefix = "/".join(bedfile.split("/")[:-3])
-                bedfile_suffix = bedfile.split("/")[-1][:-len("_abs.bed")]
-                if bedfile_prefix == key_prefix and bedfile_suffix == key_suffix:
+                bedfile_name = os.path.basename(bedfile)
+                bedfile_experiment, bedfile_resolution, _ = bedfile_name.rsplit("_", 2)
+                bedfile_resolution = int(bedfile_resolution)
+
+                if bedfile_experiment == experiment and bedfile_resolution == resolution:
                     if key not in grouped_iced_files:
-                        grouped_iced_files[key] = (bedfile, iced_matrixfile)
+                        grouped_iced_files[key] = (bedfile, inted_matrixfile)
                     else:
-                        grouped_iced_files[key] += (bedfile, iced_matrixfile)
+                        grouped_iced_files[key] += (bedfile, inted_matrixfile)
 
         # Checks if Pipeline should be run on raw or ICE-normalized data
         grouped_files_checked = None
@@ -254,7 +290,6 @@ class Pipeline:
                 f.writelines(bedpe)
                 f.close()
 
-    # window_size = bedpe_file.strip(".bedpe").split("_")[2]
 
     @staticmethod
     def remove_blacklisted_regions(bedpe_file):
@@ -394,42 +429,15 @@ class Pipeline:
         # Iterate over input files and process/save them
         for no_cytobands_file in no_cytobands_dir:
 
-            # check if "iced" is in the file path (if the data is normalized)
-            if "iced" in no_cytobands_file:
-                # open the file and round the interaction values
-                bedpe_inted = []
-                with open(os.path.join(SetDirectories.get_temp_dir(), "no_cytobands", no_cytobands_file), "r") as file:
-                    for line in file:
-                        fields = line.split()
-                        if len(fields) >= 7 and "." in fields[6]:  # rounds float iced matrix
-                            fields[6] = str(int(round(float(fields[6]))))
-                        bedpe_inted.append("\t".join(fields))
+            # run the NCHG script on the input bedpe file
+            os.chdir(SetDirectories.get_temp_dir() + "/no_cytobands")
+            nchg_output = Pipeline.find_siginificant_interactions(no_cytobands_file)
 
-                # save the rounded bedpe file
-                bedpe_inted_file = no_cytobands_file.replace(".bedpe", "_inted.bedpe")
-                with open(os.path.join(SetDirectories.get_temp_dir(), "no_cytobands", bedpe_inted_file), "w") as file:
-                    file.write("\n".join(bedpe_inted))
-
-                # run the NCHG script on the rounded bedpe file
-                os.chdir(SetDirectories.get_temp_dir() + "/no_cytobands")
-                nchg_output = Pipeline.find_siginificant_interactions(bedpe_inted_file)
-
-                # save the NCHG output to a file
-                os.chdir(output_dir)
-                output_filename = f"{no_cytobands_file[:-len('.bedpe')]}_nchg_output.txt"
-                with open(os.path.join(output_dir, output_filename), "w") as f:
-                    f.writelines(nchg_output)
-
-            else:
-                # run the NCHG script on the input bedpe file
-                os.chdir(SetDirectories.get_temp_dir() + "/no_cytobands")
-                nchg_output = Pipeline.find_siginificant_interactions(no_cytobands_file)
-
-                # save the NCHG output to a file
-                os.chdir(output_dir)
-                output_filename = f"{no_cytobands_file[:-len('.bedpe')]}_nchg_output.txt"
-                with open(os.path.join(output_dir, output_filename), "w") as f:
-                    f.writelines(nchg_output)
+            # save the NCHG output to a file
+            os.chdir(output_dir)
+            output_filename = f"{no_cytobands_file[:-len('.bedpe')]}_nchg_output.txt"
+            with open(os.path.join(output_dir, output_filename), "w") as f:
+                f.writelines(nchg_output)
 
     @staticmethod
     def adjust_pvalues(nchg_file, fdr_threshold=0.01, log_ratio_threshold=2, method="fdr_bh"):
@@ -567,59 +575,6 @@ class Pipeline:
                 for line in edgelist:
                     f.write(line + "\n")
 
-    @staticmethod
-    def interactions_per_resolution(edge_list_file):
-        """
-        :input: edgelist files
-        :output: Dictionary with resolution as key, and number of bins as value
-        """
-
-        resolution = int(re.search(r"(\d+)[^/\d]*$", edge_list_file).group(1))
-        if not isinstance(resolution, int):
-            raise ValueError(f"Resolution must be an integer, {resolution} is not an integer.")
-
-        interaction_count = []
-        if os.path.exists(edge_list_file):
-            with open(edge_list_file, "r") as f:
-                for line in f:
-                    interaction_count.append(line)
-
-            interactions_per_resolution = {resolution: len(interaction_count)}
-            return interactions_per_resolution
-        else:
-            raise FileNotFoundError(f"File not found: {edge_list_file}")
-
-    @staticmethod
-    def call_interactions_per_resolution():
-
-        # Create the output directory if it doesn't exist
-        output_dir = os.path.join(SetDirectories.get_temp_dir(), "interactions_per_resolution")
-        if not os.path.exists(output_dir):
-            os.mkdir(output_dir)
-        else:
-            shutil.rmtree(output_dir)
-            os.mkdir(output_dir)
-
-        output_file = os.path.join(output_dir, "interactions_per_resolution.txt")
-
-        # Get the list of edgelist files and sort them based on resolution
-        edge_list_files = os.listdir(SetDirectories.get_output_dir() + "/edgelists")
-        edge_list_files.sort(key=lambda x: int(re.search(r"(\d+)[^/\d]*$", edge_list_file).group(1)))
-
-        # Iterate over the sorted list of edgelist files and process/save them
-        with open(output_file, "w") as f:
-            os.chdir(SetDirectories.get_output_dir() + "/edgelists")
-            for edge_list_file in edge_list_files:
-                interactions_per_resolution = Pipeline.interactions_per_resolution(os.path.join(SetDirectories.get_output_dir(), "edgelists", edge_list_file))
-                for key, val in interactions_per_resolution.items():
-                    f.write("{:<30} {:<10}{:<10}\n".format(edge_list_file, key, str(val)))
-
-                # Check if the number of lines in the file matches the value of the dictionary key
-                with open(edge_list_file) as edgelist:
-                    line_count = sum(1 for _ in edgelist)
-                    if line_count != val:
-                        print(f"Warning: {edge_list_file} has {line_count} lines, expected {val}.")
-
 
 def run_pipeline():
     """
@@ -636,8 +591,7 @@ def run_pipeline():
         "input_to_nchg",
         "input_to_adjust_pvalues",
         "input_to_make_edgelist",
-        "input_to_make_weighted_edgelist",
-        "call_interactions_per_resolution"
+        "input_to_make_weighted_edgelist"
     ]
 
     # Call each method once
@@ -649,7 +603,6 @@ def run_pipeline():
     # Print runtime on completion
     end_time = time.time()
     print(f"Pipeline completed in {end_time - start_time:.2f} seconds.")
-
 
 # run_pipeline()
 
