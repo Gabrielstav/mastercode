@@ -8,29 +8,63 @@ from statsmodels.sandbox.stats import multicomp
 import time as time
 from tqdm import tqdm
 import re as re
+import argparse as argparse
 
 
-# TODO: Enable reading in of different file structures (eg only raw folder as root dir, or only matrix folder)
-# TODO: Enable hg38 as well (need chrom sizes, blacklisted regions, centromeres, and reference data for running HiC-Pro)
+###########################################################################
+# Pre-processing pipeline for Hi-C data from HiC-Pro (command line version)
+###########################################################################
 
+help_message = "Pipeline for processing Hi-C data from HiC-Pro to statistically significant edge-lists for HG19. Data is run on one output folder from Hi-C pro at a time. \n\n" \
+               "INPUT DIR:\n" \
+               "Directory containing HiC-Pro output folders (bed and matrix files) is set as input directory. Any folder can be the input, as long as it contains the HiC-Pro output folders (raw, matrix) for one HiC-Pro run. \n\n" \
+               "OUTPUT DIR: \n"\
+               "Any directory to output processed data is set as output directory. The output directory will contain extremenly large temp files if running whole genome analysis (At least 60 GB needed). \n\n" \
+               "REFERENCE DIR:\n" \
+               "Directory containing reference genome files is set as reference directory. Put the reference files in a folder called hg19. \n" \
+               "This directory should contain the following files: \n" \
+               "    cytoBand_hg19.txt (USCS cytoband reference file: https://hgdownload.cse.ucsc.edu/goldenpath/hg19/database/ \n" \
+               "    hg19-blacklist.v2.bed (Encode hg19 blacklisted regions: https://github.com/Boyle-Lab/Blacklist/tree/master/lists \n\n"\
+               "NCHG PATH: \n"\
+               "Path to NCHG executable is set as NCHG path. NCHG is a C++ tool for calculating p-values for Hi-C interactions using the NCHG distribution. \n" \
+               "It can be found here: https://github.com/Chrom3D/preprocess_scripts/blob/master/NCHG_hic.zip \n\n"\
+               "NORM OPTION: \n"\
+               "Specifies if normalized data or raw data is processed to edge lists. Options: raw, iced, norm, normalized. \n"\
+               "If raw is selected, the script will look for raw data in the HiC-Pro output folder. If iced is selected, the script will look for ICE normalized data in the HiC-Pro output folder. \n"\
+               "\n\n"\
+               "If no arguments are given, the script will run with the hardcoded paths set in the SetDirectories class. Meaning, it's possible to run without providing arguments. \n"\
+               "For instance, set the NCHG and reference paths hardcoded, and provide input and output directories for each run. \n"
 
-####################################################
-# Pre-processing pipeline for Hi-C data from HiC-Pro
-####################################################
+parser = argparse.ArgumentParser(description=help_message, formatter_class=argparse.RawDescriptionHelpFormatter)
+
+parser.add_argument("-i", "--input_dir", help="Directory containing HiC-Pro output folders (bed and matrix files)", required=False)
+parser.add_argument("-o", "--output_dir", help="Any directory to output processed data", required=False)
+parser.add_argument("-r", "--reference_dir", help="Directory containing reference genome files.", required=False)
+parser.add_argument("-n", "--nchg_path", help="Path to NCHG executable", required=False)
+parser.add_argument("-m", "--norm_option", help="Normalization option", choices=["raw", "iced", "norm", "normalized"], required=False)
+
+args = parser.parse_args()
+
+input_directory = args.input_dir if args.input_dir is not None else None
+output_directory = args.output_dir if args.output_dir is not None else None
+reference_directory = args.reference_dir if args.reference_dir is not None else None
+nchg_executable_path = args.nchg_path if args.nchg_path is not None else None
+norm_option = args.norm_option if args.norm_option is not None else None
+
 
 class SetDirectories:
     """
-    SET INPUT-, OUTPUT- AND REFERENCE DIRS AND FULLPATH TO NCHG HERE
+    SET INPUT-, OUTPUT- AND REFERENCE DIRS AND FULLPATH TO NCHG HERE IF USING HARD CODED PATHS
 
     For each run, change the input and output directories to the appropriate directories
     Set input dir to root dir containing HiC-Pro output folders (raw, matrix).
     Set normalized data = True to process ICE matrices, False to process raw data.
     """
 
-    input_dir = os.path.abspath("/Users/GBS/Master/HiC-Data/HiC-Pro_out/mcf7")
-    output_dir = os.path.abspath("/Users/GBS/Master/HiC-Data/Pipeline_out/mcf7")
-    reference_dir = os.path.abspath("/Users/GBS/Master/Reference")
-    nchg_path = os.path.abspath("/Users/GBS/Master/Scripts/NCHG_hic/NCHG")
+    input_dir = os.path.abspath("")
+    output_dir = os.path.abspath("")
+    reference_dir = os.path.abspath("")
+    nchg_path = os.path.abspath("")
     normalized_data = True  # Checks for ICE normalized data in matrix folder
 
     @classmethod
@@ -84,6 +118,26 @@ class SetDirectories:
             os.makedirs(temp_dir)
         return temp_dir
 
+if input_directory is not None:
+    SetDirectories.set_input_dir(input_directory)
+
+if output_directory is not None:
+    SetDirectories.set_output_dir(output_directory)
+
+if reference_directory is not None:
+    SetDirectories.set_reference_dir(reference_directory)
+
+if nchg_executable_path is not None:
+    SetDirectories.set_NCHG_path(nchg_executable_path)
+
+if norm_option is not None:
+    if norm_option in ["raw"]:
+        SetDirectories.set_normalized_data(False)
+    elif norm_option in ["iced", "norm", "normalized"]:
+        SetDirectories.set_normalized_data(True)
+
+# Set PyBedtools tmp dir to temp dir
+pbt.set_tempdir(SetDirectories.get_temp_dir())
 
 class Pipeline_Input:
 

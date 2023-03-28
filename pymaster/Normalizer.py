@@ -3,6 +3,9 @@ import matplotlib.pyplot as plt
 from matplotlib import colors
 from iced import normalization
 from iced import datasets
+# import HiNT-Package as hnt, does not work in IDE
+
+
 
 # TODO: ICE normalization of CNV for cancer cell lines (CAIC or LOIC), unsure if I should do it here or on the HPC?
 #       Probably try to do it on the HPC, the iced package is deprecated and throws errors, it'll take a while to process data locally, and I need to download the datasets as well.
@@ -13,6 +16,7 @@ from iced import datasets
 counts, lengths, cnv = datasets.load_sample_cancer()
 
 loic_normed = normalization.ICE_normalization(counts, counts_profile=cnv)
+print(loic_normed)
 block_biases = normalization.ICE_normalization(counts, lengths, cnv)
 caic_normed = loic_normed / block_biases
 print(caic_normed)
