@@ -42,7 +42,7 @@ parser.add_argument("-o", "--output_dir", help="Any directory to output processe
 parser.add_argument("-r", "--reference_dir", help="Directory containing reference genome files.", required=False)
 parser.add_argument("-n", "--nchg_path", help="Path to NCHG executable", required=False)
 parser.add_argument("-m", "--norm_option", help="Normalization option", choices=["raw", "iced", "norm", "normalized"], required=False)
-
+parser.add_argument("-w", "--whole_genome", help="Consider both inter- and intra-chromosomal interactions for statistical testing using in the NCHG script.", action="store_true", required=False)
 args = parser.parse_args()
 
 input_directory = args.input_dir if args.input_dir is not None else None
@@ -50,6 +50,12 @@ output_directory = args.output_dir if args.output_dir is not None else None
 reference_directory = args.reference_dir if args.reference_dir is not None else None
 nchg_executable_path = args.nchg_path if args.nchg_path is not None else None
 norm_option = args.norm_option if args.norm_option is not None else None
+whole_genome = args.whole_genome if args.whole_genome is not None else None
+
+
+
+
+
 
 
 class SetDirectories:
@@ -66,6 +72,7 @@ class SetDirectories:
     reference_dir = os.path.abspath("")
     nchg_path = os.path.abspath("")
     normalized_data = True  # Checks for ICE normalized data in matrix folder
+    whole_genome_nchg = False  # If true, considers both inter- and intra-chromosomal interactions for statistical testing using in the NCHG script.
 
     @classmethod
     def set_normalized_data(cls, normalized_data):
@@ -106,6 +113,14 @@ class SetDirectories:
     @classmethod
     def get_NCHG_path(cls):
         return cls.nchg_path
+
+    @classmethod
+    def set_whole_genome(cls, whole_genome_nchg):
+        cls.whole_genome = whole_genome_nchg
+
+    @classmethod
+    def get_whole_genome(cls):
+        return cls.whole_genome_nchg
 
     @classmethod
     def set_temp_dir(cls, temp_dir):
@@ -452,6 +467,7 @@ class Pipeline:
         NCHG script to calculate the significance of interactions:
         m = minimum interaction length in bp, should be same as window size used to make the bedpe file (resolution)
         p = input file, which is the output of the remove_cytobands function but reformatted to be compatible with NCHG
+        i = Use interchromosomal interactions as well when calculating p-values (w in args for this script)
         """
 
         # Setting window size to be the same as the resolution
@@ -460,7 +476,10 @@ class Pipeline:
             raise ValueError(f"Window size must be an integer, {window_size} is not an integer.")
 
         # Run NCHG
-        nchg_run = sp.run([SetDirectories.get_NCHG_path(), "-m", str(window_size), "-p", bedpe_file], capture_output=True)
+        if SetDirectories.whole_genome_nchg is False:
+            nchg_run = sp.run([SetDirectories.get_NCHG_path(), "-m", str(window_size), "-p", bedpe_file], capture_output=True)
+        else:
+            nchg_run = sp.run([SetDirectories.get_NCHG_path(), "-m", str(window_size), "-p", bedpe_file, "-i"], capture_output=True)
 
         return nchg_run.stdout.decode("utf-8").split("\t")
 

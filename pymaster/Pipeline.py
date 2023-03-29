@@ -10,10 +10,6 @@ from tqdm import tqdm
 import re as re
 
 
-# TODO: Enable reading in of different file structures (eg only raw folder as root dir, or only matrix folder)
-# TODO: Enable hg38 as well (need chrom sizes, blacklisted regions, centromeres, and reference data for running HiC-Pro)
-
-
 ####################################################
 # Pre-processing pipeline for Hi-C data from HiC-Pro
 ####################################################
@@ -27,8 +23,8 @@ class SetDirectories:
     Set normalized data = True to process ICE matrices, False to process raw data.
     """
 
-    input_dir = os.path.abspath("/Users/GBS/Master/HiC-Data/HiC-Pro_out/mcf7")
-    output_dir = os.path.abspath("/Users/GBS/Master/HiC-Data/Pipeline_out/mcf7")
+    input_dir = os.path.abspath("/Users/GBS/Master/HiC-Data/HiC-Pro_out/chr18_inc/chr18_inc")
+    output_dir = os.path.abspath("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm")
     reference_dir = os.path.abspath("/Users/GBS/Master/Reference")
     nchg_path = os.path.abspath("/Users/GBS/Master/Scripts/NCHG_hic/NCHG")
     normalized_data = True  # Checks for ICE normalized data in matrix folder
