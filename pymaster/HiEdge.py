@@ -10,30 +10,41 @@ import time as time
 from tqdm import tqdm
 import re as re
 import argparse as argparse
+import pickle as pickle
+import threading as threading
 
-###########################################################################
-# Pre-processing pipeline for Hi-C data from HiC-Pro (command line version)
-###########################################################################
+
+
+
+#########################################################################################
+# Pre-processing pipeline for Hi-C data from HiC-Pro (command line version, parallelized)
+#########################################################################################
 
 help_message = "Pipeline for processing Hi-C data from HiC-Pro to statistically significant edge-lists for HG19. Data is run on one output folder from Hi-C pro at a time. \n\n" \
-               "INPUT DIR:\n" \
+               "INPUT DIR: -i\n" \
                "Directory containing HiC-Pro output folders (bed and matrix files) is set as input directory. Any folder can be the input, as long as it contains the HiC-Pro output folders (raw, matrix) for one HiC-Pro run. \n\n" \
-               "OUTPUT DIR: \n"\
+               "OUTPUT DIR: -o \n"\
                "Any directory to output processed data is set as output directory. The output directory will contain extremenly large temp files if running whole genome analysis (At least 60 GB needed). \n\n" \
-               "REFERENCE DIR:\n" \
+               "REFERENCE DIR: -r \n" \
                "Directory containing reference genome files is set as reference directory. Put the reference files in a folder called hg19. \n" \
                "This directory should contain the following files: \n" \
                "    cytoBand_hg19.txt (USCS cytoband reference file: https://hgdownload.cse.ucsc.edu/goldenpath/hg19/database/ \n" \
                "    hg19-blacklist.v2.bed (Encode hg19 blacklisted regions: https://github.com/Boyle-Lab/Blacklist/tree/master/lists \n\n"\
-               "NCHG PATH: \n"\
+               "NCHG PATH: -n \n"\
                "Path to NCHG executable is set as NCHG path. NCHG is a C++ tool for calculating p-values for Hi-C interactions using the NCHG distribution. \n" \
                "It can be found here: https://github.com/Chrom3D/preprocess_scripts/blob/master/NCHG_hic.zip \n\n"\
-               "NORM OPTION: \n"\
+               "NORM OPTION: -m \n"\
                "Specifies if normalized data or raw data is processed to edge lists. Options: raw, iced, norm, normalized. \n"\
                "If raw is selected, the script will look for raw data in the HiC-Pro output folder. If iced is selected, the script will look for ICE normalized data in the HiC-Pro output folder. \n"\
                "\n\n"\
                "If no arguments are given, the script will run with the hardcoded paths set in the SetDirectories class. Meaning, it's possible to run without providing arguments. \n"\
-               "For instance, set the NCHG and reference paths hardcoded, and provide input and output directories for each run. \n"
+               "For instance, set the NCHG and reference paths hardcoded, and provide input and output directories for each run. \n\n"\
+               "WHOLE GENOME: -w \n"\
+               "If this flag is set, the NCHG script will consider both inter- and intra-chromosomal interactions for statistical testing using in the NCHG script. \n"\
+               "This will result in a much larger edge list, longer processing times and loss of power for intra-chromosomal interactions. \n\n"\
+               "THEADS: -t \n"\
+               "Int: Number of threads to use for processing. Default is cores available on machine. Always specify on HPC cluster. \n\n"\
+
 
 parser = argparse.ArgumentParser(description=help_message, formatter_class=argparse.RawDescriptionHelpFormatter)
 
@@ -42,16 +53,24 @@ parser.add_argument("-o", "--output_dir", help="Any directory to output processe
 parser.add_argument("-r", "--reference_dir", help="Directory containing reference genome files.", required=False)
 parser.add_argument("-n", "--nchg_path", help="Path to NCHG executable", required=False)
 parser.add_argument("-m", "--norm_option", help="Normalization option", choices=["raw", "iced", "norm", "normalized"], required=False)
-parser.add_argument("-w", "--whole_genome", help="Consider both inter- and intra-chromosomal interactions for statistical testing using in the NCHG script.", action="store_true", required=False)
+parser.add_argument("-w", "--whole_genome", help="Consider inter-chromosomal interactions for statistical testing using in the NCHG script.", action="store_true", required=False)
+parser.add_argument("-t", "--threads", help="Int: Number of threads to use for processing. Default is cores available on machine. Always specify on HPC cluster.", required=False)
 args = parser.parse_args()
 
+# Sets args to None if not provided in command line
 input_directory = args.input_dir if args.input_dir is not None else None
 output_directory = args.output_dir if args.output_dir is not None else None
 reference_directory = args.reference_dir if args.reference_dir is not None else None
 nchg_executable_path = args.nchg_path if args.nchg_path is not None else None
 norm_option = args.norm_option if args.norm_option is not None else None
 whole_genome = args.whole_genome if args.whole_genome is not None else None
+threads = args.threads if args.threads is not None else None
 
+def check_file_exists(file_path):
+    if os.path.exists(file_path):
+        print(f"File {file_path} exists")
+    else:
+        print(f"File {file_path} does not exist")
 
 
 class SetDirectories:
@@ -63,12 +82,13 @@ class SetDirectories:
     Set normalized data = True to process ICE matrices, False to process raw data.
     """
 
-    input_dir = os.path.abspath("")
-    output_dir = os.path.abspath("")
-    reference_dir = os.path.abspath("/scratch/gabriebs/hic_data/reference")
-    nchg_path = os.path.abspath("/scratch/gabriebs/hic_data/scripts/NCHG")
+    input_dir = os.path.abspath("/Users/GBS/Master/HiC-Data/HiC-Pro_out/chr18_inc/chr18_inc")
+    output_dir = os.path.abspath("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm")
+    reference_dir = os.path.abspath("/Users/GBS/Master/Reference")
+    nchg_path = os.path.abspath("/Users/GBS/Master/Scripts/NCHG_hic/NCHG")
     normalized_data = True  # Checks for ICE normalized data in matrix folder
     whole_genome_nchg = False  # If true, considers both inter- and intra-chromosomal interactions for statistical testing using in the NCHG script.
+    threads = os.cpu_count()  # Sets threads to number of cores on machine, can be overwritten by user input in command line
 
     @classmethod
     def set_normalized_data(cls, normalized_data):
@@ -129,6 +149,27 @@ class SetDirectories:
             os.makedirs(temp_dir)
         return temp_dir
 
+    @staticmethod
+    def set_threads(threads_used):
+        SetDirectories.threads = int(threads_used)
+
+    @staticmethod
+    def get_threads():
+        return SetDirectories.threads
+
+    @staticmethod
+    def set_pbt_temp_dir(cls, pbt_temp_dir):
+        cls.pbt_temp_dir = os.path.abspath(pbt_temp_dir)
+
+    @staticmethod
+    def get_pbt_temp_dir():
+        pbt_temp_dir = SetDirectories.get_temp_dir() + "/pbt_temp_dir"
+        if not os.path.exists(pbt_temp_dir):
+            os.makedirs(pbt_temp_dir)
+        return pbt_temp_dir
+
+
+# Sets input, output and reference directories if not provided in command line
 if input_directory is not None:
     SetDirectories.set_input_dir(input_directory)
 
@@ -147,15 +188,15 @@ if norm_option is not None:
     elif norm_option in ["iced", "norm", "normalized"]:
         SetDirectories.set_normalized_data(True)
 
+if whole_genome is not None:
+    SetDirectories.set_whole_genome(whole_genome)
 
-# Set PyBedtools tmp dir to temp dir
-pbt_temp_dir = SetDirectories.get_temp_dir() + "/pybedtools_tmp"
-if not os.path.exists(pbt_temp_dir):
-    os.mkdir(pbt_temp_dir)
-else:
-    shutil.rmtree(pbt_temp_dir)
-    os.mkdir(pbt_temp_dir)
-pbt.set_tempdir(pbt_temp_dir)
+if threads is not None:
+    SetDirectories.set_threads(threads)
+
+# Sets temporary directory for pbt without cleanup
+pbt.set_tempdir(SetDirectories.get_pbt_temp_dir())
+pbt.cleanup(False)
 
 
 
@@ -208,16 +249,16 @@ class Pipeline_Input:
         return bedfiles, matrixfiles, iced_matrixfiles
 
     @staticmethod
-    def group_files(*args):
+    def group_files(*dirs):
         """
         Groups bed and matrix files by resolution and experiment.
-        :param args: one or more root directories containing raw data from HiC-Pro
+        :param dirs: one or more root directories containing raw data from HiC-Pro
         :return: dict of file paths for each BED and matrix file found, grouped by resolution and experiment
         """
 
-        bedfiles = Pipeline_Input.find_files(*args)[0]
-        matrixfiles = Pipeline_Input.find_files(*args)[1]
-        iced_matrixfiles = Pipeline_Input.find_files(*args)[2]
+        bedfiles = Pipeline_Input.find_files(*dirs)[0]
+        matrixfiles = Pipeline_Input.find_files(*dirs)[1]
+        iced_matrixfiles = Pipeline_Input.find_files(*dirs)[2]
         inted_iced_matrixfiles = []
 
         # Round floats in ICE-normalized matrix files to integers if using ICE normalization
@@ -307,25 +348,31 @@ class Pipeline:
         Makes bedpe file from HiC-Pro output
         """
 
-        bedpe = []
+        try:
+            bedpe = []
 
-        bed_lines = open(bed_file, "r").readlines()
-        matrix_lines = open(matrix_file, "r").readlines()
+            bed_lines = open(bed_file, "r").readlines()
+            matrix_lines = open(matrix_file, "r").readlines()
 
-        bed_dict = {}
-        for line in bed_lines:
-            line = line.strip().split("\t")
-            bed_dict[line[3]] = line
-        for line in matrix_lines:
-            line = line.strip().split("\t")
-            bedpe.append(f"{bed_dict[line[0]][0]}"
-                         f"\t{bed_dict[line[0]][1]}"
-                         f"\t{bed_dict[line[0]][2]}"
-                         f"\t{bed_dict[line[1]][0]}"
-                         f"\t{bed_dict[line[1]][1]}"
-                         f"\t{bed_dict[line[1]][2]}"
-                         f"\t{line[2]}\n")
-        return bedpe
+            bed_dict = {}
+            for line in bed_lines:
+                line = line.strip().split("\t")
+                bed_dict[line[3]] = line
+            for line in matrix_lines:
+                line = line.strip().split("\t")
+                bedpe.append(f"{bed_dict[line[0]][0]}"
+                             f"\t{bed_dict[line[0]][1]}"
+                             f"\t{bed_dict[line[0]][2]}"
+                             f"\t{bed_dict[line[1]][0]}"
+                             f"\t{bed_dict[line[1]][1]}"
+                             f"\t{bed_dict[line[1]][2]}"
+                             f"\t{line[2]}\n")
+            return bedpe
+
+        except Exception as e:
+            tid = threading.get_ident()
+            print(f"Error processing file: {bed_file, matrix_file}, {e}, PID: {os.getpid()}, TID: {tid}")
+            raise
 
     @staticmethod
     def input_to_make_bedpe(grouped_files):
@@ -357,41 +404,50 @@ class Pipeline:
             experiment = '_'.join(filter(None, experiment.split('_')))
             resolution = '_'.join(filter(None, resolution.split('_')))
 
+            # Should separate the string formatting from the file handling?
             bedfile = val[0]
             matrixfile = val[1]
             bedpe = Pipeline.make_bedpe(bedfile, matrixfile)
+
             with open(experiment + "_" + resolution + ".bedpe", "w") as f:
                 f.writelines(bedpe)
                 f.close()
-
 
     @staticmethod
     def remove_blacklisted_regions(bedpe_file):
         """
         Removes blacklisted regions from bedpe file
         """
+        try:
+            reference_dir = SetDirectories.get_reference_dir()
+            blacklisted_regions_path = os.path.join(reference_dir, "hg19/hg19-blacklist.v2.bed")
+            with open(blacklisted_regions_path, "r") as f:
+                blacklisted_regions = f.readlines()
 
-        os.chdir(SetDirectories.get_reference_dir())
-        blacklisted_regions = open("hg19/hg19-blacklist.v2.bed", "r").readlines()
-        blacklisted_pbt = pbt.BedTool(blacklisted_regions)
+            blacklisted_pbt = pbt.BedTool(blacklisted_regions)
+            blacklisted_bedpe = pbt.BedTool(bedpe_file)
 
-        os.chdir(SetDirectories.get_temp_dir() + "/bedpe")
-        blacklisted_bedpe = pbt.BedTool(bedpe_file)
+            window_size = int(re.search(r"(\d+)[^/\d]*$", bedpe_file).group(1))
+            if not isinstance(window_size, int):
+                raise ValueError(f"Window size must be an integer, {window_size} is not an integer.")
 
-        window_size = int(re.search(r"(\d+)[^/\d]*$", bedpe_file).group(1))
-        if not isinstance(window_size, int):
-            raise ValueError(f"Window size must be an integer, {window_size} is not an integer.")
+            no_overlap_bedpe = blacklisted_bedpe.window(blacklisted_pbt, w=int(window_size), r=False, v=True)
+            print(f"Finished processing file: {bedpe_file}, PID: {os.getpid()}, TID: {threading.get_ident()}")
+            return no_overlap_bedpe
 
-        no_overlap_bedpe = blacklisted_bedpe.window(blacklisted_pbt, w=int(window_size), r=False, v=True)
-
-        return no_overlap_bedpe
+        except Exception as e:
+            tid = threading.get_ident()
+            print(f"Error processing file: {bedpe_file}, {e}, PID: {os.getpid()}, TID: {tid}")
+            raise
 
     @staticmethod
     def input_to_remove_blacklist():
         """
-        Calls remove_blacklisted_regions() on all bedpe files in the bedpe directory
+        Calls the remove_blacklisted_regions function on each file in the BEDPE directory
         """
-        bedpe_dir = os.listdir(SetDirectories.get_temp_dir() + "/bedpe")
+
+        bedpe_dir = SetDirectories.get_temp_dir() + "/bedpe"
+        bedpe_files = [os.path.join(bedpe_dir, file) for file in os.listdir(bedpe_dir)]
 
         # Create the output directory if it doesn't exist
         output_dir = os.path.join(SetDirectories.get_temp_dir(), "blacklisted")
@@ -401,15 +457,30 @@ class Pipeline:
             shutil.rmtree(output_dir)
             os.mkdir(output_dir)
 
-        # Iterate over input files and process/save them
-        for bedpe_file in bedpe_dir:
-            os.chdir(SetDirectories.get_temp_dir() + "/bedpe")
-            no_blacklist_bedpe = Pipeline.remove_blacklisted_regions(bedpe_file)
+        try:
+            pickle.dumps(bedpe_files)
+        except Exception as e:
+            print(f"Pickling error: {e}")
 
-            output_filename = f"{bedpe_file[:-len('.bedpe')]}_no_blacklist.bedpe"
-            converted_nbl_bedpe = no_blacklist_bedpe.to_dataframe().to_csv(sep="\t", index=False, header=False)
-            with open(os.path.join(output_dir, output_filename), "w") as f:
-                f.writelines(converted_nbl_bedpe)
+        for file in bedpe_files:
+            if not os.path.isfile(file):
+                print(f"File {file} does not exist.")
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=SetDirectories.get_threads()) as executor:
+            futures = list(executor.map(Pipeline.remove_blacklisted_regions, bedpe_files))
+            for bedpe_file, future in zip(bedpe_files, futures):
+                try:
+                    no_blacklist_bedpe = future
+                    output_filename = os.path.basename(bedpe_file)[:-len('.bedpe')] + '_no_blacklist.bedpe'
+                    converted_nb_bedpe = no_blacklist_bedpe.to_dataframe().to_csv(sep="\t", index=False, header=False)
+                    output_filepath = os.path.join(output_dir, output_filename)
+                    with open(output_filepath, "w") as f:
+                        f.writelines(converted_nb_bedpe)
+
+                except Exception as e:
+                    tid = threading.get_ident()
+                    print(f"Error processing {bedpe_file}: {e}, PID: {os.getpid()}, TID: {tid}")
+
 
     @staticmethod
     def remove_cytobands(blacklisted_bedpe_file):
@@ -418,32 +489,43 @@ class Pipeline:
         and are located and removed from the BEDPE file.
         """
 
-        os.chdir(SetDirectories.get_reference_dir())
-        cytobands = os.path.join(SetDirectories.get_reference_dir(), "hg19/cytoBand_hg19.txt")
-        centromeric_regions = []
-        with open(cytobands, "r") as f:
-            cytobands = f.readlines()
-            for line in cytobands:
-                line = line.strip().split("\t")
-                if line[4] == "acen":
-                    centromeric_regions.append(line[0:5])
+        try:
+            os.chdir(SetDirectories.get_reference_dir())
+            cytobands = os.path.join(SetDirectories.get_reference_dir(), "hg19/cytoBand_hg19.txt")
+            centromeric_regions = []
+            with open(cytobands, "r") as f:
+                cytobands = f.readlines()
+                for line in cytobands:
+                    line = line.strip().split("\t")
+                    if line[4] == "acen":
+                        centromeric_regions.append(line[0:5])
 
-        os.chdir(SetDirectories.get_temp_dir() + "/blacklisted")
-        blacklisted_pbt = pbt.BedTool(blacklisted_bedpe_file)
+            os.chdir(SetDirectories.get_temp_dir() + "/blacklisted")
+            blacklisted_pbt = pbt.BedTool(blacklisted_bedpe_file)
 
-        window_size = int(re.search(r"(\d+)[^/\d]*$", blacklisted_bedpe_file).group(1))
-        if not isinstance(window_size, int):
-            raise ValueError(f"Window size must be an integer, {window_size} is not an integer.")
+            window_size = int(re.search(r"(\d+)[^/\d]*$", blacklisted_bedpe_file).group(1))
+            if not isinstance(window_size, int):
+                raise ValueError(f"Window size must be an integer, {window_size} is not an integer.")
 
-        no_cytobands = blacklisted_pbt.window(centromeric_regions, w=int(window_size), r=False, v=True)
+            no_cytobands = blacklisted_pbt.window(centromeric_regions, w=int(window_size), r=False, v=True)
+            tid = threading.get_ident()
+            print(f"Finished processing file: {blacklisted_bedpe_file}, PID: {os.getpid()}, TID: {tid}")
+            return no_cytobands
 
-        return no_cytobands
+        except Exception as e:
+            tid = threading.get_ident()
+            print(f"Error processing {blacklisted_bedpe_file}: {e}, PID: {os.getpid()}, TID: {tid}")
+            raise
 
     @staticmethod
     def input_to_remove_cytobands():
         """
         Calls the remove_cytobands function on each file in the blacklisted directory
         """
+
+        blacklisted_dir_path = SetDirectories.get_temp_dir() + "/blacklisted"
+        blacklisted_dir = os.listdir(blacklisted_dir_path)
+
 
         # Create the output directory if it doesn't exist
         output_dir = os.path.join(SetDirectories.get_temp_dir(), "no_cytobands")
@@ -453,38 +535,57 @@ class Pipeline:
             shutil.rmtree(output_dir)
             os.mkdir(output_dir)
 
-        # Iterate over input files and process/save them
-        blacklisted_dir = os.listdir(SetDirectories.get_temp_dir() + "/blacklisted")
-        for blacklisted_file in blacklisted_dir:
-            os.chdir(SetDirectories.get_temp_dir() + "/blacklisted")
-            no_cytoband_bedpe = Pipeline.remove_cytobands(blacklisted_file)
+        for file in blacklisted_dir:
+            full_path = os.path.join(blacklisted_dir_path, file)
+            if not os.path.isfile(full_path):
+                print(f"File {file} does not exist.")
 
-            output_filename = f"{blacklisted_file[:-len('.bedpe')]}_no_cytobands.bedpe"
-            converted_nc_bedpe = no_cytoband_bedpe.to_dataframe().to_csv(sep="\t", index=False, header=False)
-            with open(os.path.join(output_dir, output_filename), "w") as f:
-                f.writelines(converted_nc_bedpe)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=SetDirectories.get_threads()) as executor:
+            full_paths = [os.path.join(blacklisted_dir_path, file) for file in blacklisted_dir]
+            futures = list(executor.map(Pipeline.remove_cytobands, full_paths))
+            for bedpe_file, future in zip(blacklisted_dir, futures):
+                try:
+                    no_cytoband_bedpe = future
+                    output_filename = f"{bedpe_file[:-len('.bedpe')]}_no_cytobands.bedpe"
+                    converted_nc_bedpe = no_cytoband_bedpe.to_dataframe().to_csv(sep="\t", index=False, header=False)
+                    output_filepath = os.path.join(output_dir, output_filename)
+                    with open(output_filepath, "w") as f:
+                        f.writelines(converted_nc_bedpe)
+
+                except Exception as e:
+                    tid = threading.get_ident()
+                    print(f"Error processing {bedpe_file}: {e}, PID: {os.getpid()}, TID: {tid}")
+
 
     @staticmethod
     def find_siginificant_interactions(bedpe_file):
         """
         NCHG script to calculate the significance of interactions:
         m = minimum interaction length in bp, should be same as window size used to make the bedpe file (resolution)
-        p = input file, which is the output of the remove_cytobands function but reformatted to be compatible with NCHG
+        p = print counts, needed for FDR correction for padj with BH method.
         i = Use interchromosomal interactions as well when calculating p-values (w in args for this script)
         """
 
-        # Setting window size to be the same as the resolution
-        window_size = int(re.search(r"(\d+)[^/\d]*$", bedpe_file).group(1))
-        if not isinstance(window_size, int):
-            raise ValueError(f"Window size must be an integer, {window_size} is not an integer.")
+        try:
+            # Setting min interactions length to same as bin size from HiC-Pro
+            window_size = int(re.search(r"(\d+)[^/\d]*$", bedpe_file).group(1))
+            if not isinstance(window_size, int):
+                raise ValueError(f"Window size must be an integer, {window_size} is not an integer.")
 
-        # Run NCHG
-        if SetDirectories.whole_genome_nchg is False:
-            nchg_run = sp.run([SetDirectories.get_nchg_path(), "-m", str(window_size), "-p", bedpe_file], capture_output=True)
-        else:
-            nchg_run = sp.run([SetDirectories.get_nchg_path(), "-m", str(window_size), "-p", bedpe_file, "-i"], capture_output=True)
+            # Run NCHG
+            if SetDirectories.whole_genome_nchg is False:
+                nchg_run = sp.run([SetDirectories.get_nchg_path(), bedpe_file, "-m", str(window_size), "-p"], capture_output=True)
+            else:
+                nchg_run = sp.run([SetDirectories.get_nchg_path(), bedpe_file, "-m", str(window_size), "-p", "-i"], capture_output=True)
 
-        return nchg_run.stdout.decode("utf-8").split("\t")
+            tid = threading.get_ident()
+            print(f"Finished processing file: {bedpe_file}, PID: {os.getpid()}, TID: {tid}")
+            return nchg_run.stdout.decode("utf-8").split("\t")
+
+        except Exception as e:
+            tid = threading.get_ident()
+            print(f"Error in {bedpe_file}: {e}, PID: {os.getpid()}, TID: {tid}")
+            raise
 
     @staticmethod
     def input_to_nchg():
@@ -492,7 +593,8 @@ class Pipeline:
         Calls the NCHG script on all files in the no_cytobands directory to find significant interactions
         """
 
-        no_cytobands_dir = os.listdir(SetDirectories.get_temp_dir() + "/no_cytobands")
+        no_cytobands_dir_path = SetDirectories.get_temp_dir() + "/no_cytobands"
+        no_cytobands_dir = os.listdir(no_cytobands_dir_path)
 
         # Create the output directory if it doesn't exist
         output_dir = os.path.join(SetDirectories.get_temp_dir(), "NCHG_output")
@@ -502,17 +604,25 @@ class Pipeline:
             shutil.rmtree(output_dir)
             os.mkdir(output_dir)
 
-        # Iterate over input files and process/save them
-        for no_cytobands_file in no_cytobands_dir:
+        for file in no_cytobands_dir:
+            full_path = os.path.join(no_cytobands_dir_path, file)
+            if not os.path.isfile(full_path):
+                print(f"File {file} does not exist.")
 
-            # run the NCHG script on the input bedpe file
-            os.chdir(SetDirectories.get_temp_dir() + "/no_cytobands")
-            nchg_output = Pipeline.find_siginificant_interactions(no_cytobands_file)
+        with concurrent.futures.ProcessPoolExecutor(max_workers=SetDirectories.get_threads()) as executor:
+            full_paths = [os.path.join(no_cytobands_dir_path, file) for file in no_cytobands_dir]
+            futures = list(executor.map(Pipeline.find_siginificant_interactions, full_paths))
+            for bedpe_file, future in zip(no_cytobands_dir, futures):
+                try:
+                    nchg_output = future
+                    output_filename = f"{bedpe_file[:-len('.bedpe')]}_nchg_output.txt"
+                    output_filepath = os.path.join(output_dir, output_filename)
+                    with open(output_filepath, "w") as f:
+                        f.writelines(nchg_output)
 
-            # save the NCHG output to a file
-            output_filename = f"{no_cytobands_file[:-len('.bedpe')]}_nchg_output.txt"
-            with open(os.path.join(output_dir, output_filename), "w") as f:
-                f.writelines(nchg_output)
+                except Exception as e:
+                    tid = threading.get_ident()
+                    print(f"Error processing {bedpe_file}: {e}, PID: {os.getpid()}, TID: {tid}")
 
     @staticmethod
     def adjust_pvalues(nchg_file, fdr_threshold=0.01, log_ratio_threshold=2, method="fdr_bh"):
@@ -520,40 +630,53 @@ class Pipeline:
         Adjusts the p-values using the Benjamini-Hochberg method
         """
 
-        # Finds the p-values and log ratios of the interactions
-        pval = []
-        processed = []
-        with open(nchg_file, "r") as nchg_file:
-            for line in nchg_file:
-                line = line.split()
-                pval.append(float(line[6]))
-                if float(line[9]) == 0 or float(line[10]) == 0:
-                    logratio = 0.0
-                else:
-                    logratio = math.log(float(line[9]), 2) - math.log(float(line[10]), 2)
+        try:
+            # Finds the p-values and log ratios of the interactions
+            p_values = []
+            processed_lines = []
+            with open(nchg_file, "r") as nchg_file:
+                for line in nchg_file:
+                    col = line.split()
+                    if col[7] == '0':
+                        continue  # Skips the line if interactions/edges is 0
 
-                line = ' '.join(line) + ' ' + str(logratio)
-                processed.append(line)
+                    p_values.append(float(col[6]))
 
-        padj = list(multicomp.multipletests(pval, method=method))
-        padj_out = []
+                    log_ratio = 0.0
+                    if float(col[9]) != 0 and float(col[10]) != 0:
+                        log_ratio = math.log(float(col[9]), 2) - math.log(float(col[10]), 2)
 
-        # Filters the interactions based on the log ratio and FDR thresholds
-        for i in range(len(processed)):
-            line = processed[i] + " " + str(padj[1][i])
-            line = line.split()
-            if float(line[11]) >= log_ratio_threshold and float(line[12]) <= fdr_threshold:
-                padj_out.append(line[0] + "\t" + line[1] + "\t" + line[2] + "\t" + line[3] + "\t" + line[4] + "\t" + line[5] + "\t" + line[12])
+                    processed_line = ' '.join(col) + ' ' + str(log_ratio)
+                    processed_lines.append(processed_line)
 
-        return padj_out
+            padj = list(multicomp.multipletests(p_values, method=method))
+            padj_out = []
+
+            # Filters the interactions based on the log ratio and FDR thresholds
+            for i, processed_line in enumerate(processed_lines):
+                col = processed_line.split()
+                col.append(str(padj[1][i]))
+                if float(col[11]) >= log_ratio_threshold and float(col[12]) <= fdr_threshold:
+                    padj_out.append("\t".join(col[:6] + [col[12]]))
+
+            tid = threading.get_ident()
+            print(f"Finished processing file: {nchg_file}, PID: {os.getpid()}, TID: {tid}")
+            return padj_out
+
+        except Exception as e:
+            tid = threading.get_ident()
+            print(f"Error in {nchg_file}: {e}, PID: {os.getpid()}, TID: {tid}")
+            raise
 
     @staticmethod
     def input_to_adjust_pvalues():
         """
-        calls the adjust_pvalues function on all files in the NCHG_output directory
+        Calls the adjust_pvalues function on all files in the NCHG_output directory
         """
 
-        nchg_dir = os.listdir(SetDirectories.get_temp_dir() + "/NCHG_output")
+        nchg_dir_path = SetDirectories.get_temp_dir() + "/NCHG_output"
+        nchg_dir = os.listdir(nchg_dir_path)
+
         # Create the output directory if it doesn't exist
         output_dir = os.path.join(SetDirectories.get_temp_dir(), "padj")
         if not os.path.exists(output_dir):
@@ -562,14 +685,26 @@ class Pipeline:
             shutil.rmtree(output_dir)
             os.mkdir(output_dir)
 
-        for nchg_file in nchg_dir:
-            os.chdir(SetDirectories.get_temp_dir() + "/NCHG_output")
-            padj = Pipeline.adjust_pvalues(nchg_file)
+        for file in nchg_dir:
+            full_path = os.path.join(nchg_dir_path, file)
+            if not os.path.isfile(full_path):
+                print(f"File {file} does not exist.")
 
-            output_filename = f"{nchg_file[:-len('_nchg_output.txt')]}_padj.txt"
-            with open(os.path.join(output_dir, output_filename), "w") as f:
-                for line in padj:
-                    f.write(line + "\n")
+        with concurrent.futures.ProcessPoolExecutor(max_workers=SetDirectories.get_threads()) as executor:
+            full_paths = [os.path.join(nchg_dir_path, file) for file in nchg_dir]
+            futures = list(executor.map(Pipeline.adjust_pvalues, full_paths))
+            for nchg_file, future in zip(nchg_dir, futures):
+                try:
+                    padj = future
+                    output_filename = f"{nchg_file[:-len('_nchg_output.txt')]}_padj.txt"
+                    output_filepath = os.path.join(output_dir, output_filename)
+                    with open(output_filepath, "w") as f:
+                        for line in padj:
+                            f.write(line + "\n")
+                except Exception as e:
+                    tid = threading.get_ident()
+                    print(f"Error processing {nchg_file}: {e}, PID: {os.getpid()}, TID: {tid}")
+
 
     @staticmethod
     def make_weighted_edgelist(padj_file):
@@ -577,13 +712,18 @@ class Pipeline:
         makes a weighted edgelist from padj file, padj values are weights
         """
 
-        edge_list = []
-        with open(padj_file, "r") as padj_file:
-            for line in padj_file:
-                line = line.split()
-                edge_list.append(line[0] + ":" + line[1] + "-" + line[2] + " " + line[3] + "-" + line[4] + ":" + line[5] + " " + line[6])
+        try:
+            edge_list = []
+            with open(padj_file, "r") as padj_file:
+                for line in padj_file:
+                    line = line.split()
+                    edge_list.append(line[0] + ":" + line[1] + "-" + line[2] + " " + line[3] + "-" + line[4] + ":" + line[5] + " " + line[6])
+            return edge_list
 
-        return edge_list
+        except Exception as e:
+            tid = threading.get_ident()
+            print(f"Error in {padj_file}: {e}, PID: {os.getpid()}, TID: {tid}")
+            raise
 
     @staticmethod
     def input_to_make_weighted_edgelist():
@@ -591,8 +731,9 @@ class Pipeline:
         calls make_weighted_edgelist on all padj files
         """
 
-        os.chdir(SetDirectories.get_temp_dir() + "/padj")
-        padj_dir = os.listdir(SetDirectories.get_temp_dir() + "/padj")
+        padj_dir_path = SetDirectories.get_temp_dir() + "/padj"
+        padj_dir = os.listdir(padj_dir_path)
+
         # Create the output directory if it doesn't exist
         output_dir = os.path.join(SetDirectories.get_temp_dir(), "weighted_edgelists")
         if not os.path.exists(output_dir):
@@ -601,26 +742,45 @@ class Pipeline:
             shutil.rmtree(output_dir)
             os.mkdir(output_dir)
 
-        for padj_file in padj_dir:
-            os.chdir(SetDirectories.get_temp_dir() + "/padj")
-            weighted_edgelist = Pipeline.make_weighted_edgelist(padj_file)
+        for file in padj_dir:
+            full_path = os.path.join(padj_dir_path, file)
+            if not os.path.isfile(full_path):
+                print(f"File {file} does not exist.")
 
-            output_filename = f"{padj_file[:-len('_no_blacklist_no_cytobands_padj.txt')]}_weighted_edgelist.txt"
-            with open(os.path.join(output_dir, output_filename), "w") as f:
-                for line in weighted_edgelist:
-                    f.write(line + "\n")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=SetDirectories.get_threads()) as executor:
+            full_paths = [os.path.join(padj_dir_path, file) for file in padj_dir]
+            futures = list(executor.map(Pipeline.make_weighted_edgelist, full_paths))
+            for padj_file, future in zip(padj_dir, futures):
+                try:
+                    weighted_edgelist = future
+                    output_filename = f"{padj_file[:-len('_no_blacklist_no_cytobands_padj.txt')]}_weighted_edgelist.txt"
+                    output_filepath = os.path.join(output_dir, output_filename)
+                    with open(output_filepath, "w") as f:
+                        for line in weighted_edgelist:
+                            f.write(line + "\n")
+                except Exception as e:
+                    tid = threading.get_ident()
+                    print(f"Error processing {padj_file}: {e}, PID: {os.getpid()}, TID: {tid}")
 
     @staticmethod
     def make_edgelist(padj_file):
         """Makes edge list from padj file"""
 
-        edge_list = []
-        with open(padj_file, "r") as padj_file:
-            for line in padj_file:
-                line = line.split()
-                edge_list.append(line[0] + ":" + line[1] + "-" + line[2] + "  " + line[3] + "-" + line[4] + ":" + line[5])
+        try:
+            edge_list = []
+            with open(padj_file, "r") as padj_file:
+                for line in padj_file:
+                    line = line.split()
+                    edge_list.append(line[0] + ":" + line[1] + "-" + line[2] + "  " + line[3] + "-" + line[4] + ":" + line[5])
 
-        return edge_list
+            tid = threading.get_ident()
+            print(f"Finished processing file: {padj_file}, PID: {os.getpid()}, tid: {tid}")
+            return edge_list
+
+        except Exception as e:
+            tid = threading.get_ident()
+            print(f"Error in {padj_file}: {e}, PID: {os.getpid()}, tid: {tid}")
+            raise
 
     @staticmethod
     def input_to_make_edgelist():
@@ -628,8 +788,9 @@ class Pipeline:
         Calls make_edgelist on all padj files
         """
 
-        os.chdir(SetDirectories.get_temp_dir() + "/padj")
-        padj_dir = os.listdir(SetDirectories.get_temp_dir() + "/padj")
+        padj_dir_path = SetDirectories.get_temp_dir() + "/padj"
+        padj_dir = os.listdir(padj_dir_path)
+
         # Create the output directory if it doesn't exist
         output_dir = os.path.join(SetDirectories.get_output_dir(), "edgelists")
         if not os.path.exists(output_dir):
@@ -638,14 +799,25 @@ class Pipeline:
             shutil.rmtree(output_dir)
             os.mkdir(output_dir)
 
-        for padj_file in padj_dir:
-            os.chdir(SetDirectories.get_temp_dir() + "/padj")
-            edgelist = Pipeline.make_edgelist(padj_file)
+        for file in padj_dir:
+            full_path = os.path.join(padj_dir_path, file)
+            if not os.path.isfile(full_path):
+                print(f"File {file} does not exist.")
 
-            output_filename = f"{padj_file[:-len('_no_blacklist_no_cytobands_padj.txt')]}_edgelist.txt"
-            with open(os.path.join(output_dir, output_filename), "w") as f:
-                for line in edgelist:
-                    f.write(line + "\n")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=SetDirectories.get_threads()) as executor:
+            full_paths = [os.path.join(padj_dir_path, file) for file in padj_dir]
+            futures = list(executor.map(Pipeline.make_edgelist, full_paths))
+            for padj_file, future in zip(padj_dir, futures):
+                try:
+                    edgelist = future
+                    output_filename = f"{padj_file[:-len('_no_blacklist_no_cytobands_padj.txt')]}_edgelist.txt"
+                    output_filepath = os.path.join(output_dir, output_filename)
+                    with open(output_filepath, "w") as f:
+                        for line in edgelist:
+                            f.write(line + "\n")
+                except Exception as e:
+                    tid = threading.get_ident()
+                    print(f"Error processing {padj_file}: {e}, PID: {os.getpid()}, TID: {tid}")
 
 
 def run_pipeline():
