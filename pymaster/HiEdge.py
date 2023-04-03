@@ -1,4 +1,5 @@
 # Import modules
+import concurrent.futures
 import shutil
 import pybedtools as pbt
 import os as os
@@ -9,7 +10,6 @@ import time as time
 from tqdm import tqdm
 import re as re
 import argparse as argparse
-
 
 ###########################################################################
 # Pre-processing pipeline for Hi-C data from HiC-Pro (command line version)
@@ -54,10 +54,6 @@ whole_genome = args.whole_genome if args.whole_genome is not None else None
 
 
 
-
-
-
-
 class SetDirectories:
     """
     SET INPUT-, OUTPUT- AND REFERENCE DIRS AND FULLPATH TO NCHG HERE IF USING HARD CODED PATHS
@@ -69,8 +65,8 @@ class SetDirectories:
 
     input_dir = os.path.abspath("")
     output_dir = os.path.abspath("")
-    reference_dir = os.path.abspath("")
-    nchg_path = os.path.abspath("")
+    reference_dir = os.path.abspath("/scratch/gabriebs/hic_data/reference")
+    nchg_path = os.path.abspath("/scratch/gabriebs/hic_data/scripts/NCHG")
     normalized_data = True  # Checks for ICE normalized data in matrix folder
     whole_genome_nchg = False  # If true, considers both inter- and intra-chromosomal interactions for statistical testing using in the NCHG script.
 
@@ -107,11 +103,11 @@ class SetDirectories:
         return cls.reference_dir
 
     @classmethod
-    def set_NCHG_path(cls, nchg_path):
-        cls.NCHG_path = os.path.abspath(nchg_path)
+    def set_nchg_path(cls, nchg_path):
+        cls.nchg_path = os.path.abspath(nchg_path)
 
     @classmethod
-    def get_NCHG_path(cls):
+    def get_nchg_path(cls):
         return cls.nchg_path
 
     @classmethod
@@ -143,7 +139,7 @@ if reference_directory is not None:
     SetDirectories.set_reference_dir(reference_directory)
 
 if nchg_executable_path is not None:
-    SetDirectories.set_NCHG_path(nchg_executable_path)
+    SetDirectories.set_nchg_path(nchg_executable_path)
 
 if norm_option is not None:
     if norm_option in ["raw"]:
@@ -151,8 +147,17 @@ if norm_option is not None:
     elif norm_option in ["iced", "norm", "normalized"]:
         SetDirectories.set_normalized_data(True)
 
+
 # Set PyBedtools tmp dir to temp dir
-pbt.set_tempdir(SetDirectories.get_temp_dir())
+pbt_temp_dir = SetDirectories.get_temp_dir() + "/pybedtools_tmp"
+if not os.path.exists(pbt_temp_dir):
+    os.mkdir(pbt_temp_dir)
+else:
+    shutil.rmtree(pbt_temp_dir)
+    os.mkdir(pbt_temp_dir)
+pbt.set_tempdir(pbt_temp_dir)
+
+
 
 class Pipeline_Input:
 
@@ -401,7 +406,6 @@ class Pipeline:
             os.chdir(SetDirectories.get_temp_dir() + "/bedpe")
             no_blacklist_bedpe = Pipeline.remove_blacklisted_regions(bedpe_file)
 
-            os.chdir(output_dir)
             output_filename = f"{bedpe_file[:-len('.bedpe')]}_no_blacklist.bedpe"
             converted_nbl_bedpe = no_blacklist_bedpe.to_dataframe().to_csv(sep="\t", index=False, header=False)
             with open(os.path.join(output_dir, output_filename), "w") as f:
@@ -455,7 +459,6 @@ class Pipeline:
             os.chdir(SetDirectories.get_temp_dir() + "/blacklisted")
             no_cytoband_bedpe = Pipeline.remove_cytobands(blacklisted_file)
 
-            os.chdir(output_dir)
             output_filename = f"{blacklisted_file[:-len('.bedpe')]}_no_cytobands.bedpe"
             converted_nc_bedpe = no_cytoband_bedpe.to_dataframe().to_csv(sep="\t", index=False, header=False)
             with open(os.path.join(output_dir, output_filename), "w") as f:
@@ -477,9 +480,9 @@ class Pipeline:
 
         # Run NCHG
         if SetDirectories.whole_genome_nchg is False:
-            nchg_run = sp.run([SetDirectories.get_NCHG_path(), "-m", str(window_size), "-p", bedpe_file], capture_output=True)
+            nchg_run = sp.run([SetDirectories.get_nchg_path(), "-m", str(window_size), "-p", bedpe_file], capture_output=True)
         else:
-            nchg_run = sp.run([SetDirectories.get_NCHG_path(), "-m", str(window_size), "-p", bedpe_file, "-i"], capture_output=True)
+            nchg_run = sp.run([SetDirectories.get_nchg_path(), "-m", str(window_size), "-p", bedpe_file, "-i"], capture_output=True)
 
         return nchg_run.stdout.decode("utf-8").split("\t")
 
@@ -507,7 +510,6 @@ class Pipeline:
             nchg_output = Pipeline.find_siginificant_interactions(no_cytobands_file)
 
             # save the NCHG output to a file
-            os.chdir(output_dir)
             output_filename = f"{no_cytobands_file[:-len('.bedpe')]}_nchg_output.txt"
             with open(os.path.join(output_dir, output_filename), "w") as f:
                 f.writelines(nchg_output)
@@ -564,7 +566,6 @@ class Pipeline:
             os.chdir(SetDirectories.get_temp_dir() + "/NCHG_output")
             padj = Pipeline.adjust_pvalues(nchg_file)
 
-            os.chdir(output_dir)
             output_filename = f"{nchg_file[:-len('_nchg_output.txt')]}_padj.txt"
             with open(os.path.join(output_dir, output_filename), "w") as f:
                 for line in padj:
@@ -604,7 +605,6 @@ class Pipeline:
             os.chdir(SetDirectories.get_temp_dir() + "/padj")
             weighted_edgelist = Pipeline.make_weighted_edgelist(padj_file)
 
-            os.chdir(output_dir)
             output_filename = f"{padj_file[:-len('_no_blacklist_no_cytobands_padj.txt')]}_weighted_edgelist.txt"
             with open(os.path.join(output_dir, output_filename), "w") as f:
                 for line in weighted_edgelist:
@@ -642,7 +642,6 @@ class Pipeline:
             os.chdir(SetDirectories.get_temp_dir() + "/padj")
             edgelist = Pipeline.make_edgelist(padj_file)
 
-            os.chdir(output_dir)
             output_filename = f"{padj_file[:-len('_no_blacklist_no_cytobands_padj.txt')]}_edgelist.txt"
             with open(os.path.join(output_dir, output_filename), "w") as f:
                 for line in edgelist:

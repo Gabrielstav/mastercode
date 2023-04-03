@@ -10,9 +10,9 @@ from tqdm import tqdm
 import re as re
 
 
-####################################################
-# Pre-processing pipeline for Hi-C data from HiC-Pro
-####################################################
+###############################################################################################
+# Pre-processing pipeline for Hi-C data from HiC-Pro (Original, IDE-version, serial processing)
+###############################################################################################
 
 class SetDirectories:
     """

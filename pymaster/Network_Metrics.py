@@ -296,7 +296,7 @@ def chr18_50kb_metrics():
     return NetworkMetrics.print_metrics(metrics)
 
 
-# chr18_50kb_metrics()
+chr18_50kb_metrics()
 
 
 # Or calculate metrics from root directory containing edge lists:
