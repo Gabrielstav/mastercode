@@ -12,7 +12,8 @@ import re as re
 import argparse as argparse
 import pickle as pickle
 import threading as threading
-
+from collections import defaultdict
+import concurrent.futures
 
 
 
@@ -83,11 +84,11 @@ class SetDirectories:
     """
 
     input_dir = os.path.abspath("/Users/GBS/Master/HiC-Data/HiC-Pro_out/chr18_inc/chr18_inc")
-    output_dir = os.path.abspath("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm")
+    output_dir = os.path.abspath("/Users/GBS/Master/HiC-Data/testing_chrom_parallelization/output")
     reference_dir = os.path.abspath("/Users/GBS/Master/Reference")
     nchg_path = os.path.abspath("/Users/GBS/Master/Scripts/NCHG_hic/NCHG")
     normalized_data = True  # Checks for ICE normalized data in matrix folder
-    whole_genome_nchg = False  # If true, considers both inter- and intra-chromosomal interactions for statistical testing using in the NCHG script.
+    whole_genome_nchg = True  # If true, considers both inter- and intra-chromosomal interactions for statistical testing using in the NCHG script.
     threads = os.cpu_count()  # Sets threads to number of cores on machine, can be overwritten by user input in command line
 
     @classmethod
@@ -540,8 +541,7 @@ class Pipeline:
             if not os.path.isfile(full_path):
                 print(f"File {file} does not exist.")
 
-        # TODO: Switched to multiprocessing as this does not seem I/O bound on cluster
-        with concurrent.futures.ProcessPoolExecutor(max_workers=SetDirectories.get_threads()) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=SetDirectories.get_threads()) as executor:
             full_paths = [os.path.join(blacklisted_dir_path, file) for file in blacklisted_dir]
             futures = list(executor.map(Pipeline.remove_cytobands, full_paths))
             for bedpe_file, future in zip(blacklisted_dir, futures):
@@ -559,7 +559,7 @@ class Pipeline:
 
 
     @staticmethod
-    def find_siginificant_interactions(bedpe_file):
+    def find_significant_interactions(bedpe_file):
         """
         NCHG script to calculate the significance of interactions:
         m = minimum interaction length in bp, should be same as window size used to make the bedpe file (resolution)
@@ -581,7 +581,38 @@ class Pipeline:
 
             tid = threading.get_ident()
             print(f"Finished processing file: {bedpe_file}, PID: {os.getpid()}, TID: {tid}")
-            return nchg_run.stdout.decode("utf-8").split("\t")
+            return nchg_run.stdout.decode("utf-8").splitlines()
+
+        except Exception as e:
+            tid = threading.get_ident()
+            print(f"Error in {bedpe_file}: {e}, PID: {os.getpid()}, TID: {tid}")
+            raise
+
+    @staticmethod
+    def split_bedpe_by_chromosome(bedpe_file, output_dir):
+
+        try:
+            with open(bedpe_file, "r") as f:
+                data = f.readlines()
+
+            # Group data by chromosome
+            chromosomes = {}
+            for line in data:
+                chr_name = line.split("\t")[0]
+                if chr_name not in chromosomes:
+                    chromosomes[chr_name] = []
+                chromosomes[chr_name].append(line)
+
+            # Write each chromosome to a separate file
+            chr_files = []
+            for chr_name, chr_data in chromosomes.items():
+                output_filename = f"{os.path.basename(bedpe_file)[:-len('.bedpe')]}_{chr_name}_chr.bedpe"
+                output_filepath = os.path.join(output_dir, output_filename)
+                with open(output_filepath, "w") as f:
+                    f.writelines(chr_data)
+                chr_files.append(output_filepath)
+
+            return chr_files
 
         except Exception as e:
             tid = threading.get_ident()
@@ -605,25 +636,49 @@ class Pipeline:
             shutil.rmtree(output_dir)
             os.mkdir(output_dir)
 
+        # Create a directory to store split chromosome files
+        chr_split_base_dir = os.path.join(SetDirectories.get_temp_dir(), "input_to_nchg")
+        os.makedirs(chr_split_base_dir, exist_ok=True)
+
+        # Split input files by chromosome
+        all_chr_files = []
+        # keep original input file name for each chromosome file
+        input_file_map = {}
+
         for file in no_cytobands_dir:
             full_path = os.path.join(no_cytobands_dir_path, file)
             if not os.path.isfile(full_path):
                 print(f"File {file} does not exist.")
 
+            # Create a subdirectory for each input file inside the chr_split_base_dir
+            file_split_dir = os.path.join(chr_split_base_dir, f"{file}_split")
+            os.makedirs(file_split_dir, exist_ok=True)
+            chr_files = Pipeline.split_bedpe_by_chromosome(full_path, file_split_dir)
+
+            for chr_file in chr_files:
+                input_file_map[chr_file] = file
+            all_chr_files.extend(chr_files)
+
+        # Run find_significant_interactions on chromosome-specific files in parallel
+        output_file_data = defaultdict(list)
         with concurrent.futures.ProcessPoolExecutor(max_workers=SetDirectories.get_threads()) as executor:
-            full_paths = [os.path.join(no_cytobands_dir_path, file) for file in no_cytobands_dir]
-            futures = list(executor.map(Pipeline.find_siginificant_interactions, full_paths))
-            for bedpe_file, future in zip(no_cytobands_dir, futures):
+            futures = list(executor.map(Pipeline.find_significant_interactions, all_chr_files))
+            for bedpe_file, future in zip(all_chr_files, futures):
                 try:
                     nchg_output = future
-                    output_filename = f"{bedpe_file[:-len('.bedpe')]}_nchg_output.txt"
-                    output_filepath = os.path.join(output_dir, output_filename)
-                    with open(output_filepath, "w") as f:
-                        f.writelines(nchg_output)
-
+                    input_file = input_file_map[bedpe_file]
+                    output_file_data[input_file].append(nchg_output)
                 except Exception as e:
                     tid = threading.get_ident()
                     print(f"Error processing {bedpe_file}: {e}, PID: {os.getpid()}, TID: {tid}")
+
+        # Merge output files back together
+        for input_file, nchg_outputs in output_file_data.items():
+            output_filename = f"{os.path.basename(input_file)[:-len('_no_blacklist_no_cytobands.bedpe')]}_nchg_output.txt"
+            output_filepath = os.path.join(output_dir, output_filename)
+            with open(output_filepath, "w") as f:
+                for nchg_output in nchg_outputs:
+                    f.writelines(line + "\n" for line in nchg_output)
 
     @staticmethod
     def adjust_pvalues(nchg_file, fdr_threshold=0.01, log_ratio_threshold=2, method="fdr_bh"):
@@ -638,7 +693,7 @@ class Pipeline:
             with open(nchg_file, "r") as nchg_file:
                 for line in nchg_file:
                     col = line.split()
-                    if col[7] == '0':
+                    if col[7] == "0" or "1":
                         continue  # Skips the line if interactions/edges is 0
 
                     p_values.append(float(col[6]))
@@ -851,3 +906,8 @@ def run_pipeline():
 
 if __name__ == "__main__":
     run_pipeline()
+
+
+
+
+
