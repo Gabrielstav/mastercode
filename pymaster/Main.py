@@ -1,5 +1,6 @@
 # Use fit hic instead of NCHG?
 # Find papaer and read it.
+import os.path
 
 # Set the path to the Fit-Hi-C executable
 # fit_hic_executable = "path/to/fitHiC.py"
@@ -41,3 +42,126 @@
 
 # How does this work with the parallelization? Can we have thread and one process pool for the method? The NCHG method needs to be called with process pool.
 # Try to implement process pool for "find siginificant interactions" method.
+
+
+# nchg_input_file = os.path.abspath("/Users/GBS/Master/HiC-Data/testing_chrom_parallelization/output/temp_dir/input_to_nchg/chr18_inc_20000_no_blacklist_no_cytobands_split/chr18_inc_20000_no_blacklist_no_cytobands_chr18.bedpe")
+# concatted_file = os.path.abspath("")
+#
+# def splitter(input_file):
+#     with open(input_file) as input_file:
+#         for line in input_file:
+#             print(line.split())
+#
+# splitter(nchg_input_file)
+
+split_chrom_nchg_file = os.path.abspath("/Users/GBS/Master/HiC-Data/testing_chrom_parallelization/eval/split_nchg.txt")
+
+def find_sigs(nchg_out_file):
+    sig_pvals = []
+    num_interchrom = 0
+    num_intrachrom = 0
+    inter_list = []
+    intra_list = []
+    with open(nchg_out_file, "r") as nchg_file:
+        for line in nchg_file:
+            col = line.split()
+            if float(col[6]) < 0.05:
+                if col[0] != col[3]:
+                    num_interchrom += 1
+                    sig_pvals.append(line)
+                    inter_list.append(line)
+                else:
+                    intra_list.append(line)
+                    sig_pvals.append(line)
+                    num_intrachrom += 1
+
+
+    return print(f"Number of sig interactions total:, {len(sig_pvals)} in {sig_pvals}. \n"
+                 f"Of these, {num_intrachrom} are intrachromosomal, and {num_interchrom} are interchromosmal. \n")
+
+# find_sigs(split_chrom_nchg_file)
+
+nchg_out_file = os.path.abspath("/Users/GBS/Master/HiC-Data/testing_chrom_parallelization/output/temp_dir/NCHG_output/chr18_inc_1000000_nchg_output.txt")
+
+
+def find_cols(file):
+    with open(file, "r") as nchg_file:
+        for line in nchg_file:
+            col = line.split()
+            print(len(col))
+
+find_cols(nchg_out_file)
+# find_cols(split_chrom_nchg_file)
+
+
+# Stable-ish version of input to nchg
+
+# @staticmethod
+# def input_to_nchg():
+#     """
+#     Calls the NCHG script on all files in the no_cytobands directory to find significant interactions
+#     """
+#
+#     no_cytobands_dir_path = SetDirectories.get_temp_dir() + "/no_cytobands"
+#     no_cytobands_dir = os.listdir(no_cytobands_dir_path)
+#
+#     # Create the output directory if it doesn't exist
+#     output_dir = os.path.join(SetDirectories.get_temp_dir(), "NCHG_output")
+#     if not os.path.exists(output_dir):
+#         os.mkdir(output_dir)
+#     else:
+#         shutil.rmtree(output_dir)
+#         os.mkdir(output_dir)
+#
+#     # Create a directory to store split chromosome files
+#     chr_split_base_dir = os.path.join(SetDirectories.get_temp_dir(), "input_to_nchg")
+#     if not os.path.exists(chr_split_base_dir):
+#         os.mkdir(chr_split_base_dir)
+#     else:
+#         shutil.rmtree(chr_split_base_dir)
+#         os.mkdir(chr_split_base_dir)
+#
+#     # Split input files by chromosome
+#     all_chr_files = []
+#     # keep original input file name for each chromosome file
+#     input_file_map = {}
+#
+#     for file in no_cytobands_dir:
+#         full_path = os.path.join(no_cytobands_dir_path, file)
+#         if not os.path.isfile(full_path):
+#             print(f"File {file} does not exist.")
+#
+#         # Create a subdirectory for each input file inside the chr_split_base_dir
+#         file_split_dir = os.path.join(chr_split_base_dir, f"{file[:-len('.bedpe')]}_split")
+#         if not os.path.exists(file_split_dir):
+#             os.mkdir(file_split_dir)
+#         else:
+#             shutil.rmtree(file_split_dir)
+#             os.mkdir(file_split_dir)
+#
+#         chr_files = Pipeline.split_bedpe_by_chromosome(full_path, file_split_dir)
+#
+#         for chr_file in chr_files:
+#             input_file_map[chr_file] = file
+#         all_chr_files.extend(chr_files)
+#
+#     # Run find_significant_interactions on chromosome-specific files in parallel
+#     output_file_data = defaultdict(list)
+#     with concurrent.futures.ProcessPoolExecutor(max_workers=SetDirectories.get_threads()) as executor:
+#         futures = list(executor.map(Pipeline.find_significant_interactions, all_chr_files))
+#         for bedpe_file, future in zip(all_chr_files, futures):
+#             try:
+#                 nchg_output = future
+#                 input_file = input_file_map[bedpe_file]
+#                 output_file_data[input_file].append(nchg_output)
+#             except Exception as e:
+#                 tid = threading.get_ident()
+#                 print(f"Error processing {bedpe_file}: {e}, PID: {os.getpid()}, TID: {tid}")
+#
+#     # Merge output files back together
+#     for input_file, nchg_outputs in output_file_data.items():
+#         output_filename = f"{os.path.basename(input_file)[:-len('_no_blacklist_no_cytobands.bedpe')]}_nchg_output.txt"
+#         output_filepath = os.path.join(output_dir, output_filename)
+#         with open(output_filepath, "w") as f:
+#             for nchg_output in nchg_outputs:
+#                 f.writelines(line + "\n" for line in nchg_output)

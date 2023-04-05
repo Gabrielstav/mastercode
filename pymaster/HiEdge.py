@@ -540,8 +540,7 @@ class Pipeline:
             if not os.path.isfile(full_path):
                 print(f"File {file} does not exist.")
 
-        # TODO: Switched to multiprocessing as this does not seem I/O bound on cluster
-        with concurrent.futures.ProcessPoolExecutor(max_workers=SetDirectories.get_threads()) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=SetDirectories.get_threads()) as executor:
             full_paths = [os.path.join(blacklisted_dir_path, file) for file in blacklisted_dir]
             futures = list(executor.map(Pipeline.remove_cytobands, full_paths))
             for bedpe_file, future in zip(blacklisted_dir, futures):
