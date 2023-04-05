@@ -48,11 +48,7 @@ help_message = "Pipeline for processing Hi-C data from HiC-Pro to statistically 
                "Allows for running mixed input files, some of which contain inter-chromosomal interactions and some that do not. This increases time complexity. \n\n" \
                "THEADS: -t \n" \
                "Int: Number of threads to use for processing. Default is cores available on machine. Always specify on HPC cluster. \n\n" \
- \
-"""
-Refactor so that you set option to use inter, intra, or mixed interactions in the command line. Default is inter. Then refactor nchg method to check if the option is mixed, if it is 
-then check all input files for intra or interchromosomal interactions. If one file is only intra, run NCHG without -i, run inter files with -i. 
-"""
+
 
 parser = argparse.ArgumentParser(description=help_message, formatter_class=argparse.RawDescriptionHelpFormatter)
 
@@ -96,7 +92,7 @@ class SetDirectories:
     """
 
     input_dir = os.path.abspath("/Users/GBS/Master/HiC-Data/HiC-Pro_out/chr18_inc/chr18_inc")
-    output_dir = os.path.abspath("/Users/GBS/Master/HiC-Data/testing_chrom_parallelization/output")
+    output_dir = os.path.abspath("/Users/GBS/Master/HiC-Data/testing_chrom_parallelization/output_terminal")
     reference_dir = os.path.abspath("/Users/GBS/Master/Reference")
     nchg_path = os.path.abspath("/Users/GBS/Master/Scripts/NCHG_hic/NCHG")
     normalized_data = True  # Checks for ICE normalized data in matrix folder
@@ -471,8 +467,13 @@ class Pipeline:
             with open(blacklisted_regions_path, "r") as f:
                 blacklisted_regions = f.readlines()
 
+            # Filter out mitochondrial DNA and Y chromosome
+            with open(bedpe_file, "r") as f:
+                bedpe_data = f.readlines()
+            filtered_bedpe_data = [line for line in bedpe_data if not any(chrom in line for chrom in ["chrM", "chrY"])]
+
             blacklisted_pbt = pbt.BedTool(blacklisted_regions)
-            blacklisted_bedpe = pbt.BedTool(bedpe_file)
+            blacklisted_bedpe = pbt.BedTool(filtered_bedpe_data)
 
             window_size = int(re.search(r"(\d+)[^/\d]*$", bedpe_file).group(1))
             if not isinstance(window_size, int):
@@ -480,12 +481,6 @@ class Pipeline:
 
             no_overlap_bedpe = blacklisted_bedpe.window(blacklisted_pbt, w=int(window_size), r=False, v=True)
             custom_print(f"Finished processing file: {bedpe_file}, PID: {os.getpid()}, TID: {threading.get_ident()}")
-            # with Pipeline.print_lock:
-            #     if Pipeline.first_call:
-            #         print(f"\nFinished processing file: {bedpe_file}, PID: {os.getpid()}, TID: {threading.get_ident()}")
-            #         Pipeline.first_call = False
-            #     else:
-            #         print(f"Finished processing file: {bedpe_file}, PID: {os.getpid()}, TID: {threading.get_ident()}")
 
             return no_overlap_bedpe
 
