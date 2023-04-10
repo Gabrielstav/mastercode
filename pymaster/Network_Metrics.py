@@ -5,37 +5,12 @@ from pathlib import Path
 import re as re
 import types as types
 from typing import Union
-
+import networkx as nx
+import plotly.graph_objs as go
+import pandas as pd
 # Set backend of igraph to matplotlib:
 ig.config["plotting.backend"] = "matplotlib"
 
-
-# Maybe used later?
-# import math
-# import networkx as nx
-# import numpy as np
-# from collections import Counter
-# import altair as alt
-# import pandas as pd
-# import seaborn as sb
-# import os as os
-# import scipy.stats as stats
-# import pandas as pd
-# import netZooPy as nz
-
-
-# import pycairo as pc
-
-
-# TODO: Eventually make class to read in edgelists, pass those to another class that makes graph objects, and then pass those to a metric class that calculates the metrics we want to plot.
-#       This class then passes the metrics to a plotting class that plots the metrics. Which can be saved to an output directory in the end.
-#       Also need to include overlapping nodes into networks, since we do not want to compare nodes not overlapping, but for this we need filtering classes first.
-#       Big unknown is the overlap between the networks, since we do not know how the overlap from full ganome data yet. But we can use synthetic data to test this.
-
-
-# TODO: The chromosome filtering wont work on full genome data, because now the graph name contains the chromosome, but it wont for full genome data.
-#      So we need to make a class that can filter the graphs based on the chromosome, and then we can use the graph name to filter the graphs.
-#      Need to figure out the filtering when fg data is available, can probably just ook at node names, since they are always containing "chr".
 
 
 class CreateGraphsFromDirectory:
@@ -53,23 +28,30 @@ class CreateGraphsFromDirectory:
         files_list = [str(file_path.resolve()) for file_path in files]
         return files_list
 
-    def from_edgelists(self, pattern='**/*edgelist*.txt', exclude_weighted=True):
-        if exclude_weighted:
-            pattern = f"**/*[^weighted]*edgelist*.txt"
-        edgelist_files = self.get_files(pattern)
+    def from_edgelists(self, cell_lines=None, chromosomes=None, resolutions=None):
+        all_files = self.get_files("*")
 
-        for edgelist in edgelist_files:
-            graph_name = re.findall(r".*/(.+)_edgelist\.txt$", str(edgelist))[0]
-            self.graph_dict[graph_name] = ig.Graph.Load(edgelist, format="ncol", directed=False)
+        for file_path in all_files:
+            file_name = file_path.split("/")[-1]
+            graph_name = re.sub(r"_edgelist\.txt$", "", file_name)
 
-    def from_weighted_edgelists(self, pattern='**/*weighted*.txt'):
-        weighted_files = self.get_files(pattern)
+            if cell_lines is not None:
+                if not any(cell_line in graph_name for cell_line in cell_lines):
+                    continue
 
-        for edgelist in weighted_files:
-            graph_name = re.findall(r".*/(.+)_weighted_edgelist\.txt$", str(edgelist))[0]
-            self.graph_dict[graph_name] = ig.Graph.Load(edgelist, format="ncol", directed=False)
+            if resolutions is not None:
+                graph_name_resolution = re.search(r"_([^_]+)$", graph_name).group(1)
+                if graph_name_resolution not in resolutions:
+                    continue
 
-    # rename to with_filter
+            df = pd.read_csv(file_path, sep='\t', header=None, names=['source', 'target'], dtype=str)
+
+            if chromosomes is not None:
+                df = df[df['source'].str.contains('|'.join(chromosomes)) & df['target'].str.contains('|'.join(chromosomes))]
+
+            graph = ig.Graph.TupleList(df.itertuples(index=False), directed=False)
+            self.graph_dict[graph_name] = graph
+
     def filter_graphs(self, chromosomes=None, resolutions=None):
         if chromosomes:
             if isinstance(chromosomes, str):
@@ -103,62 +85,27 @@ class CreateGraphsFromDirectory:
 # Creating graph objects from raw and normalized edge lists, as well as filtered on resolution and chromosome:
 # Move this to another module later.
 
-def chr18_inc_norm_graphs():
-    root_dir = Path("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm/edgelists")
+def mcf7_10_lowres_graphs():
+    root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/lowres_mcf7_mcf10")
     graph_creator = CreateGraphsFromDirectory(root_dir)
     graph_creator.from_edgelists()
-    chr18_inc_graphs_norm = graph_creator.graph_dict
-    return chr18_inc_graphs_norm
+    mcf7_10_graphs = graph_creator.graph_dict
+    return mcf7_10_graphs
+mcf7_10_lowres_graphs()
+print(mcf7_10_lowres_graphs())
 
 
-# print(chr18_inc_norm_graphs())
-
-def chr18_inc_raw_graphs():
-    root_dir = Path("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists")
+def mcf7_1MB_norm_chr18():
+    root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/lowres_mcf7_mcf10")
     graph_creator = CreateGraphsFromDirectory(root_dir)
-    graph_creator.from_edgelists()
-    chr18_inc_graphs_raw = graph_creator.graph_dict
-    return chr18_inc_graphs_raw
+    graph_creator.from_edgelists(cell_lines=["mcf7"], chromosomes=["chr18"], resolutions=["1000000"])
+    mcf7_1mb_norm_chr18_graphs = graph_creator.graph_dict
+    return mcf7_1mb_norm_chr18_graphs
 
-
-# Filter on resolution and chromosome:
-def chr18_inc_raw_graphs_50kb():
-    root_dir = Path("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists")
-    graph_creator = CreateGraphsFromDirectory(root_dir)
-    graph_creator.from_edgelists()
-    filtered_graphs = graph_creator.filter_graphs(resolutions=["50000"], chromosomes="chr18")
-    return filtered_graphs
-
-
-# TODO: Make "find largest connected component" here so it can be passed to NetworkMetrics class.
-#      Or just do this in the NetworkMetrics class? Write upsides/downsides with this.
-
-class LargestComponent:
-    """
-    Class to find the LCC from a given graph object.
-    Pass any graph obj dict and return largest conected component.
-    """
-
-    def __init__(self, graph_dict_or_function):
-        if isinstance(graph_dict_or_function, types.FunctionType):
-            self.graph_dict = graph_dict_or_function()
-        else:
-            self.graph_dict = graph_dict_or_function
-
-    def largest_component(self):
-        largest_component_dict = {}
-        for graph_name, graph in self.graph_dict.items():
-            largest_component = graph.connected_components().giant()  # or g.clusters().giant() or graph.components().giant()?
-            largest_component_dict[graph_name] = largest_component
-        return largest_component_dict
+print(mcf7_1MB_norm_chr18())
 
 
 
-
-
-
-
-# print(LargestComponent(chr18_inc_raw_graphs_50kb()).largest_component())
 
 
 class NetworkMetrics:
@@ -175,6 +122,7 @@ class NetworkMetrics:
 
     available_metrics = {
         "size": lambda g: g.vcount(),
+        "edges": lambda g: g.ecount(),
         "density": lambda g: g.density(),
         "fg_communities": lambda g: g.community_fastgreedy(),
         "community": lambda g: g.community_multilevel(),
@@ -183,7 +131,7 @@ class NetworkMetrics:
         "degree": lambda g: g.degree(),
         "closeness": lambda g: g.closeness(),
         "eigen_centrality": lambda g: g.eigenvector_centrality(),
-        "shortest_path_length": lambda g: g.shortest_paths(),
+        "shortest_path_length": lambda g: g.distances(),
         "radius": lambda g: g.radius(),
         "diameter": lambda g: g.diameter(),
         "average_path_length": lambda g: g.average_path_length(),
@@ -191,8 +139,6 @@ class NetworkMetrics:
         "jaccard_coefficient": lambda g: g.similarity_jaccard(),
         "pagerank": lambda g: g.pagerank(),
         "fg_modularity": lambda g: g.community_fastgreedy().as_clustering(),
-        "average_neighbor_degree": lambda g: g.average_neighbor_degree(),
-        "average_degree_connectivity": lambda g: g.average_degree_connectivity(),
         "average_clustering": lambda g: g.transitivity_avglocal_undirected(),
         "average_local_clustering": lambda g: g.transitivity_local_undirected(),
         "transitivity_undirected": lambda g: g.transitivity_undirected(),
@@ -215,12 +161,13 @@ class NetworkMetrics:
         return calculated_metrics
 
     @classmethod
-    def get_metrics(cls, graph_dict_or_function=None, chromosome=None, resolution=None, metrics: Union[None, dict, list] = None, root_dir=None):  # ,**kwargs):
+    def get_metrics(cls, graph_dict_or_function=None, cell_lines=None, chromosomes=None, resolutions=None, metrics: Union[None, dict, list] = None, root_dir=None):
         """
-        Filter metrics from dict, function returning dict or from root directory containing edge lists
+        Filter metrics from dict, function returning dict or from root directory containing edgelists
+        :param: cell_lines: cell lines to filter on
         :param graph_dict_or_function: input as dictionary or function returning dictionary
-        :param chromosome: chromosome to filter on
-        :param resolution: specific resolution to filter on
+        :param chromosomes: chromosome to filter on
+        :param resolutions: specific resolution to filter on
         :param metrics: network metrics to calculate
         :param root_dir: root dir containing edge lists (if calculating metrics from edge lists)
         :return: dict containing graph objects and metrics
@@ -239,10 +186,15 @@ class NetworkMetrics:
             graph_dict = graph_dict_or_function
 
         # If root_dir is provided, create graph_dict from the directory
+        # if root_dir is not None:
+        #     graph_creator = CreateGraphsFromDirectory(root_dir)
+        #     graph_creator.from_edgelists()
+        #     graph_creator.filter_graphs(chromosomes=chromosomes, resolutions=resolutions)
+        #     graph_dict = graph_creator.graph_dict
+
         if root_dir is not None:
             graph_creator = CreateGraphsFromDirectory(root_dir)
-            graph_creator.from_edgelists()
-            graph_creator.filter_graphs(chromosomes=chromosome, resolutions=resolution)
+            graph_creator.from_edgelists(cell_lines=cell_lines, chromosomes=chromosomes, resolutions=resolutions)
             graph_dict = graph_creator.graph_dict
 
         # If metrics is None, use all available metrics
@@ -254,6 +206,7 @@ class NetworkMetrics:
 
         metrics_data = {}
         for graph_name, graph in graph_dict.items():
+            print(f"Graph object for {graph_name}:", graph)  # Debugging line to check the graph object
             metrics_data[graph_name] = {}
             for metric_name, metric_function in metrics.items():
                 metric_value = metric_function(graph)
@@ -287,495 +240,213 @@ class NetworkMetrics:
 ###################
 
 # From function returning dictionary containing graph objects (or from dictionary):
-def chr18_50kb_metrics():
+
+# MCF10 1MB norm:
+def mcf10_chr18_1mb_norm_metrics():
     metrics = NetworkMetrics.get_metrics(
-        graph_dict_or_function=chr18_inc_raw_graphs_50kb,
+        graph_dict_or_function=mcf7_10_lowres_graphs(),
         metrics=[
-            "size", "fg_communities", "assortativity", "clustering_coefficient", "radius", "diameter", "average_path_length", "fg_modularity"
+            "size", "edges", "fg_communities"
         ])
     return NetworkMetrics.print_metrics(metrics)
 
+# MCF7 1MB norm:
+def mcf7_chr18_1mb_norm_metrics():
+    metrics = NetworkMetrics.get_metrics(
+        graph_dict_or_function=mcf7_1MB_norm_chr18,
+        metrics=[
+            "size", "edges", "fg_communities"
+        ])
+    return NetworkMetrics.print_metrics(metrics)
 
-chr18_50kb_metrics()
+mcf7_chr18_1mb_norm_metrics()
 
 
 # Or calculate metrics from root directory containing edge lists:
-def chr18_size_mod_from_directory():
-    metrics = NetworkMetrics.get_metrics(chromosome="chr18", resolution="50000", metrics=["size", "fg_communities"], root_dir=Path("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists"))
-    return NetworkMetrics.print_metrics(metrics)
+# def chr18_size_mod_from_directory():
+#     metrics = NetworkMetrics.get_metrics(cell_line="mcf7", chromosome="chr18", resolution="1000000", metrics=["size", "nodes", "fg_communities"], root_dir=Path("/Users/GBS/Master/HiC-Data/edgelists/lowres_mcf7_mcf10")
+#     return NetworkMetrics.print_metrics(metrics)
+# # chr18_size_mod_from_directory()
 
 
-# chr18_size_mod_from_directory()
 
 
-class largest_connected_component:
+
+
+class LargestComponent:
     """
-    This class should be used to calculate metrics for the largest connected components of a graph.
-    Can atomatically do community detection, and find the largest connected component for all graphs in CreateGraphsFromDirectory?
-    Or you can pass graph objects to the class, and it will calculate metrics for the largest connected component.
-    Maybe it could filter out all smaller communities, name them based on size, and do metrics for each community?
-    Another question is what community detection algorithms to use?
-    """
-
-
-# TODO: Make differential community detection class that takes two graphs, and calculates the difference in community detection metrics
-#   Class methods can be the different metrics (Jaccard, Alpaca, genomic(?)) and the class can be initialized with the two graphs?
-#   Or, we make separate class for each metric? This allows for more flexibility, but also more code duplication.
-
-
-class JaccardIndex:
-    """
-    Calculate Jaccard index for two graphs
+    Class to find the LCC from a given graph object.
+    Pass any graph obj dict and return largest conected component.
     """
 
-    def __init__(self, graph1, graph2):
-        self.graph1 = graph1
-        self.graph2 = graph2
+    def __init__(self, graph_dict_or_function):
+        if isinstance(graph_dict_or_function, types.FunctionType):
+            self.graph_dict = graph_dict_or_function()
+        else:
+            self.graph_dict = graph_dict_or_function
 
-    def calculate(self):
-        pass
+    def find_lcc(self):
+        largest_component_dict = {}
+        for graph_name, graph in self.graph_dict.items():
+            largest_component = graph.connected_components().giant()  # or g.clusters().giant() or graph.components().giant()?
+            largest_component_dict[graph_name] = largest_component
+        return largest_component_dict
 
+    def print_lcc(self):
+        for graph_name, graph in self.find_lcc().items():
+            print(f"LCC for: {graph_name} \n size: {graph.vcount()} \n edges: {graph.ecount()}")
 
-class DifferentialCommunityDetection:
-    """
-    Calculate the difference in community detection metrics between two graphs using Alpaca R package
-    """
+# LargestComponent(chr18_inc_norm_graphs_50kb()).print_lcc()
 
-    def __init__(self, graph1, graph2):
-        self.graph1 = graph1
-        self.graph2 = graph2
-
-    def calculate(self):
-        pass
-
-
-# TODO: Make a class for plotting graphs, and compare largest connected components with whole network (move to network_plots.py later)
-
-class plot_lcc_to_graph_ratio:
-    """
-    Plot the ratio of the size of the largest connected component to the size of the whole graph
-    pass graph object and get out stacked bar chart with the ratio for each network
-    """
-    def something(self):
-        pass
-
-
-# def plot_chr18_50kb():
-#     h = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists/chr18_hires_20000_edgelist.txt", format="ncol", directed=False)  # very messy
-#     ig.plot(h, edge_width=0.07, node_size=0.5, node_color="red")
-#     plt.show()
-#     plt.close()
-
-
-# PLotting class
-
-# class NetworkPlots:
-#     @staticmethod
-#     def plot_degree_distribution(graph_dict, title=None):
-#         for graph_name, graph in graph_dict.items():
-#             degree_distribution = graph.degree_distribution()
-#             x = [left + (width / 2) for left, _, width in degree_distribution.bins()]
-#             y = [count for _, count, _ in degree_distribution.bins()]
-#             plt.plot(x, y, marker='o', linestyle='-', label=graph_name)
+# def print_50kb_norm():
+#     metrics = NetworkMetrics.get_metrics(chr18_inc_norm_graphs_50kb(), metrics=["size", "edges"])
+#     return NetworkMetrics.print_metrics(metrics)
+# # print_50kb_norm()
 #
-#         plt.xlabel("Degree")
-#         plt.ylabel("Frequency")
-#         plt.legend()
-#         if title:
-#             plt.title(title)
-#         plt.show()
-#
-# # Usage
-# network_plots = NetworkPlots()
-# network_plots.plot_degree_distribution(chr18_inc_graphs_norm, title="Degree Distribution")
+# LargestComponent(mcf10_1mb_norm_graph()).print_lcc()
 
-#
-# # TODO: This is messy RN; automate so each method takes the previous method as input, and then the last method returns the final output (plots).
-# #    calculate largest connected ocmponent, and then calculate metrics for that component only. Compare with metrics for whole network?
-# #
-#
 
 
-# Need to make the graph objects for each file read in, and then pass them to a class
+# TODO: Find lcc to total size ratio for each graph
 
+# TODO: Plot the lcc to size ratio for each cell line and each resolution as stacked bar plot
 
-# {'chr18_lowres_500000': <igraph.Graph object at 0x12122e340>, ...}
+# TODO: Plot degree distribution for each cell line and each resolution
 
-# g= ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists/chr18_lowres_50000_edgelist.txt", format="ncol")
-# ig.plot(g)
-# # ig.plot(g, vertex_size=2, vertex_label=g.vs["name"], vertex_label_size=1, vertex_label_dist=1.5, vertex_label_color="black", layout=g.layout("kk")) # TODO: Figure out iptimal plot layout
-# plt.show()
+# TODO: Calculate betweenness centrality for LCC (on cell line --> resolution level).
 
-def plot_20kb_hires_raw():
-    h = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists/chr18_hires_20000_edgelist.txt", format="ncol", directed=False)  # very messy
-    ig.plot(h, edge_width=0.07, node_size=0.5, node_color="red")
-    plt.show()
-    plt.close()
+# TODO: Calculate closeness centrality for LCC (on cell line --> resolution level).
 
+# TODO:
 
-def plot_20kb_hires_norm():
-    g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm/edgelists/chr18_hires_iced_20000_edgelist.txt", format="ncol", directed=False)  # every node connected
-    ig.plot(g, edge_width=0.07, node_size=0.5, node_color="red")
-    plt.show()
-    plt.close()
+# TODO: Make a class that does differential community detection for two graphs: Two cell lines on same resolution.
 
+# TODO: Plot the jaccard index for two cell lines on same resolution (for all resolutions).
 
-def plot_500kb_raw():
-    g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists/chr18_lowres_500000_edgelist.txt", format="ncol", directed=False)
-    ig.plot(g, edge_width=0.07, node_size=0.5, node_color="red")
-    plt.show()
-    plt.close()
+# TODO: Make Alpaca differential community detection that takes two graphs: Two cell lines on same resolution and calculates the difference in community detection metrics.
 
+# TODO: Plot the differential community detection stuff.
 
-def plot_500kb_norm():
-    g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm/edgelists/chr18_lowres_iced_500000_edgelist.txt", format="ncol", directed=False)
-    ig.plot(g, edge_width=0.07, node_size=0.5, node_color="red")
-    plt.show()
-    plt.close()
 
 
-def plot_50kb_raw():
-    g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists/chr18_lowres_50000_edgelist.txt", format="ncol", directed=False)
-    ig.plot(g, edge_width=0.1, node_size=0.9, node_color="red")
-    plt.show()
-    plt.close()
 
 
-def plot_50kb_norm():
-    g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm/edgelists/chr18_lowres_iced_50000_edgelist.txt", format="ncol", directed=False)
-    ig.plot(g, edge_width=0.1, node_size=0.9, node_color="red")
-    plt.show()
-    plt.close()
 
 
-def plot_120kb_raw():
-    g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists/chr18_hires_120000_edgelist.txt", format="ncol", directed=False)
-    ig.plot(g, edge_width=0.1, node_size=0.9, node_color="red")
-    plt.show()
-    plt.close()
 
 
-def plot_120kb_norm():
-    g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm/edgelists/chr18_hires_iced_120000_edgelist.txt", format="ncol", directed=False)
-    ig.plot(g, edge_width=0.1, node_size=0.9, node_color="red")
-    plt.show()
-    plt.close()
 
 
-def plot_250kb_raw():
-    g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists/chr18_lowres_250000_edgelist.txt", format="ncol", directed=False)
-    ig.plot(g, edge_width=0.1, node_size=0.9, node_color="red")
-    plt.show()
-    plt.close()
+# If I need to use networkx for some reason later:
 
+class ConvertIgraphToNetworkx:
 
-def plot_250kb_norm():
-    g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm/edgelists/chr18_lowres_iced_250000_edgelist.txt", format="ncol", directed=False)
-    ig.plot(g, edge_width=0.1, node_size=0.9, node_color="red")
-    plt.show()
-    plt.close()
+    def __init__(self, graph_dict):
+        self.graph_dict = graph_dict
+        self.nx_graph_dict = {}
 
+    def convert(self):
+        for graph_key in self.graph_dict:
+            graph = self.graph_dict[graph_key]
 
-# plot_50kb_raw()
+            # Create an empty NetworkX graph
+            nx_graph = nx.Graph()
 
-kb50_raw = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists/chr18_lowres_50000_edgelist.txt", format="ncol", directed=False)
-kb50_norm = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm/edgelists/chr18_lowres_iced_50000_edgelist.txt", format="ncol", directed=False)
+            # Add nodes from the iGraph graph
+            nx_graph.add_nodes_from(range(graph.vcount()))
 
+            # Add edges from the iGraph graph
+            nx_graph.add_edges_from(graph.get_edgelist())
 
-def fg_kb50_raww():
-    fg_kb50_raw = kb50_raw.community_fastgreedy()
-    communities_kb50_raw = fg_kb50_raw.as_clustering()
-    print(communities_kb50_raw.modularity)
+            # Copy vertex attributes
+            for v in graph.vs:
+                for attr in v.attributes():
+                    nx_graph.nodes[v.index][attr] = v[attr]
 
+            # Copy edge attributes
+            for e in graph.es:
+                u, v = e.tuple
+                for attr in e.attributes():
+                    nx_graph.edges[u, v][attr] = e[attr]
 
-def fg_kb50_normm():
-    fg_kb50_norm = kb50_norm.community_fastgreedy()
-    communities_kb50_norm = fg_kb50_norm.as_clustering()
-    print(communities_kb50_norm.modularity)
+            self.nx_graph_dict[graph_key] = nx_graph
 
+        return self.nx_graph_dict
 
-# fg_kb50_normm()
+    def __str__(self):
+        if not self.nx_graph_dict:
+            return "No NetworkX graph generated yet. Please run the convert() method first."
 
-def fg_kb500_raww():
-    g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm/edgelists/chr18_lowres_iced_500000_edgelist.txt", format="ncol", directed=False)
-    fg_kb50_raw = g.community_fastgreedy()
-    communities_kb50_raw = fg_kb50_raw.as_clustering()
-    print(communities_kb50_raw.modularity)
+        output_str = ""
+        for graph_key, nx_graph in self.nx_graph_dict.items():
+            nodes = nx_graph.nodes()
+            edges = nx_graph.edges()
+            output_str += f"Graph: {graph_key}\nNodes: {nodes}\nEdges: {edges}\n\n"
 
+        return output_str
 
-def fg_kb500_normm():
-    g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm/edgelists/chr18_lowres_iced_500000_edgelist.txt", format="ncol", directed=False)
-    fg_kb50_norm = g.community_fastgreedy()
-    communities_kb50_norm = fg_kb50_norm.as_clustering()
-    print(communities_kb50_norm.modularity)
-
-
-def fg_kb20_raww():
-    h = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists/chr18_hires_20000_edgelist.txt", format="ncol", directed=False)  # very messy
-    fg_kb50_raw = h.community_fastgreedy()
-    communities_kb50_raw = fg_kb50_raw.as_clustering()
-    print(communities_kb50_raw.modularity)
-
-
-def fg_kb20_normm():
-    g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm/edgelists/chr18_hires_iced_20000_edgelist.txt", format="ncol", directed=False)  # every node connected
-    fg_kb50_norm = g.community_fastgreedy()
-    communities_kb50_norm = fg_kb50_norm.as_clustering()
-    print(communities_kb50_norm.modularity)
-
-
-def fg_kb120_raww():
-    g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists/chr18_hires_120000_edgelist.txt", format="ncol", directed=False)
-    fg_kb50_raw = g.community_fastgreedy()
-    communities_kb50_raw = fg_kb50_raw.as_clustering()
-    print(communities_kb50_raw.modularity)
-
-
-def fg_kb120_normm():
-    g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm/edgelists/chr18_hires_iced_120000_edgelist.txt", format="ncol", directed=False)
-    fg_kb50_norm = g.community_fastgreedy()
-    communities_kb50_norm = fg_kb50_norm.as_clustering()
-    print(communities_kb50_norm.modularity)
-
-
-def fg_kb250_raww():
-    g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists/chr18_lowres_250000_edgelist.txt", format="ncol", directed=False)
-    fg_kb50_raw = g.community_fastgreedy()
-    communities_kb50_raw = fg_kb50_raw.as_clustering()
-    print(communities_kb50_raw.modularity)
-
-
-def fg_kb250_normm():
-    g = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm/edgelists/chr18_lowres_iced_250000_edgelist.txt", format="ncol", directed=False)
-    fg_kb50_norm = g.community_fastgreedy()
-    communities_kb50_norm = fg_kb50_norm.as_clustering()
-    print(communities_kb50_norm.modularity)
-
-# fg_kb250_raww()
-# fg_kb250_normm()
-
-# kb50_norm.isomorphic(kb50_raw)
-#
-# degree_distribution_raw_50kb = kb50_raw.degree_distribution()
-# print(degree_distribution_raw_50kb)
-# degree_distribution_norm_50kb = kb50_norm.degree_distribution()
-#
-# plt.scatter(degree_distribution_raw_50kb, degree_distribution_raw_50kb, color="red")
-# plt.show()
+# ConvertIgraphToNetworkx(chr18_inc_norm_graphs_50kb()).convert()
 
+class PlotNetworkxGraphs:
 
-# dd = g.degree_distribution()
-# degree_distribution = dd.bins()
-# ig.plot(dd)
-# plt.show()
-# plt.close()
+    def __init__(self, networkx_graph_dict):
+        self.networkx_graph_dict = networkx_graph_dict
 
-# How to make undirected?
-# c = nx.read_edgelist("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_raw/edgelists/chr18_lowres_50000_edgelist.txt", directed=False, edgetype=str, nodetype=str, data=(('weight', float),), create_using=nx.DiGraph())
-# nx.draw(c, node_size=10)
-# plt.show()
+    def plot(self):
+        for graph_key, nx_graph in self.networkx_graph_dict.items():
+            plt.figure()
+            plt.title(f"{graph_key}")
+            nx.draw(nx_graph, with_labels=True, node_color="skyblue", font_weight="bold", node_size=1000)
+            plt.show()
 
+# plotter = PlotNetworkxGraphs(ConvertIgraphToNetworkx(chr18_inc_norm_graphs_50kb()).convert())
+# plotter.plot()
 
-# ex = ig.Graph.Famous("petersen")
-# ig.plot(ex)
-#
-# plt.plot(ex)
-#
-# y = nx.complete_graph(5)
-# nx.draw(y)
+class InteractivePlotNetworkxGraphs:
 
-
-# class Degree_distribution:
-#
-#     @staticmethod
-#     def get_degree(graph_objects):
-#         degree = {}
-#         for graph_name, graph in graph_objects.items():
-#             degree[graph_name] = graph.degree()
-#         return degree
-
-# print(Degree_distribution.get_degree(Create_graphs.from_edgelists()))
-
-# Ugly af method
-# @staticmethod
-# def plot_degree_distribution():
-#     graphs = Create_graphs.from_edgelists()
-#     for graph_name, graph in graphs.items():
-#         degrees = graph.degree()
-#         plt.figure()
-#         plt.scatter(degrees, range(len(degrees)), s=5, color='red')
-#         plt.xscale('log')
-#         plt.xlim(1, max(degrees))
-#         plt.ylim(0, len(degrees))
-#         plt.title(graph_name)
-#         plt.xlabel('Degree')
-#         plt.ylabel('Frequency')
-#         plot_path = Directories.figure_directory()
-#         plot_path /= f"{graph_name}_degree_distribution.png"
-#         print(plot_path)
-#         plt.savefig(str(plot_path))
-
-# First test:
-# @staticmethod
-# def plot_degree_distribution(degree_distributions):
-#     for graph_name, degrees in degree_distributions.items():
-#         freqs = [degrees.count(d) for d in degrees]
-#         plt.scatter(degrees, freqs)
-#         plt.xscale('log')
-#         plt.yscale('-log')
-#         plt.xlabel('Degree')
-#         plt.ylabel('Frequency')
-#         plt.title(f'Degree distribution for {graph_name}')
-#         plt.savefig(str(Directories.figure_directory() / f"{graph_name}_degree_distribution.png"))
-#         plt.close()
-
-
-#
-# graphs = Create_graphs.from_edgelists()
-# degree_distributions = Degree_distribution.get_degree(graphs)
-# Degree_distribution.plot_degree_distribution(degree_distributions)
-
-
-# TODO: Make degree to map to edgelists, so we can plot the degree distribution for each bin. Make class for this?
-# @staticmethod
-# def map_degree_to_edgelists(degree, edgelists):
-#     mapped_degree = {}
-#     for edgelists, degree in zip(edgelists, degree):
-#         mapped_degree[edgelists] = degree
-#     return mapped_degree
-
-
-# TODO: Create graph objects from data per resolution
-# Maybe make function to split data into different resolutions per root dir provided? Quick fix.
-
-# TODO: Figure out what metrics to calculate, and what to plot.
-# think about what we want to show in the end.
-# Maybe we can make a function that takes in a graph object and calculates the metrics we want to plot? IDk about speed tho, but definiatey for commong stuff like degree and betweenness etc.
-
-# TODO: Then do plotting quick for now, that is, just plot the metrics we want to show without making the code automatic and flexible.
-
-
-# TODO: Do community detection for all graphs, and plot the communities for each graph.
-
-# TODO: Jaccard index for all graphs, and plot the Jaccard index for each graph.
-
-# TODO: Calculate modulariry for each graph
-
-# TODO: Calcualte
-
-
-# Quick look at new method on INC data
-
-
-# Check if we can create graph objects directly without having to create an edgelist format file each time and
-# import it from a different directory.
-
-# K562 chromosome 18 (just testing iGraph stuff)
-# K562_chr18 = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Processed_Data_Edgelist/HiC_from_Jonas/Chr18/K562_processed_chr18.txt",
-#                            format="ncol")
-#
-# HUVEC_chr18 = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Processed_Data_Edgelist/HiC_from_Jonas/Chr18/HUVEC_processed_chr18.txt", format="ncol")
-#
-# IMR90 = ig.Graph.Load("/Users/GBS/Master/HiC-Data/Processed_Data_Edgelist/HiC_from_Jonas/FullGenome/IMR90_processed.txt", format="ncol")
-
-# K562_chr18.save("K562_chr18", format = "ncol") Saving doesn't work?
-# Finding degree of graph
-# degree_K562_chr18 = K562_chr18.degree()
-# print(degree_K562_chr18)
-
-# Finding betweenness of edges (same as using .es but our graph is not directed)
-# edge_betweenness_K562_chr18 = K562_chr18.edge_betweenness()
-# print(edge_betweenness_K562_chr18)
-
-# Finding betweenness of vertices (.vs: nodes)
-# nodes_betweenness_K562_chr18 = K562_chr18.vs.betweenness()
-# print(nodes_betweenness_K562_chr18)
-
-# Finding adjacency matrix for graph
-# adjacency_K562_chr18 = K562_chr18.get_adjacency()
-# print(adjacency_K562_chr18)
-
-# Is our graph directed:
-# print("Our graph is directed:", K562_chr18.is_directed())
-
-# Testing if the Cairo package works (it works)
-# g = ig.Graph.Famous("petersen")
-# plot(g)
-# And it works on my data
-# plot(K562_chr18, layout = "fr", directed="false") # 2D layouts can be: circle, drl, fr, kk, lgl, random, rt
-
-
-#
-
-
-# plot(IMR90, layout = "")
-# plot(HUVEC_chr18, layout = "fr")
-
-
-# Frequency distribution test
-
-# Må ha frequency på Y-aksen og Degree på X-aksen
-# Må ogsp ha dotplot og ikke histogram, det ser ut som de har log-transformert grafen i paperet.
-# Sjekk paper for å se hvordan det skal se ut: https://pubmed.ncbi.nlm.nih.gov/27618581/
-
-# Plot this using Altair? Looked nice on OMgenomics.
-
-# Something is wrong with iGraph, troubleshoot later: https://github.com/scverse/scanpy/issues/961
-
-# ig.add_vertices(5)
-# ig.add_edges([(0,1), (0,2), (0,3), (1,2), (2,3), (3,4)])
-
-# Compute the degree distribution using the Counter class
-# degree_values = g.degree()
-# degree_counts = Counter(degree_values)
-
-# Create a dataframe with the degree and frequency data
-# df = pd.DataFrame({"degree": list(degree_counts.keys()), "frequency": list(degree_counts.values())})
-
-# Plot the degree distribution using the Chart and Scatter classes
-# chart = alt.Chart(df).mark_circle(size=60).encode(
-#     x=alt.X("degree:Q", scale=alt.Scale(type="log")),
-#     y=alt.Y("frequency:Q", scale=alt.Scale(type="log")),
-# )
-# chart.show()
-
-# bins = 20
-# # log_data = np.log(K562_chr18)
-# plt.scatter(K562_chr18.degree(), bins)
-# plt.semilogx()
-# plt.xscale("log")
-# plt.ylim(0.1, 100)
-# plt.xlim(9, max(xscale))
-# plt.ylabel("Degree")
-# plt.xlabel("Frequency")
-# plt.show()
-
-# Something like this for degree distribution?
-
-# plt.scatter(degree_counts.keys(), degree_counts.freq(), linewidth=0)
-# plt.semilogx(degree_counts.keys(), degree_counts.values())
-# plt.semilogy(degree_counts.keys, degree_counts.values())
-# plt.xlabel("Degree")
-# plt.ylabel("Frequency")
-# plt.show()
-
-
-# After we standardize nodes, we can run community detection (e.g fast greedy first), then look at
-# clustering, degree distritution, betweeness centrality and other network metrics.
-
-# communities = g.communnity_fastgreedy()
-# print(communities)
-# communitites_list = communitites.as_clustering() # communitites as list of vertices
-# The index represents the ID of each edge:
-# membership = communitites.membership
-# print(membership)
-
-# Plot the graph, coloring the vertices by their community
-# plot_options = {
-#     "vertex_color": communities.membership,
-#     "vertex_label": g.vs["name"],
-#     "vertex_size": 30,
-#     "edge_color": "lightgray",
-#     "margin": 20
-# }
-# ig.plot(g, **plot_options)
+    def __init__(self, networkx_graph_dict):
+        self.networkx_graph_dict = networkx_graph_dict
+
+    def plot(self):
+        for graph_key, nx_graph in self.networkx_graph_dict.items():
+            # Use a spring layout to position the nodes
+            pos = nx.spring_layout(nx_graph, seed=42)
+
+            # Create node trace
+            node_trace = go.Scatter(mode='markers+text', textposition='bottom center',
+                                    hoverinfo='text', marker=dict(showscale=False, size=20, colorscale='Viridis', reversescale=True, colorbar=dict(thickness=15, title='Node Connections', xanchor='left', titleside='right')))
+
+            # Create edge trace
+            edge_trace = go.Scatter(line=dict(width=0.5, color='#888'), hoverinfo='none', mode='lines')
+
+            node_x, node_y, node_text, node_colors = [], [], [], []
+            edge_x, edge_y = [], []
+
+            # Add nodes and edges to the traces
+            for node, adjacencies in enumerate(nx_graph.adjacency()):
+                x, y = pos[node]
+                node_x.append(x)
+                node_y.append(y)
+                node_colors.append(len(adjacencies[1]))
+                node_info = f"{node} - # of connections: {len(adjacencies[1])}"
+                node_text.append(node_info)
+
+                for neighbor in adjacencies[1].keys():
+                    x0, y0 = pos[node]
+                    x1, y1 = pos[neighbor]
+                    edge_x.extend([x0, x1, None])
+                    edge_y.extend([y0, y1, None])
+
+            node_trace.update(x=node_x, y=node_y, text=node_text, marker=dict(color=node_colors))
+            edge_trace.update(x=edge_x, y=edge_y)
+
+            # Customize the plot appearance
+            fig = go.Figure(data=[edge_trace, node_trace],
+                            layout=go.Layout(title=graph_key, showlegend=False, hovermode='closest',
+                                             margin=dict(b=20, l=5, r=5, t=40),
+                                             xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                                             yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)))
+            fig.show()
+
+# interactive_plotter = InteractivePlotNetworkxGraphs(ConvertIgraphToNetworkx(chr18_inc_norm_graphs_50kb()).convert())
+# interactive_plotter.plot()

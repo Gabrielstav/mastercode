@@ -14,7 +14,6 @@ import pickle as pickle
 import threading as threading
 from collections import defaultdict
 import concurrent.futures
-from threading import Lock
 
 #########################################################################################
 # Pre-processing pipeline for Hi-C data from HiC-Pro (command line version, parallelized)
@@ -48,6 +47,8 @@ help_message = "Pipeline for processing Hi-C data from HiC-Pro to statistically 
                "Allows for running mixed input files, some of which contain inter-chromosomal interactions and some that do not. This increases time complexity. \n\n" \
                "THEADS: -t \n" \
                "Int: Number of threads to use for processing. Default is cores available on machine. Always specify on HPC cluster. \n\n" \
+               "FDR THRESHOLD: -f \n" \
+               "Float: FDR threshold for significance. Default is 0.05. \n\n" \
 
 
 parser = argparse.ArgumentParser(description=help_message, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -61,6 +62,7 @@ parser.add_argument("-inter", "--interchromosomal_interactions", help="Consider 
 parser.add_argument("-intra", "--intrachromosomal_interactions", help="Consider only intra-chromosomal interactions to find significant interactions.", action="store_true", required=False)
 parser.add_argument("-mixed", "--mixed_interactions", help="Consider inter-chromosomal and intra-chromosmal interactions on a file-by-file basis.", action="store_true", required=False)
 parser.add_argument("-t", "--threads", help="Int: Number of threads to use for processing. Default is cores available on machine. Always specify on HPC cluster.", required=False)
+parser.add_argument("-f", "--fdr_threshold", help="Float: FDR threshold for significance. Default is 0.05.", required=False, type=float)
 args = parser.parse_args()
 
 # Sets args to None if not provided in command line
@@ -72,6 +74,7 @@ norm_option = args.norm_option
 interchromosomal_interactions = args.interchromosomal_interactions
 intrachromosomal_interactions = args.intrachromosomal_interactions
 mixed_interactions = args.mixed_interactions
+fdr_threshold = args.fdr_threshold
 threads = args.threads
 
 
@@ -100,6 +103,7 @@ class SetDirectories:
     intra_interactions = False  # If true, considers only intra-chromosomal interactions for statistical testing
     mixed_interactions = True  # If true, considers both inter- and intra-chromosomal interactions for statistical testing on file-by-file basis, using in the NCHG script.
     threads = os.cpu_count()  # Sets threads to number of cores on machine, can be overwritten by user input in command line
+    fdr_threshold = 0.05  # Sets FDR threshold for significance, can be overwritten by user input in command line
 
     @classmethod
     def set_normalized_data(cls, normalized_data):
@@ -166,6 +170,14 @@ class SetDirectories:
         return cls.intra_interactions
 
     @classmethod
+    def set_fdr_threshold(cls, fdr_thresh):
+        cls.fdr_threshold = fdr_thresh
+
+    @classmethod
+    def get_fdr_threshold(cls):
+        return cls.fdr_threshold
+
+    @classmethod
     def set_temp_dir(cls, temp_dir):
         cls.temp_dir = os.path.abspath(temp_dir)
 
@@ -217,6 +229,9 @@ if norm_option is not None:
 
 if mixed_interactions:
     SetDirectories.set_mixed_interactions(mixed_interactions)
+
+if fdr_threshold is not None:
+    SetDirectories.set_fdr_threshold(fdr_threshold)
 
 if interchromosomal_interactions is not None:
     SetDirectories.set_interchromosomal_interactions(interchromosomal_interactions)
@@ -373,12 +388,12 @@ class Pipeline_Input:
         return grouped_files_checked
 
 first_print = True
-def custom_print(*args, **kwargs):
+def custom_print(*argss, **kwargs):
     global first_print
     if first_print:
         print("\n", end="")
         first_print = False
-    print(*args, **kwargs)
+    print(*argss, **kwargs)
 
 class Pipeline:
 
@@ -619,7 +634,7 @@ class Pipeline:
 
         try:
             # Setting min interactions length to same as bin size from HiC-Pro
-            window_size = int(re.search(r"(\d+)[^/\d]*$", bedpe_file).group(1))
+            window_size = int(re.search(r"_(\d+)_", bedpe_file).group(1))  # Any number in file name with underscores on both sides
             if not isinstance(window_size, int):
                 raise ValueError(f"Window size must be an integer, {window_size} is not an integer.")
 
@@ -753,7 +768,7 @@ class Pipeline:
                     f.writelines(nchg_output)
 
     @staticmethod
-    def adjust_pvalues(nchg_file, fdr_threshold=0.01, log_ratio_threshold=2, method="fdr_bh"):
+    def adjust_pvalues(nchg_file, fdr_thresh=SetDirectories.get_fdr_threshold(), log_ratio_threshold=2, method="fdr_bh"):
         """
         Adjusts the p-values using the Benjamini-Hochberg method
         """
@@ -765,7 +780,7 @@ class Pipeline:
             with open(nchg_file, "r") as nchg_f:
                 for line in nchg_f:
                     col = line.split()
-                    if len(col) < 11:  # Assuming you expect at least 11 columns in the input file
+                    if len(col) < 11:  # Expect 11 columns in the input file
                         print(f"Error: {nchg_file} does not have the correct number of columns.")
                     if col[7] == "0":
                         continue  # Skips the line if interactions/edges is 0
@@ -786,7 +801,7 @@ class Pipeline:
             for i, processed_line in enumerate(processed_lines):
                 col = processed_line.split()
                 col.append(str(padj[1][i]))
-                if float(col[11]) >= log_ratio_threshold and float(col[12]) <= fdr_threshold:
+                if float(col[11]) >= log_ratio_threshold and float(col[12]) <= fdr_thresh:
                     padj_out.append("\t".join(col[:6] + [col[12]]))
 
             print(f"Finished processing file: {nchg_file}, PID: {os.getpid()}, TID: {threading.get_ident()}")
