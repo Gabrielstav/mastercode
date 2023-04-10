@@ -44,10 +44,16 @@ class CreateGraphsFromDirectory:
                 if graph_name_resolution not in resolutions:
                     continue
 
-            df = pd.read_csv(file_path, sep='\t', header=None, names=['source', 'target'], dtype=str)
+            with open(file_path, "r") as f:
+                edges = [tuple(line.strip().split()) for line in f]
+
+            df = pd.DataFrame(edges, columns=['source', 'target'])
 
             if chromosomes is not None:
                 df = df[df['source'].str.contains('|'.join(chromosomes)) & df['target'].str.contains('|'.join(chromosomes))]
+
+            print(f"DataFrame for {graph_name}:")
+            print(df)
 
             graph = ig.Graph.TupleList(df.itertuples(index=False), directed=False)
             self.graph_dict[graph_name] = graph
@@ -91,9 +97,6 @@ def mcf7_10_lowres_graphs():
     graph_creator.from_edgelists()
     mcf7_10_graphs = graph_creator.graph_dict
     return mcf7_10_graphs
-mcf7_10_lowres_graphs()
-print(mcf7_10_lowres_graphs())
-
 
 def mcf7_1MB_norm_chr18():
     root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/lowres_mcf7_mcf10")
@@ -102,7 +105,12 @@ def mcf7_1MB_norm_chr18():
     mcf7_1mb_norm_chr18_graphs = graph_creator.graph_dict
     return mcf7_1mb_norm_chr18_graphs
 
-print(mcf7_1MB_norm_chr18())
+def mcf10_1mb_norm_chr18():
+    root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/lowres_mcf7_mcf10")
+    graph_creator = CreateGraphsFromDirectory(root_dir)
+    graph_creator.from_edgelists(cell_lines=["mcf10"], chromosomes=["chr18"], resolutions=["1000000"])
+    mcf10_1mb_norm_chr18_graphs = graph_creator.graph_dict
+    return mcf10_1mb_norm_chr18_graphs
 
 
 
@@ -173,9 +181,6 @@ class NetworkMetrics:
         :return: dict containing graph objects and metrics
         """
 
-        # Create an instance of NetworkMetrics
-        # network_metrics = cls(graph_dict_or_function)
-
         graph_dict = {}
 
         # If graph_dict_or_function is a function, call it to get the graph_dict
@@ -185,17 +190,24 @@ class NetworkMetrics:
         elif isinstance(graph_dict_or_function, dict):
             graph_dict = graph_dict_or_function
 
-        # If root_dir is provided, create graph_dict from the directory
-        # if root_dir is not None:
-        #     graph_creator = CreateGraphsFromDirectory(root_dir)
-        #     graph_creator.from_edgelists()
-        #     graph_creator.filter_graphs(chromosomes=chromosomes, resolutions=resolutions)
-        #     graph_dict = graph_creator.graph_dict
+        # Function to check if a graph name matches the filtering criteria
+        def filter_graph_name(graph_name):
+            if cell_lines and not any(cell_line.lower() in graph_name.lower() for cell_line in cell_lines):
+                return False
+            if chromosomes and not any(chromosome.lower() in graph_name.lower() for chromosome in chromosomes):
+                return False
+            if resolutions and not any(resolution.lower() in graph_name.lower() for resolution in resolutions):
+                return False
+            return True
 
+        # If root_dir is provided, create graph_dict from the directory
         if root_dir is not None:
             graph_creator = CreateGraphsFromDirectory(root_dir)
             graph_creator.from_edgelists(cell_lines=cell_lines, chromosomes=chromosomes, resolutions=resolutions)
             graph_dict = graph_creator.graph_dict
+        else:
+            # Filter the graph_dict based on the filtering criteria
+            graph_dict = {graph_name: graph for graph_name, graph in graph_dict.items() if filter_graph_name(graph_name)}
 
         # If metrics is None, use all available metrics
         if metrics is None:
@@ -234,6 +246,17 @@ class NetworkMetrics:
                 print(f"  {metric_name}: {metric_value}")
             print()
 
+# graph_dict = mcf7_1MB_norm_chr18()
+# print("Graphs in the dictionary:")
+# for name, graph in graph_dict.items():
+#     print(f"  {name}: {graph.summary()}")
+#
+# metrics = NetworkMetrics.get_metrics(
+#     graph_dict_or_function=graph_dict,
+#     metrics=[
+#         "size", "edges", "fg_communities"
+#     ])
+# NetworkMetrics.print_metrics(metrics)
 
 ###################
 # Calculate metrics
@@ -242,13 +265,15 @@ class NetworkMetrics:
 # From function returning dictionary containing graph objects (or from dictionary):
 
 # MCF10 1MB norm:
-def mcf10_chr18_1mb_norm_metrics():
+def mcf10_1mb_norm_metrics():
     metrics = NetworkMetrics.get_metrics(
         graph_dict_or_function=mcf7_10_lowres_graphs(),
         metrics=[
             "size", "edges", "fg_communities"
         ])
     return NetworkMetrics.print_metrics(metrics)
+
+# TODO: Filtero on cell line and chromosome 
 
 # MCF7 1MB norm:
 def mcf7_chr18_1mb_norm_metrics():
