@@ -8,23 +8,22 @@ from typing import Union
 import networkx as nx
 import plotly.graph_objs as go
 import pandas as pd
+import os as os
+
 # Set backend of igraph to matplotlib:
 ig.config["plotting.backend"] = "matplotlib"
 
-
-
-class CreateGraphsFromDirectory:
+class CreateGraphs:
     """
-    Class to create igraph objects from edgelists in a directory.
-    Set exclude_weighted = False in from_edgelist method to create graphs from weighted edgelists.
+    Create graph objects from edgelists
     """
 
-    def __init__(self, input_directory):
-        self.input_directory = input_directory
+    def __init__(self, edgelist_path):
+        self.edgelist_path = Path(edgelist_path).absolute()
         self.graph_dict = {}
 
     def get_files(self, pattern):
-        files = (file_path for file_path in self.input_directory.rglob(pattern) if file_path.is_file())
+        files = (file_path for file_path in self.edgelist_path.rglob(pattern) if file_path.is_file())
         files_list = [str(file_path.resolve()) for file_path in files]
         return files_list
 
@@ -32,56 +31,78 @@ class CreateGraphsFromDirectory:
         all_files = self.get_files("*")
 
         for file_path in all_files:
-            file_name = file_path.split("/")[-1]
+            file_name = os.path.basename(file_path)
             graph_name = re.sub(r"_edgelist\.txt$", "", file_name)
+            print(graph_name)
 
             if cell_lines is not None:
                 if not any(cell_line in graph_name for cell_line in cell_lines):
                     continue
 
             if resolutions is not None:
-                graph_name_resolution = re.search(r"_([^_]+)$", graph_name).group(1)
+                graph_name_resolution = re.search(r"_([\d]+)$", graph_name).group(1)
                 if graph_name_resolution not in resolutions:
                     continue
 
             with open(file_path, "r") as f:
-                edges = [tuple(line.strip().split()) for line in f]
+                edges = [tuple(filter(None, line.strip().split())) for line in f]
 
             df = pd.DataFrame(edges, columns=['source', 'target'])
 
+            # Add this line to filter the edges based on chromosomes
             if chromosomes is not None:
-                df = df[df['source'].str.contains('|'.join(chromosomes)) & df['target'].str.contains('|'.join(chromosomes))]
+                df = df[df['source'].str.startswith(tuple(chromosomes)) & df['target'].str.startswith(tuple(chromosomes))]
 
-            print(f"DataFrame for {graph_name}:")
-            print(df)
+            # Create graph object
+            graph = ig.Graph.TupleList(df.itertuples(index=False), directed=False, weights=False)
 
-            graph = ig.Graph.TupleList(df.itertuples(index=False), directed=False)
+            # Add graph to dictionary
             self.graph_dict[graph_name] = graph
 
-    def filter_graphs(self, chromosomes=None, resolutions=None):
-        if chromosomes:
-            if isinstance(chromosomes, str):
-                chromosomes = [chromosomes]
-            chromosomes = set(chromosomes)
-        if resolutions:
-            if isinstance(resolutions, str):
-                resolutions = [resolutions]
-            resolutions = set(resolutions)
+class CreateGraphsFromDirectory:
+    """
+    Class to create igraph objects from edgelists in a directory.
+    """
 
-        filtered_graph_dict = {}
+    def __init__(self, input_directory):
+        self.input_directory = Path(input_directory).absolute()
+        self.graph_dict = {}
 
-        for graph_name, graph in self.graph_dict.items():
-            if chromosomes is not None and not any(chrom in graph_name for chrom in chromosomes):
-                continue
+    def get_files(self, pattern):
+        files = (file_path for file_path in self.input_directory.rglob(pattern) if file_path.is_file())
+        files_list = [str(file_path.resolve()) for file_path in files]
+        print(f"Files found: {files_list}")  # Debugging line
+        return files_list
+
+    def from_edgelists(self, cell_lines=None, chromosomes=None, resolutions=None):
+        all_files = self.get_files("*")
+
+        for file_path in all_files:
+            file_name = os.path.basename(file_path)
+            graph_name = re.sub(r"_edgelist\.txt$", "", file_name)
+            print(f"Processing graph: {graph_name}")  # Debugging line
+
+            if cell_lines is not None:
+                if not any(cell_line in graph_name for cell_line in cell_lines):
+                    continue
 
             if resolutions is not None:
-                graph_name_resolution = re.search(r"_([^_]+)$", graph_name).group(1)
+                graph_name_resolution = re.search(r"_([\d]+)$", graph_name).group(1)
                 if graph_name_resolution not in resolutions:
                     continue
 
-            filtered_graph_dict[graph_name] = graph
+            with open(file_path, "r") as f:
+                edges = [tuple(filter(None, line.strip().split())) for line in f]
 
-        return filtered_graph_dict
+            df = pd.DataFrame(edges, columns=['source', 'target'])
+
+            # Add this line to filter the edges based on chromosomes
+            if chromosomes is not None:
+                df = df[df['source'].str.startswith(tuple(chromosomes)) & df['target'].str.startswith(tuple(chromosomes))]
+
+            graph = ig.Graph.TupleList(df.itertuples(index=False), directed=False)
+            graph.vs['name'] = [v['name'] for v in graph.vs]  # Assign the 'name' attribute to vertices
+            self.graph_dict[graph_name] = graph
 
 
 ################################
@@ -97,22 +118,87 @@ def mcf7_10_lowres_graphs():
     graph_creator.from_edgelists()
     mcf7_10_graphs = graph_creator.graph_dict
     return mcf7_10_graphs
+print(mcf7_10_lowres_graphs())
 
-def mcf7_1MB_norm_chr18():
+def mcf7_10_lowres_graphs_2():
     root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/lowres_mcf7_mcf10")
-    graph_creator = CreateGraphsFromDirectory(root_dir)
-    graph_creator.from_edgelists(cell_lines=["mcf7"], chromosomes=["chr18"], resolutions=["1000000"])
-    mcf7_1mb_norm_chr18_graphs = graph_creator.graph_dict
-    return mcf7_1mb_norm_chr18_graphs
+    graph_creator = CreateGraphs(root_dir)
+    graph_creator.from_edgelists()
+    mcf7_10_graphs = graph_creator.graph_dict
+    return mcf7_10_graphs
+# print(mcf7_10_lowres_graphs_2())
 
-def mcf10_1mb_norm_chr18():
-    root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/lowres_mcf7_mcf10")
-    graph_creator = CreateGraphsFromDirectory(root_dir)
-    graph_creator.from_edgelists(cell_lines=["mcf10"], chromosomes=["chr18"], resolutions=["1000000"])
-    mcf10_1mb_norm_chr18_graphs = graph_creator.graph_dict
-    return mcf10_1mb_norm_chr18_graphs
+class FilterGraphs:
+    """
+    Class that filters the graphs based on cell line, chromosome, and resolution.
+    """
+
+    def __init__(self, graph_dict):
+        self.graph_dict = graph_dict
 
 
+    def filter_graphs(self, cell_lines=None, chromosomes=None, resolutions=None, graph_dict=None):
+        if graph_dict is None:
+            graph_dict = self.graph_dict
+
+        if cell_lines:
+            if isinstance(cell_lines, str):
+                cell_lines = [cell_lines]
+            cell_lines = set(cell_lines)
+        if chromosomes:
+            if isinstance(chromosomes, str):
+                chromosomes = [chromosomes]
+            chromosomes = set(chromosomes)
+        if resolutions:
+            if isinstance(resolutions, str):
+                resolutions = [resolutions]
+            resolutions = set(resolutions)
+
+        print("cell_lines:", cell_lines)
+        print("chromosomes:", chromosomes)
+        print("resolutions:", resolutions)
+
+        filtered_graph_dict = {}
+
+        filtered_graph_dict = {}
+
+        for graph_name, graph in graph_dict.items():
+            print(f"Checking graph {graph_name}")  # Print the current graph being processed
+
+            if cell_lines is not None and not any(cell_line in graph_name for cell_line in cell_lines):
+                print(f"Skipped {graph_name} due to cell_lines")
+                continue
+
+            if resolutions is not None:
+                graph_name_resolution = re.search(r"_([^_]+)$", graph_name).group(1)
+                if graph_name_resolution not in resolutions:
+                    print(f"Skipped {graph_name} due to resolutions")
+                    continue
+
+            if chromosomes is not None:
+                # Create a new empty graph with the same vertices as the original graph
+                new_graph = ig.Graph()
+                new_graph.add_vertices(graph.vs['name'])
+                new_edges = [(graph.vs[e.source]['name'], graph.vs[e.target]['name']) for e in graph.es
+                             if graph.vs[e.source]['name'].split(':')[0] in chromosomes
+                             and graph.vs[e.target]['name'].split(':')[0] in chromosomes]
+                new_graph.add_edges(new_edges)
+                new_graph = new_graph.simplify()  # Remove self-loops and multiple edges if any
+                print(f"Number of edges in original graph ({graph_name}):", len(graph.es))
+                print(f"Number of edges in filtered graph ({graph_name}):", len(new_graph.es))
+                graph = new_graph
+
+            filtered_graph_dict[graph_name] = graph
+
+        return filtered_graph_dict
+
+# MCF10 chr18 1Mbp norm:
+def mcf10_chr18():
+    graph_filter = FilterGraphs(mcf7_10_lowres_graphs())
+    filtered_graphs = graph_filter.filter_graphs(cell_lines=["mcf10"], chromosomes=["chr18"], resolutions=["1000000"])
+    print(filtered_graphs)
+mcf10_chr18()
+# TODO: Finish the filtering class.
 
 
 
@@ -168,11 +254,10 @@ class NetworkMetrics:
 
         return calculated_metrics
 
-    @classmethod
-    def get_metrics(cls, graph_dict_or_function=None, cell_lines=None, chromosomes=None, resolutions=None, metrics: Union[None, dict, list] = None, root_dir=None):
+    def get_metrics(self, graph_dict_or_function=None, cell_lines=None, chromosomes=None, resolutions=None, metrics: Union[None, dict, list] = None, root_dir=None):
         """
         Filter metrics from dict, function returning dict or from root directory containing edgelists
-        :param: cell_lines: cell lines to filter on
+        :param cell_lines: cell lines to filter on
         :param graph_dict_or_function: input as dictionary or function returning dictionary
         :param chromosomes: chromosome to filter on
         :param resolutions: specific resolution to filter on
@@ -183,31 +268,30 @@ class NetworkMetrics:
 
         graph_dict = {}
 
-        # If graph_dict_or_function is a function, call it to get the graph_dict
-        if callable(graph_dict_or_function):
-            graph_dict = graph_dict_or_function()
-        # If graph_dict_or_function is a dictionary, use it directly
-        elif isinstance(graph_dict_or_function, dict):
-            graph_dict = graph_dict_or_function
-
-        # Function to check if a graph name matches the filtering criteria
-        def filter_graph_name(graph_name):
-            if cell_lines and not any(cell_line.lower() in graph_name.lower() for cell_line in cell_lines):
-                return False
-            if chromosomes and not any(chromosome.lower() in graph_name.lower() for chromosome in chromosomes):
-                return False
-            if resolutions and not any(resolution.lower() in graph_name.lower() for resolution in resolutions):
-                return False
-            return True
-
         # If root_dir is provided, create graph_dict from the directory
         if root_dir is not None:
             graph_creator = CreateGraphsFromDirectory(root_dir)
-            graph_creator.from_edgelists(cell_lines=cell_lines, chromosomes=chromosomes, resolutions=resolutions)
+            graph_creator.from_edgelists()
             graph_dict = graph_creator.graph_dict
         else:
-            # Filter the graph_dict based on the filtering criteria
-            graph_dict = {graph_name: graph for graph_name, graph in graph_dict.items() if filter_graph_name(graph_name)}
+            # If graph_dict_or_function is a function, call it to get the graph_dict
+            if callable(graph_dict_or_function):
+                graph_dict = graph_dict_or_function()
+            # If graph_dict_or_function is a dictionary, use it directly
+            elif isinstance(graph_dict_or_function, dict):
+                graph_dict = graph_dict_or_function
+
+        # Filter the graph_dict based on the filtering criteria
+        if cell_lines or chromosomes or resolutions:
+            graph_dict = CreateGraphsFromDirectory("").filter_graphs(graph_dict=graph_dict, chromosomes=chromosomes, resolutions=resolutions)
+
+        # Filter the edges within the graph objects based on the chromosome information
+        if chromosomes:
+            for graph_name, graph in graph_dict.items():
+                df = pd.DataFrame([(e.source_vertex['name'], e.target_vertex['name']) for e in graph.es], columns=['source', 'target'])
+                df = df[df['source'].str.startswith(tuple(chromosomes)) & df['target'].str.startswith(tuple(chromosomes))]
+                graph = ig.Graph.TupleList(df.itertuples(index=False), directed=False)
+                graph_dict[graph_name] = graph
 
         # If metrics is None, use all available metrics
         if metrics is None:
@@ -218,7 +302,6 @@ class NetworkMetrics:
 
         metrics_data = {}
         for graph_name, graph in graph_dict.items():
-            print(f"Graph object for {graph_name}:", graph)  # Debugging line to check the graph object
             metrics_data[graph_name] = {}
             for metric_name, metric_function in metrics.items():
                 metric_value = metric_function(graph)
@@ -242,9 +325,10 @@ class NetworkMetrics:
                             membership = metric_value.community_multilevel().membership
                             metric_value = metric_value.modularity(membership)
                         else:
-                            raise ValueError(f"Unsupported metric '{metric_name}' with additional arguments")
+                            raise ValueError(f"Unsupported metric '{metric_name}'")
                 print(f"  {metric_name}: {metric_value}")
             print()
+
 
 # graph_dict = mcf7_1MB_norm_chr18()
 # print("Graphs in the dictionary:")
@@ -264,38 +348,46 @@ class NetworkMetrics:
 
 # From function returning dictionary containing graph objects (or from dictionary):
 
-# MCF10 1MB norm:
-def mcf10_1mb_norm_metrics():
-    metrics = NetworkMetrics.get_metrics(
-        graph_dict_or_function=mcf7_10_lowres_graphs(),
-        metrics=[
-            "size", "edges", "fg_communities"
-        ])
-    return NetworkMetrics.print_metrics(metrics)
+# MCF10 1MB norm chr18:
+# def mcf10_1mb_norm_metrics_chr18():
+#     metrics = NetworkMetrics.get_metrics(cell_lines=["mcf10"], chromosomes=["chr18"], resolutions=["1000000"],
+#                                          graph_dict_or_function=mcf7_10_lowres_graphs,
+#                                          metrics=[
+#                                              "size", "edges", "fg_communities"
+#                                          ])
+#     return NetworkMetrics.print_metrics(metrics)
+# mcf10_1mb_norm_metrics_chr18()
 
-# TODO: Filtero on cell line and chromosome 
+# def mcf10_1mb_norm_metrics_chr18():
+#     network_metrics = NetworkMetrics(mcf7_10_lowres_graphs)
+#     metrics = network_metrics.get_metrics(cell_lines=["mcf7"], chromosomes=["chr18"], resolutions=["1000000"],
+#                                           metrics=[
+#                                               "size", "edges", "fg_communities"
+#                                           ])
+#     return network_metrics.print_metrics(metrics)
+#
+# mcf10_1mb_norm_metrics_chr18()
 
-# MCF7 1MB norm:
-def mcf7_chr18_1mb_norm_metrics():
-    metrics = NetworkMetrics.get_metrics(
-        graph_dict_or_function=mcf7_1MB_norm_chr18,
-        metrics=[
-            "size", "edges", "fg_communities"
-        ])
-    return NetworkMetrics.print_metrics(metrics)
 
-mcf7_chr18_1mb_norm_metrics()
+
+# # MCF7 1MB norm:
+# def mcf7_chr18_1mb_norm_metrics():
+#     metrics = NetworkMetrics.get_metrics(
+#         graph_dict_or_function=mcf7_1MB_norm_chr18,
+#         metrics=[
+#             "size", "edges", "fg_communities"
+#         ])
+#     return NetworkMetrics.print_metrics(metrics)
+
+
+# mcf7_chr18_1mb_norm_metrics()
 
 
 # Or calculate metrics from root directory containing edge lists:
 # def chr18_size_mod_from_directory():
-#     metrics = NetworkMetrics.get_metrics(cell_line="mcf7", chromosome="chr18", resolution="1000000", metrics=["size", "nodes", "fg_communities"], root_dir=Path("/Users/GBS/Master/HiC-Data/edgelists/lowres_mcf7_mcf10")
+#     metrics = NetworkMetrics.get_metrics(cell_lines="mcf7", chromosomes="chr18", resolutions="1000000", metrics=["size", "nodes", "fg_communities"], root_dir=Path("/Users/GBS/Master/HiC-Data/edgelists/lowres_mcf7_mcf10"))
 #     return NetworkMetrics.print_metrics(metrics)
-# # chr18_size_mod_from_directory()
-
-
-
-
+# chr18_size_mod_from_directory()
 
 
 class LargestComponent:
@@ -321,6 +413,7 @@ class LargestComponent:
         for graph_name, graph in self.find_lcc().items():
             print(f"LCC for: {graph_name} \n size: {graph.vcount()} \n edges: {graph.ecount()}")
 
+
 # LargestComponent(chr18_inc_norm_graphs_50kb()).print_lcc()
 
 # def print_50kb_norm():
@@ -329,7 +422,6 @@ class LargestComponent:
 # # print_50kb_norm()
 #
 # LargestComponent(mcf10_1mb_norm_graph()).print_lcc()
-
 
 
 # TODO: Find lcc to total size ratio for each graph
@@ -351,15 +443,6 @@ class LargestComponent:
 # TODO: Make Alpaca differential community detection that takes two graphs: Two cell lines on same resolution and calculates the difference in community detection metrics.
 
 # TODO: Plot the differential community detection stuff.
-
-
-
-
-
-
-
-
-
 
 
 # If I need to use networkx for some reason later:
@@ -410,6 +493,7 @@ class ConvertIgraphToNetworkx:
 
         return output_str
 
+
 # ConvertIgraphToNetworkx(chr18_inc_norm_graphs_50kb()).convert()
 
 class PlotNetworkxGraphs:
@@ -423,6 +507,7 @@ class PlotNetworkxGraphs:
             plt.title(f"{graph_key}")
             nx.draw(nx_graph, with_labels=True, node_color="skyblue", font_weight="bold", node_size=1000)
             plt.show()
+
 
 # plotter = PlotNetworkxGraphs(ConvertIgraphToNetworkx(chr18_inc_norm_graphs_50kb()).convert())
 # plotter.plot()
