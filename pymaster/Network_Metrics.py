@@ -13,52 +13,6 @@ import os as os
 # Set backend of igraph to matplotlib:
 ig.config["plotting.backend"] = "matplotlib"
 
-class CreateGraphs:
-    """
-    Create graph objects from edgelists
-    """
-
-    def __init__(self, edgelist_path):
-        self.edgelist_path = Path(edgelist_path).absolute()
-        self.graph_dict = {}
-
-    def get_files(self, pattern):
-        files = (file_path for file_path in self.edgelist_path.rglob(pattern) if file_path.is_file())
-        files_list = [str(file_path.resolve()) for file_path in files]
-        return files_list
-
-    def from_edgelists(self, cell_lines=None, chromosomes=None, resolutions=None):
-        all_files = self.get_files("*")
-
-        for file_path in all_files:
-            file_name = os.path.basename(file_path)
-            graph_name = re.sub(r"_edgelist\.txt$", "", file_name)
-            print(graph_name)
-
-            if cell_lines is not None:
-                if not any(cell_line in graph_name for cell_line in cell_lines):
-                    continue
-
-            if resolutions is not None:
-                graph_name_resolution = re.search(r"_([\d]+)$", graph_name).group(1)
-                if graph_name_resolution not in resolutions:
-                    continue
-
-            with open(file_path, "r") as f:
-                edges = [tuple(filter(None, line.strip().split())) for line in f]
-
-            df = pd.DataFrame(edges, columns=['source', 'target'])
-
-            # Add this line to filter the edges based on chromosomes
-            if chromosomes is not None:
-                df = df[df['source'].str.startswith(tuple(chromosomes)) & df['target'].str.startswith(tuple(chromosomes))]
-
-            # Create graph object
-            graph = ig.Graph.TupleList(df.itertuples(index=False), directed=False, weights=False)
-
-            # Add graph to dictionary
-            self.graph_dict[graph_name] = graph
-
 class CreateGraphsFromDirectory:
     """
     Class to create igraph objects from edgelists in a directory.
@@ -71,7 +25,6 @@ class CreateGraphsFromDirectory:
     def get_files(self, pattern):
         files = (file_path for file_path in self.input_directory.rglob(pattern) if file_path.is_file())
         files_list = [str(file_path.resolve()) for file_path in files]
-        print(f"Files found: {files_list}")  # Debugging line
         return files_list
 
     def from_edgelists(self, cell_lines=None, chromosomes=None, resolutions=None):
@@ -80,7 +33,6 @@ class CreateGraphsFromDirectory:
         for file_path in all_files:
             file_name = os.path.basename(file_path)
             graph_name = re.sub(r"_edgelist\.txt$", "", file_name)
-            print(f"Processing graph: {graph_name}")  # Debugging line
 
             if cell_lines is not None:
                 if not any(cell_line in graph_name for cell_line in cell_lines):
@@ -96,12 +48,12 @@ class CreateGraphsFromDirectory:
 
             df = pd.DataFrame(edges, columns=['source', 'target'])
 
-            # Add this line to filter the edges based on chromosomes
+            # Filter the edges based on chromosomes
             if chromosomes is not None:
                 df = df[df['source'].str.startswith(tuple(chromosomes)) & df['target'].str.startswith(tuple(chromosomes))]
 
             graph = ig.Graph.TupleList(df.itertuples(index=False), directed=False)
-            graph.vs['name'] = [v['name'] for v in graph.vs]  # Assign the 'name' attribute to vertices
+            graph.vs['name'] = [v['name'] for v in graph.vs]  # Assign name attribute to edges
             self.graph_dict[graph_name] = graph
 
 
@@ -118,15 +70,7 @@ def mcf7_10_lowres_graphs():
     graph_creator.from_edgelists()
     mcf7_10_graphs = graph_creator.graph_dict
     return mcf7_10_graphs
-print(mcf7_10_lowres_graphs())
 
-def mcf7_10_lowres_graphs_2():
-    root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/lowres_mcf7_mcf10")
-    graph_creator = CreateGraphs(root_dir)
-    graph_creator.from_edgelists()
-    mcf7_10_graphs = graph_creator.graph_dict
-    return mcf7_10_graphs
-# print(mcf7_10_lowres_graphs_2())
 
 class FilterGraphs:
     """
@@ -154,25 +98,16 @@ class FilterGraphs:
                 resolutions = [resolutions]
             resolutions = set(resolutions)
 
-        print("cell_lines:", cell_lines)
-        print("chromosomes:", chromosomes)
-        print("resolutions:", resolutions)
-
-        filtered_graph_dict = {}
-
         filtered_graph_dict = {}
 
         for graph_name, graph in graph_dict.items():
-            print(f"Checking graph {graph_name}")  # Print the current graph being processed
 
             if cell_lines is not None and not any(cell_line in graph_name for cell_line in cell_lines):
-                print(f"Skipped {graph_name} due to cell_lines")
                 continue
 
             if resolutions is not None:
                 graph_name_resolution = re.search(r"_([^_]+)$", graph_name).group(1)
                 if graph_name_resolution not in resolutions:
-                    print(f"Skipped {graph_name} due to resolutions")
                     continue
 
             if chromosomes is not None:
@@ -180,27 +115,39 @@ class FilterGraphs:
                 new_graph = ig.Graph()
                 new_graph.add_vertices(graph.vs['name'])
                 new_edges = [(graph.vs[e.source]['name'], graph.vs[e.target]['name']) for e in graph.es
-                             if graph.vs[e.source]['name'].split(':')[0] in chromosomes
-                             and graph.vs[e.target]['name'].split(':')[0] in chromosomes]
+                             if (graph.vs[e.source]['name'].split(':')[0] in chromosomes
+                                 or graph.vs[e.target]['name'].split(':')[0] in chromosomes)]
                 new_graph.add_edges(new_edges)
-                new_graph = new_graph.simplify()  # Remove self-loops and multiple edges if any
-                print(f"Number of edges in original graph ({graph_name}):", len(graph.es))
-                print(f"Number of edges in filtered graph ({graph_name}):", len(new_graph.es))
+                # new_graph = new_graph.simplify()  # Remove self-loops and multiple edges if any
                 graph = new_graph
 
             filtered_graph_dict[graph_name] = graph
 
         return filtered_graph_dict
 
+    @staticmethod
+    def print_filtered_edges(filtered_graph_dict):
+        for graph_name, graph in filtered_graph_dict.items():
+            print(f"Edges in filtered graph {graph_name}:")
+            for edge in graph.es:
+                source = graph.vs[edge.source]['name']
+                target = graph.vs[edge.target]['name']
+                print(f"{source} -- {target}")
+
 # MCF10 chr18 1Mbp norm:
-def mcf10_chr18():
+def mcf7_chr18_1mb():
+    graph_filter = FilterGraphs(mcf7_10_lowres_graphs())
+    filtered_graphs = graph_filter.filter_graphs(cell_lines=["mcf7"], chromosomes=["chr18", "chrX"], resolutions=["1000000"])
+    graph_filter.print_filtered_edges(filtered_graphs)
+    return filtered_graphs
+mcf7_chr18_1mb()
+
+
+def mcf10_chr18_1mb():
     graph_filter = FilterGraphs(mcf7_10_lowres_graphs())
     filtered_graphs = graph_filter.filter_graphs(cell_lines=["mcf10"], chromosomes=["chr18"], resolutions=["1000000"])
-    print(filtered_graphs)
-mcf10_chr18()
-# TODO: Finish the filtering class.
-
-
+    graph_filter.print_filtered_edges(filtered_graphs)
+# mcf10_chr18_1mb()
 
 class NetworkMetrics:
     """
@@ -330,17 +277,17 @@ class NetworkMetrics:
             print()
 
 
-# graph_dict = mcf7_1MB_norm_chr18()
-# print("Graphs in the dictionary:")
-# for name, graph in graph_dict.items():
-#     print(f"  {name}: {graph.summary()}")
-#
-# metrics = NetworkMetrics.get_metrics(
-#     graph_dict_or_function=graph_dict,
-#     metrics=[
-#         "size", "edges", "fg_communities"
-#     ])
-# NetworkMetrics.print_metrics(metrics)
+graph_dict = mcf7_chr18_1mb()
+print("Graphs in the dictionary:")
+for name, graph in graph_dict.items():
+    print(f"  {name}: {graph.summary()}")
+
+metrics = NetworkMetrics.get_metrics(
+    graph_dict_or_function=graph_dict,
+    metrics=[
+        "size", "edges", "fg_communities"
+    ])
+NetworkMetrics.print_metrics(metrics)
 
 ###################
 # Calculate metrics
