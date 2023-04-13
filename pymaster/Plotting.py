@@ -1,110 +1,53 @@
 
 import igraph as ig
+import networkx as nx
+import seaborn as sb
+import plotly as ply
+import altair as alt
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
-import Node_Connectedness
+import Network_Metrics as NM
+from pathlib import Path
+
+def mcf7_10_lowres_graphs():
+    root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/lowres_mcf7_mcf10")
+    graph_creator = NM.CreateGraphsFromDirectory(root_dir)
+    graph_creator.from_edgelists()
+    mcf7_10_graphs = graph_creator.graph_dict
+    return mcf7_10_graphs
+
+def mcf7_chr18_1mb():
+    graph_filter = NM.FilterGraphs(mcf7_10_lowres_graphs())
+    filtered_graphs = graph_filter.filter_graphs(cell_lines=["mcf7"], chromosomes=["chr18", "chrX"], resolutions=["1000000"])
+    # graph_filter.print_filtered_edges(filtered_graphs)
+    return filtered_graphs
+mcf7_chr18_1mb()
+
+# TODO: Make plotting class that takes any graph dict from any class in Network_Metrics and plots it as a network
+#   need to compare the LCC to the full graphs, because the number of communities and merges are the same but the sizes are different.
+
+class plot_graph:
+    def __init__(self, graph_dict):
+        self.graph_dict = graph_dict
+
+    def plot_graph(self):
+        for graph in self.graph_dict:
+            ig.plot(graph)
+            plt.show()
+
+plot_graph(mcf7_chr18_1mb())
 
 
-"""
-Plotting node stats
-"""
+# TODO: Make LCC plot, where the network is plotted with the LCC highlighted, takes graph dict as input.
 
-# Dictionaries created in the node stats function (remove once plotting is complete)
+# TODO: Make stacked bar plots showing ratio of nodes in LCC to total nodes for each cell line and each resolution, takes graph dicts as input.
 
-"""print(node_ratio_dict)
-print(node_ratio_con_dict)
-print(node_ratio_iso_dict)
+# TODO: Make degree distribution plots for each cell lines LCC for each chromosome, per resolution? Takes graph dict as input.
 
-# Make inputs to function "1, 2, 3-7" or "all" etc instead of "chr1, chr2"
-# maybe use a decoratr function
-def arg_changer(*args):
-def wrapper():
-    for arg in args:
-        if args == int:
+# TODO: Make betweenness plot that colors the nodes by betwenness centrality, takes a graph dict as input. Make
 
-# Plot node_ratio_iso_dict
-
-print(node_ratio_iso_dict)
-def select_chromosomes_for_plotting_iso(*args):"""
-
-# Selecting chromosomes for plotting
-
-"""node_ratio_keys = []
-node_ratio_values = []
-for arg in args:
-    for key, val in node_ratio_dict.items():
-        if arg == key:
-            node_ratio_keys.append(key)
-            node_ratio_values.append(val)
-node_ratio_values = np.array(node_ratio_values)
-
-# Plotting node ratio
-fig, ax = plt.subplots()
-ax.scatter(range(len(node_ratio_keys)), node_ratio_values[:, 1])
-# plt.xticks(range(len(node_ratio_keys)), node_ratio_keys)
-plt.show()
-
-select_chromosomes_for_plotting_iso("chr1", "chrX", "chr18", "chr5")"""
-
-# Node isolation ratio stacked bar graph
-# Vil plotte hele ratioen (altså node_ratio_dict) ikke bare node_ratio_iso_dict
-# def select_chromosomes_for_plotting(*args): #og celline?
-
-# Selecting chromosomes for plotting
-"""node_ratio_keys = []
-node_ratio_values = []
-for arg in args:
-    print(arg)
-    for key, val in node_ratio_dict.items():
-        if arg == key:
-            node_ratio_keys.append(key)
-            node_ratio_values.append(val)
-node_ratio_values = np.array(node_ratio_values)"""
-
-# Plotting node ratio
-"""fig, ax = plt.subplots()
-plt.bar(range(len(node_ratio_keys)), node_ratio_values[:, 0])
-plt.bar(range(len(node_ratio_keys)), node_ratio_values[:, 1], bottom=node_ratio_values[:, 0])
-plt.xticks(range(len(node_ratio_keys)), node_ratio_keys)
-plt.show()
-
-
-
-select_chromosomes_for_plotting("chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7", "chr8", "chr9", "chr10", "chr11", "chr12",
-                           "chr13", "chr14", "chr15", "chr16", "chr17", "chr18", "chr19", "chr20", "chr21", "chr22", "chrX")
-"""
-
-# Trying to add subtitle to each bar, but nothing showed up?
-"""y_offset = -15
-for bar in ax.patches:
-    ax.text(
-        bar.get_x() + bar.get_width() / 2,
-        bar.get_height() + bar.get_y() + y_offset, round(bar.get_height()),
-        ha="center",
-        color="k",
-        weight="bold",
-        size=8
-    )"""
-
-# Forsøk på å sortere etter verdi, men: '<' not supported between instances of 'numpy.ndarray' and 'list'
-"""x = df.index
-indexes = np.argsort(df.values).T
-heights = np.sort(df.values).T
-order = -1
-bottoms = heights[::order].cumsum(axis=0)
-bttoms = np.insert(bottoms, 0, np.zeros(len(bottoms[0])), axis=0)
-mpp_colors = dict(zip(df.columns, plt.rcParams["axes.prop_cycle"].by_key()["color"]))
-for btms, (idxs, vals) in enumerate(list(zip(indexes, heights))[::order]):
-    mps = np.take(np.array(df.columns), idxs)
-    ax.bar(x, height=vals, bottom=bottoms[btms], color=[mpp_colors[m] for m in mps])
-ax.set_ylim(bottom=0, top=2)
-plt.legend((np.take(np.array(df.columns), np.argsort(df.values)[0]))[::order], loc="upper right")
-
-ax.set_title("Node connectedness in IMR90")
-plt.xlabel("Chromosome")
-plt.ylabel("Connectedness ratio")
-plt.show()"""
+# TODO: Make closeness plot that colors the nodes by closeness, takes graph dict as input.
 
 
 

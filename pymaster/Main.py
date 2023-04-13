@@ -165,3 +165,132 @@ find_cols(nchg_out_file)
 #         with open(output_filepath, "w") as f:
 #             for nchg_output in nchg_outputs:
 #                 f.writelines(line + "\n" for line in nchg_output)
+
+
+# class NetworkMetrics:
+#     """
+#     Class to calculate network metrics for a given graph object.
+#     """
+#
+#     def __init__(self, graph_dict_or_function, metrics=None):
+#         self.graph_dict = graph_dict
+#         # if isinstance(graph_dict_or_function, types.FunctionType):
+#         #     self.graph_dict = graph_dict_or_function()
+#         # else:
+#         #     self.graph_dict = graph_dict_or_function
+#         # self.metrics_dict = metrics if metrics is not None else {}
+#
+#     available_metrics = {
+#         "size": lambda g: g.vcount(),
+#         "edges": lambda g: g.ecount(),
+#         "density": lambda g: g.density(),
+#         "fg_communities": lambda g: g.community_fastgreedy(),
+#         "community": lambda g: g.community_multilevel(),
+#         "assortativity": lambda g: g.assortativity_degree(),
+#         "betweenness": lambda g: g.betweenness(),
+#         "degree": lambda g: g.degree(),
+#         "closeness": lambda g: g.closeness(),
+#         "eigen_centrality": lambda g: g.eigenvector_centrality(),
+#         "shortest_path_length": lambda g: g.distances(),
+#         "radius": lambda g: g.radius(),
+#         "diameter": lambda g: g.diameter(),
+#         "average_path_length": lambda g: g.average_path_length(),
+#         "clustering_coefficient": lambda g: g.transitivity_undirected(),
+#         "jaccard_coefficient": lambda g: g.similarity_jaccard(),
+#         "pagerank": lambda g: g.pagerank(),
+#         "fg_modularity": lambda g: g.community_fastgreedy().as_clustering(),
+#         "average_clustering": lambda g: g.transitivity_avglocal_undirected(),
+#         "average_local_clustering": lambda g: g.transitivity_local_undirected(),
+#         "transitivity_undirected": lambda g: g.transitivity_undirected(),
+#     }
+#
+#     # Calculate metrics for all graphs passed to class
+#     def calculate_metrics(self, selected_metrics=None):
+#         if selected_metrics is None:
+#             selected_metrics = self.available_metrics.keys()
+#
+#         calculated_metrics = {}
+#
+#         for graph_name, graph in self.graph_dict.items():
+#             metrics_for_graph = {}
+#             for metric in selected_metrics:
+#                 metric_function = self.available_metrics[metric]
+#                 metrics_for_graph[metric] = metric_function(graph)
+#             calculated_metrics[graph_name] = metrics_for_graph
+#
+#         return calculated_metrics
+#
+#     def get_metrics(self, graph_dict_or_function=None, cell_lines=None, chromosomes=None, resolutions=None, metrics: Union[None, dict, list] = None, root_dir=None):
+#         """
+#         Filter metrics from dict, function returning dict or from root directory containing edgelists
+#         :param cell_lines: cell lines to filter on
+#         :param graph_dict_or_function: input as dictionary or function returning dictionary
+#         :param chromosomes: chromosome to filter on
+#         :param resolutions: specific resolution to filter on
+#         :param metrics: network metrics to calculate
+#         :param root_dir: root dir containing edge lists (if calculating metrics from edge lists)
+#         :return: dict containing graph objects and metrics
+#         """
+#
+#         graph_dict = {}
+#
+#         # If root_dir is provided, create graph_dict from the directory
+#         if root_dir is not None:
+#             graph_creator = CreateGraphsFromDirectory(root_dir)
+#             graph_creator.from_edgelists()
+#             graph_dict = graph_creator.graph_dict
+#         else:
+#             # If graph_dict_or_function is a function, call it to get the graph_dict
+#             if callable(graph_dict_or_function):
+#                 graph_dict = graph_dict_or_function()
+#             # If graph_dict_or_function is a dictionary, use it directly
+#             elif isinstance(graph_dict_or_function, dict):
+#                 graph_dict = graph_dict_or_function
+#
+#         # Filter the graph_dict based on the filtering criteria
+#         if cell_lines or chromosomes or resolutions:
+#             graph_dict = CreateGraphsFromDirectory("").filter_graphs(graph_dict=graph_dict, chromosomes=chromosomes, resolutions=resolutions)
+#
+#         # Filter the edges within the graph objects based on the chromosome information
+#         if chromosomes:
+#             for graph_name, graph in graph_dict.items():
+#                 df = pd.DataFrame([(e.source_vertex['name'], e.target_vertex['name']) for e in graph.es], columns=['source', 'target'])
+#                 df = df[df['source'].str.startswith(tuple(chromosomes)) & df['target'].str.startswith(tuple(chromosomes))]
+#                 graph = ig.Graph.TupleList(df.itertuples(index=False), directed=False)
+#                 graph_dict[graph_name] = graph
+#
+#         # If metrics is None, use all available metrics
+#         if metrics is None:
+#             metrics = cls.available_metrics
+#         # If metrics is a list, filter the default_metrics dictionary
+#         elif isinstance(metrics, list):
+#             metrics = {metric.lower(): cls.available_metrics[metric.lower()] for metric in metrics}
+#
+#         metrics_data = {}
+#         for graph_name, graph in graph_dict.items():
+#             metrics_data[graph_name] = {}
+#             for metric_name, metric_function in metrics.items():
+#                 metric_value = metric_function(graph)
+#                 metrics_data[graph_name][metric_name] = metric_value
+#
+#         return metrics_data
+#
+#     @classmethod
+#     def print_metrics(cls, metrics_dict, metric_names=None):
+#         if metric_names is None:
+#             metric_names = []
+#
+#         for graph_name, metrics in metrics_dict.items():
+#             print(f"Metrics for {graph_name}:")
+#             for metric_name, metric_value in metrics.items():
+#                 if metric_name in metric_names and callable(metric_value):
+#                     try:
+#                         metric_value = metric_value()
+#                     except TypeError:
+#                         if metric_name == "fg_modularity":
+#                             membership = metric_value.community_multilevel().membership
+#                             metric_value = metric_value.modularity(membership)
+#                         else:
+#                             raise ValueError(f"Unsupported metric '{metric_name}'")
+#                 print(f"  {metric_name}: {metric_value}")
+#             print()
