@@ -294,3 +294,55 @@ find_cols(nchg_out_file)
 #                             raise ValueError(f"Unsupported metric '{metric_name}'")
 #                 print(f"  {metric_name}: {metric_value}")
 #             print()
+
+
+
+# class InteractivePlotNetworkxGraphs:
+#
+#     def __init__(self, networkx_graph_dict):
+#         self.networkx_graph_dict = networkx_graph_dict
+#
+#     def plot(self):
+#         for graph_key, nx_graph in self.networkx_graph_dict.items():
+#             # Use a spring layout to position the nodes
+#             pos = nx.spring_layout(nx_graph, seed=42)
+#
+#             # Create node trace
+#             node_trace = go.Scatter(mode='markers+text', textposition='bottom center',
+#                                     hoverinfo='text', marker=dict(showscale=False, size=20, colorscale='Viridis', reversescale=True, colorbar=dict(thickness=15, title='Node Connections', xanchor='left', titleside='right')))
+#
+#             # Create edge trace
+#             edge_trace = go.Scatter(line=dict(width=0.5, color='#888'), hoverinfo='none', mode='lines')
+#
+#             node_x, node_y, node_text, node_colors = [], [], [], []
+#             edge_x, edge_y = [], []
+#
+#             # Add nodes and edges to the traces
+#             for node, adjacencies in enumerate(nx_graph.adjacency()):
+#                 x, y = pos[node]
+#                 node_x.append(x)
+#                 node_y.append(y)
+#                 node_colors.append(len(adjacencies[1]))
+#                 node_info = f"{node} - # of connections: {len(adjacencies[1])}"
+#                 node_text.append(node_info)
+#
+#                 for neighbor in adjacencies[1].keys():
+#                     x0, y0 = pos[node]
+#                     x1, y1 = pos[neighbor]
+#                     edge_x.extend([x0, x1, None])
+#                     edge_y.extend([y0, y1, None])
+#
+#             node_trace.update(x=node_x, y=node_y, text=node_text, marker=dict(color=node_colors))
+#             edge_trace.update(x=edge_x, y=edge_y)
+#
+#             # Customize the plot appearance
+#             fig = go.Figure(data=[edge_trace, node_trace],
+#                             layout=go.Layout(title=graph_key, showlegend=False, hovermode='closest',
+#                                              margin=dict(b=20, l=5, r=5, t=40),
+#                                              xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+#                                              yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)))
+#             fig.show()
+
+
+# interactive_plotter = InteractivePlotNetworkxGraphs(ConvertIgraphToNetworkx(chr18_inc_norm_graphs_50kb()).convert())
+# interactive_plotter.plot()

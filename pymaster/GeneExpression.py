@@ -16,3 +16,6 @@
 
 # TODO plotting:
 #  1. Make a plot that shows nodes colored by gene expression (what metric?), takes a graph dict as input with gene expression data integrated as input.
+
+
+
