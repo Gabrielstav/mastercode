@@ -424,8 +424,13 @@ class Pipeline:
             with open(blacklisted_regions_path, "r") as f:
                 blacklisted_regions = f.readlines()
 
+            # Filter out mitochondrial DNA and Y chromosome
+            with open(bedpe_file, "r") as f:
+                bedpe_data = f.readlines()
+            filtered_bedpe_data = [line for line in bedpe_data if not any(chrom in line for chrom in ["chrM", "chrY"])]
+
             blacklisted_pbt = pbt.BedTool(blacklisted_regions)
-            blacklisted_bedpe = pbt.BedTool(bedpe_file)
+            blacklisted_bedpe = pbt.BedTool(filtered_bedpe_data)
 
             window_size = int(re.search(r"(\d+)[^/\d]*$", bedpe_file).group(1))
             if not isinstance(window_size, int):

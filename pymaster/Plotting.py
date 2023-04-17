@@ -55,11 +55,14 @@ mcf7_chr18_1mb()
 # TODO: Make plotting class that takes any graph dict from any class in Network_Metrics and plots it as a network
 #   need to compare the LCC to the full graphs, because the number of communities and merges are the same but the sizes are different.
 
+
 class plot_graph:
+
     def __init__(self, graph_dict, output_dir):
         self.graph_dict = graph_dict
         self.output_dir = output_dir
 
+    @staticmethod
     def abbreviate_label(self, label, resolution):
         chrom, region = label.split(':')
         start, end = region.split('-')
@@ -99,7 +102,7 @@ class plot_graph:
     def save_graph(self):
         for graph_name, graph in self.graph_dict.items():
             visual_style = {"vertex_size": 1, "vertex_label": graph.vs["name"], "layout": graph.layout("kk")}
-            # Remove any special characters from the graph name to use it as a file name
+            # Remove special characters from graph name to use as file name:
             safe_graph_name = "".join(e for e in graph_name if e.isalnum() or e == "_")
             output_filename = self.output_dir / f"{safe_graph_name}.png"
             ig.plot(graph, output_filename, **visual_style)
@@ -108,28 +111,38 @@ class plot_graph:
 def plot_full():
     dir_manager = SetDirectories()
     output_dir = dir_manager.get_output_dir()
-
     plot = plot_graph(mcf7_chr18_1mb(), output_dir)
     plot.show_graph()
-
 # plot_full()
 
 def plot_lcc():
     dir_manager = SetDirectories()
     output_dir = dir_manager.get_output_dir()
-
     graph_dict = mcf7_chr18_1mb()
     plot = plot_graph(graph_dict, output_dir)
-
     largest_component_obj = NM.LargestComponent(graph_dict)
     plot.show_graph_with_lcc(largest_component_obj)
-
 plot_lcc()
 
 
-# TODO: Make LCC plot, where the network is plotted with the LCC highlighted, takes graph dict as input.
-
 # TODO: Make stacked bar plots showing ratio of nodes in LCC to total nodes for each cell line and each resolution, takes graph dicts as input.
+
+class plot_lcc_ratio:
+    def __init__(self, graph_dict, output_dir):
+        self.graph_dict = graph_dict
+        self.output_dir = output_dir
+
+    def get_lcc_ratio(self):
+        for graph_name, graph in self.graph_dict.items():
+            lcc = NM.LCC_ratio(graph).calculate_lcc_ratio()
+
+    def plot_lcc_ratio_bar(self):
+        for graph_name, graph in self.graph_dict.items():
+            lcc = graph.components(mode="weak").giant()
+            lcc_ratio = len(lcc.vs) / len(graph.vs)
+            print(f"{graph_name}: {lcc_ratio}")
+
+
 
 # TODO: Make degree distribution plots for each cell lines LCC for each chromosome, per resolution? Takes graph dict as input.
 

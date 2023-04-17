@@ -1,6 +1,73 @@
 # Use fit hic instead of NCHG?
 # Find papaer and read it.
-import os.path
+# import os.path
+
+# Old implementation of run nchg:
+
+# old implementation
+# nchg_run = sp.run(nchg_command, capture_output=True, check=True)
+# print(f"Finished processing file: {bedpe_file}, PID: {os.getpid()}, TID: {threading.get_ident()}")
+# return nchg_run.stdout.decode("utf-8").split("\t")
+
+# Old implementation of find_files:
+
+# @staticmethod
+# def find_files(*root_directories):
+#     """
+#     Finds all files bed and matrix files in the raw data subdirectory of the root directory.
+#     :param root_directories: one or more root directories to search in
+#     :param resolutions: list of resolutions to search for
+#     :return: a list of file paths for each BED and matrix file found
+#     """
+#
+#     raw_subdirectory_name = "raw"
+#     iced_subdirectory_name = "iced"
+#     bedfiles = []
+#     matrixfiles = []
+#     iced_matrixfiles = []
+#     resolutions_provided = SetDirectories.get_resolutions()
+#
+#     # Find the raw data subdirectory in the root directory
+#     raw_subdirectories = []
+#     for root_directory in root_directories:
+#         for root, _, _ in os.walk(root_directory):
+#             if os.path.basename(root) == raw_subdirectory_name:
+#                 raw_subdirectories.append(root)
+#
+#     # Old implementation
+#     # Recursively search raw data subdirectory for bed and matrix files
+#     for subdirectory_path in raw_subdirectories:
+#         for root, _, files in os.walk(subdirectory_path):
+#             for file in files:
+#                 if file.endswith(".bed"):
+#                     bedfiles.append(os.path.join(root, file))
+#                 if file.endswith(".matrix"):
+#                     matrixfiles.append(os.path.join(root, file))
+#
+#     # Find the ICE-normalized data subdirectory in the root directory
+#     iced_subdirectories = []
+#     for root_directory in root_directories:
+#         for root, _, _ in os.walk(root_directory):
+#             if os.path.basename(root) == iced_subdirectory_name:
+#                 iced_subdirectories.append(root)
+#
+#     # Old implementation
+#     # # Recursively search ICE-normalized data subdirectory for matrix files
+#     for subdirectory_path in iced_subdirectories:
+#         for root, _, files in os.walk(subdirectory_path):
+#             for file in files:
+#                 if file.endswith(".matrix"):
+#                     iced_matrixfiles.append(os.path.join(root, file))
+#
+#     return bedfiles, matrixfiles, iced_matrixfiles
+
+
+
+
+
+
+
+
 
 # Set the path to the Fit-Hi-C executable
 # fit_hic_executable = "path/to/fitHiC.py"
