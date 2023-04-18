@@ -2,6 +2,65 @@
 # Find papaer and read it.
 # import os.path
 
+# Old implementation of find files:
+
+# @staticmethod
+# def find_files(*root_directories):
+#     raw_subdirectory_name = "raw"
+#     iced_subdirectory_name = "iced"
+#     bedfiles = []
+#     matrixfiles = []
+#     iced_matrixfiles = []
+#     resolutions_provided = SetDirectories.get_resolutions()
+#
+#     # Find the raw data subdirectory in the root directory
+#     raw_subdirectories = []
+#     for root_directory in root_directories:
+#         for root, _, _ in os.walk(root_directory):
+#             if os.path.basename(root) == raw_subdirectory_name:
+#                 raw_subdirectories.append(root)
+#
+#     # Find the ICE-normalized data subdirectory in the root directory
+#     iced_subdirectories = []
+#     for root_directory in root_directories:
+#         for root, _, _ in os.walk(root_directory):
+#             if os.path.basename(root) == iced_subdirectory_name:
+#                 iced_subdirectories.append(root)
+#
+#     # Helper function to filter files based on resolution
+#     def filter_files_on_resolution(files):
+#         filtered_files = []
+#         for file in files:
+#             file_name = os.path.basename(file)
+#             resolution_match = re.search(r'_(\d+)[_.]', file_name)
+#             if resolution_match:
+#                 resolution = int(resolution_match.group(1))
+#                 if resolutions_provided is None or resolution in resolutions_provided:
+#                     filtered_files.append(file)
+#         return filtered_files
+#
+#     # Recursively search raw data subdirectory for bed and matrix files
+#     for subdirectory_path in raw_subdirectories:
+#         for root, _, files in os.walk(subdirectory_path):
+#             bed_files = [os.path.join(root, file) for file in files if file.endswith(".bed")]
+#             matrix_files = [os.path.join(root, file) for file in files if file.endswith(".matrix")]
+#             bedfiles.extend(filter_files_on_resolution(bed_files, resolutions_provided))
+#             # Debug line
+#             print(f"Bedfiles found: {bedfiles}")
+#             matrixfiles.extend(filter_files_on_resolution(matrix_files, resolutions_provided))
+#             # Debug line
+#             print(f"Matrixfiles found: {matrixfiles}")
+#
+#     # Recursively search ICE-normalized data subdirectory for matrix files
+#     for subdirectory_path in iced_subdirectories:
+#         for root, _, files in os.walk(subdirectory_path):
+#             iced_matrix_files = [os.path.join(root, file) for file in files if file.endswith(".matrix")]
+#             iced_matrixfiles.extend(filter_files_on_resolution(iced_matrix_files, resolutions_provided))
+#             # Debug line
+#             print(f"Iced Matrixfiles found: {iced_matrixfiles}")
+#
+#     return bedfiles, matrixfiles, iced_matrixfiles
+
 # Old implementation of run nchg:
 
 # old implementation

@@ -53,7 +53,6 @@ help_message = "Pipeline for processing Hi-C data from HiC-Pro to statistically 
                "INT: Resolution values can be provided to run the pipeline on specific resolutions (needs to match resolutions available in HiC-Pro output folder). \n" \
                "The script will run on all resolutions if no resolution values are provided. \n\n" \
 
-
 parser = argparse.ArgumentParser(description=help_message, formatter_class=argparse.RawDescriptionHelpFormatter)
 
 parser.add_argument("-i", "--input_dir", help="Directory containing HiC-Pro output folders (bed and matrix files)", required=False)
@@ -82,7 +81,6 @@ fdr_threshold = args.fdr_threshold
 threads = args.threads
 resolutions = args.resolutions
 
-
 def check_file_exists(file_path):
     if os.path.exists(file_path):
         print(f"File {file_path} exists")
@@ -103,7 +101,7 @@ class SetDirectories:
     output_dir = os.path.abspath("/Users/GBS/Master/HiC-Data/testing_chrom_parallelization/output_terminal")
     reference_dir = os.path.abspath("/Users/GBS/Master/Reference")
     nchg_path = os.path.abspath("/Users/GBS/Master/Scripts/NCHG_hic/NCHG")
-    normalized_data = True  # Checks for ICE normalized data in matrix folder
+    normalized_data = None  # Checks for ICE normalized data in matrix folder
     inter_interactions = False  # If true, considers both intra- and inter-chromosomal interactions for statistical testing
     intra_interactions = True  # If true, considers only intra-chromosomal interactions for statistical testing
     mixed_interactions = False  # If true, considers both inter- and intra-chromosomal interactions for statistical testing on file-by-file basis, using in the NCHG script.
@@ -222,6 +220,7 @@ class SetDirectories:
         return pbt_temp_dir
 
 
+
 # Sets input, output and reference directories and flags if to values held in SetDirectories class if not provided by user on command line
 if input_directory is not None:
     SetDirectories.set_input_dir(input_directory)
@@ -240,6 +239,9 @@ if norm_option is not None:
         SetDirectories.set_normalized_data(False)
     elif norm_option in ["iced", "norm", "normalized"]:
         SetDirectories.set_normalized_data(True)
+else:
+    # Set the default value for normalized_data if no -m flag is provided
+    SetDirectories.set_normalized_data(True)
 
 if mixed_interactions is not None:
     SetDirectories.set_mixed_interactions(mixed_interactions)
@@ -273,6 +275,7 @@ class Pipeline_Input:
         matrixfiles = []
         iced_matrixfiles = []
         resolutions_provided = SetDirectories.get_resolutions()
+        print_error_message = True
 
         # Find the raw data subdirectory in the root directory
         raw_subdirectories = []
@@ -288,31 +291,48 @@ class Pipeline_Input:
                 if os.path.basename(root) == iced_subdirectory_name:
                     iced_subdirectories.append(root)
 
-        # Helper function for filtering files based on resolution
-        def filter_files_on_resolution(files, resolutions_provided):
+        def filter_files_on_resolution(files, found_resolutions):
             filtered_files = []
             for file in files:
                 file_name = os.path.basename(file)
-                resolution_match = re.search(r'_(\d+)_', file_name)
+                resolution_match = re.search(r'_(\d+)[_.]', file_name)
                 if resolution_match:
                     resolution = int(resolution_match.group(1))
                     if resolutions_provided is None or resolution in resolutions_provided:
                         filtered_files.append(file)
-            return filtered_files
+                    found_resolutions.add(resolution)
+            return filtered_files, found_resolutions
+
+        found_resolutions = set()
 
         # Recursively search raw data subdirectory for bed and matrix files
         for subdirectory_path in raw_subdirectories:
             for root, _, files in os.walk(subdirectory_path):
                 bed_files = [os.path.join(root, file) for file in files if file.endswith(".bed")]
                 matrix_files = [os.path.join(root, file) for file in files if file.endswith(".matrix")]
-                bedfiles.extend(filter_files_on_resolution(bed_files, resolutions_provided))
-                matrixfiles.extend(filter_files_on_resolution(matrix_files, resolutions_provided))
+                filtered_bed_files, found_resolutions = filter_files_on_resolution(bed_files, found_resolutions)
+                bedfiles.extend(filtered_bed_files)
+                filtered_matrix_files, found_resolutions = filter_files_on_resolution(matrix_files, found_resolutions)
+                matrixfiles.extend(filtered_matrix_files)
 
         # Recursively search ICE-normalized data subdirectory for matrix files
         for subdirectory_path in iced_subdirectories:
             for root, _, files in os.walk(subdirectory_path):
                 iced_matrix_files = [os.path.join(root, file) for file in files if file.endswith(".matrix")]
-                iced_matrixfiles.extend(filter_files_on_resolution(iced_matrix_files, resolutions_provided))
+                filtered_iced_matrix_files, found_resolutions = filter_files_on_resolution(iced_matrix_files, found_resolutions)
+                iced_matrixfiles.extend(filtered_iced_matrix_files)
+
+        # Get resolutions found in the data from the filtered files (OLD; but works)
+        file_counts = {
+            'bedfiles': len(bedfiles),
+            'matrixfiles': len(matrixfiles),
+            'iced_matrixfiles': len(iced_matrixfiles)
+        }
+
+        # If no files were found for the provided resolutions, print an error message
+        if all(count == 0 for count in file_counts.values()) and resolutions_provided is not None:
+            print(f"No files found for the provided resolutions: {resolutions_provided}. "
+                  f"Resolutions found in the data: {found_resolutions}")
 
         return bedfiles, matrixfiles, iced_matrixfiles
 
@@ -324,11 +344,8 @@ class Pipeline_Input:
         :return: dict of file paths for each BED and matrix file found, grouped by resolution and experiment
         """
 
-        bedfiles = Pipeline_Input.find_files(*dirs)[0]
-        matrixfiles = Pipeline_Input.find_files(*dirs)[1]
-        iced_matrixfiles = Pipeline_Input.find_files(*dirs)[2]
+        bedfiles, matrixfiles, iced_matrixfiles = Pipeline_Input.find_files(*dirs)
         inted_iced_matrixfiles = []
-        # resolutions = SetDirectories.get_resolutions()
 
         # Round floats in ICE-normalized matrix files to integers if using ICE normalization
         if SetDirectories.get_normalized_data():
@@ -409,13 +426,16 @@ class Pipeline_Input:
 
         return grouped_files_checked
 
+
 first_print = True
+
 def custom_print(*argss, **kwargs):
     global first_print
     if first_print:
         print("\n", end="")
         first_print = False
     print(*argss, **kwargs)
+
 
 class Pipeline:
 
@@ -484,7 +504,6 @@ class Pipeline:
             experiment = '_'.join(filter(None, experiment.split('_')))
             resolution = '_'.join(filter(None, resolution.split('_')))
 
-            # Should separate the string formatting from the file handling?
             bedfile = val[0]
             matrixfile = val[1]
             bedpe = Pipeline.make_bedpe(bedfile, matrixfile)
@@ -679,7 +698,7 @@ class Pipeline:
             if not SetDirectories.inter_interactions and not SetDirectories.intra_interactions and not SetDirectories.mixed_interactions:
                 raise ValueError("Must select at least one type of interaction type for significance testing: Inter, intra, or mixed.")
 
-            # Run NCHG and clean up complete processes
+            # Run NCHG and clean up completed processes
             nchg_command = [SetDirectories.get_nchg_path(), bedpe_file, "-m", str(window_size), "-p"] + nchg_flags
             nchg_run = sp.Popen(nchg_command, stdout=sp.PIPE, stderr=sp.PIPE)
             stdout, stderr = nchg_run.communicate()
@@ -781,9 +800,12 @@ class Pipeline:
                     nchg_output = future
                     input_file = input_file_map[bedpe_file]
                     output_file_data[input_file].append(nchg_output)
+
                 except Exception as e:
                     tid = threading.get_ident()
                     print(f"Error processing {bedpe_file}: {e}, PID: {os.getpid()}, TID: {tid}")
+
+        executor.shutdown(wait=True)
 
         # Merge output files back together
         for input_file, nchg_outputs in output_file_data.items():
@@ -1003,14 +1025,13 @@ def run_pipeline():
 
     start_time = time.time()
 
-    # List of static method names to call
+    # List of methods to call
     method_names = [
         (lambda: Pipeline.input_to_make_bedpe(Pipeline_Input.group_files(SetDirectories.get_input_dir()))),
         "input_to_remove_blacklist",
         "input_to_remove_cytobands",
         "input_to_nchg",
         "input_to_adjust_pvalues",
-        "input_to_make_weighted_edgelist",
         "input_to_make_edgelist"
     ]
 
