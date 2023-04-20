@@ -29,15 +29,16 @@ class SetDirectories:
     def get_output_dir(self):
         return self.root_dir
 
-
-def mcf7_10_raw_lowres_graphs():
+# MCF7 and MCF10 from chrom parallel inter (raw)
+def mcf7_10_raw_lowres_graphs_inter():
     root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/lowres_mcf7_mcf10/raw")
     graph_creator = NM.CreateGraphsFromDirectory(root_dir)
     graph_creator.from_edgelists()
     mcf7_10_graphs = graph_creator.graph_dict
     return mcf7_10_graphs
 
-def mcf7_10_norm_lowres_graphs():
+# MCF7 and MCF10 from chrom parallel inter (norm)
+def mcf7_10_norm_lowres_graphs_inter():
     root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/lowres_mcf7_mcf10/norm")
     graph_creator = NM.CreateGraphsFromDirectory(root_dir)
     graph_creator.from_edgelists()
@@ -46,7 +47,7 @@ def mcf7_10_norm_lowres_graphs():
 
 
 def mcf7_chr18_1mb():
-    graph_filter = NM.FilterGraphs(mcf7_10_norm_lowres_graphs())
+    graph_filter = NM.FilterGraphs(mcf7_10_norm_lowres_graphs_inter())
     filtered_graphs = graph_filter.filter_graphs(cell_lines=["mcf10"], chromosomes=["chr18"], resolutions=["500000"])
     # graph_filter.print_filtered_edges(filtered_graphs)
     return filtered_graphs

@@ -55,6 +55,8 @@ parser.add_argument("-n", "--nchg_path", help="Path to NCHG executable", require
 parser.add_argument("-m", "--norm_option", help="Normalization option", choices=["raw", "iced", "norm", "normalized"], required=False)
 parser.add_argument("-w", "--whole_genome", help="Consider inter-chromosomal interactions for statistical testing using in the NCHG script.", action="store_true", required=False)
 parser.add_argument("-t", "--threads", help="Int: Number of threads to use for processing. Default is cores available on machine. Always specify on HPC cluster.", required=False)
+parser.add_argument("-f", "--fdr_threshold", help="Float: FDR threshold for significance. Default is 0.05.", required=False, type=float)
+parser.add_argument("-res", "--resolutions", help="Int: Resolution values can be provided to run the pipeline on specific resolutions.", required=False, nargs="+", type=int)
 args = parser.parse_args()
 
 # Sets args to None if not provided in command line

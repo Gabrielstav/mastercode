@@ -66,6 +66,7 @@ parser.add_argument("-mixed", "--mixed_interactions", help="Consider inter-chrom
 parser.add_argument("-t", "--threads", help="Int: Number of threads to use for processing. Default is cores available on machine. Always specify on HPC cluster.", required=False)
 parser.add_argument("-f", "--fdr_threshold", help="Float: FDR threshold for significance. Default is 0.05.", required=False, type=float)
 parser.add_argument("-res", "--resolutions", help="Int: Resolution values can be provided to run the pipeline on specific resolutions.", required=False, nargs="+", type=int)
+parser.add_argument("-e", "--executor", choices=["m", "t", "multiprocessing", "threading"], default="multiprocessing", help="Choose between multiprocessing and threading for the find_significant_interactions method. Default is threading")
 args = parser.parse_args()
 
 # Sets args to None if not provided in command line
@@ -80,6 +81,7 @@ mixed_interactions = args.mixed_interactions
 fdr_threshold = args.fdr_threshold
 threads = args.threads
 resolutions = args.resolutions
+executor_type = args.executor
 
 def check_file_exists(file_path):
     if os.path.exists(file_path):
@@ -108,6 +110,7 @@ class SetDirectories:
     threads = os.cpu_count()  # Sets threads to number of cores on machine, can be overwritten by user input in command line
     fdr_threshold = 0.05  # Sets FDR threshold for significance, can be overwritten by user input in command line
     resolutions = None  # Sets resolutions to None, can be overwritten by user input in command line
+    nchg_executor = "threading"  # Sets executor to threading by default (tested to be fastest), can be overwritten by user input in command line or here.
 
     @classmethod
     def set_normalized_data(cls, normalized_data):
@@ -193,6 +196,15 @@ class SetDirectories:
     def set_temp_dir(cls, temp_dir):
         cls.temp_dir = os.path.abspath(temp_dir)
 
+    # Newline
+    @classmethod
+    def set_nchg_executor(cls, nchg_executor):
+        cls.executor = nchg_executor
+
+    @classmethod
+    def get_nchg_executor(cls):
+        return cls.executor
+
     @staticmethod
     def get_temp_dir():
         temp_dir = SetDirectories.get_output_dir() + "/temp_dir"
@@ -259,6 +271,14 @@ if threads is not None:
 
 if resolutions is not None:
     SetDirectories.set_resolutions(resolutions)
+
+if executor_type == "m":
+    executor_type = "multiprocessing"
+elif executor_type == "t":
+    executor_type = "threading"
+
+if executor_type is not None:
+    SetDirectories.set_nchg_executor(executor_type)
 
 # Sets temporary directory for pbt without cleanup
 pbt.set_tempdir(SetDirectories.get_pbt_temp_dir())
@@ -791,9 +811,11 @@ class Pipeline:
                 input_file_map[chr_file] = file
             all_chr_files.extend(chr_files)
 
+        # Newline
         # Run find_significant_interactions on chromosome-specific files in parallel
         output_file_data = defaultdict(list)
-        with concurrent.futures.ProcessPoolExecutor(max_workers=SetDirectories.get_threads()) as executor:
+        executorclass = concurrent.futures.ProcessPoolExecutor if executor_type == 'multiprocessing' else concurrent.futures.ThreadPoolExecutor
+        with executorclass(max_workers=SetDirectories.get_threads()) as executor:
             futures = list(executor.map(Pipeline.find_significant_interactions, all_chr_files))
             for bedpe_file, future in zip(all_chr_files, futures):
                 try:
