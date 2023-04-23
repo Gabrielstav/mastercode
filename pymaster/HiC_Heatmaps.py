@@ -9,7 +9,7 @@ import re as re
 from Pipeline import SetDirectories
 
 
-# TODO: Kinda low priority, but might be nice later?
+# TODO: Make plots of Hi-C heat maps to compare with LCC plots.
 
 # Read in BEDPE file
 def bedpe_directory():

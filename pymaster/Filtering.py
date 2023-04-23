@@ -3,118 +3,9 @@ from dataclasses import dataclass
 from Pipeline import SetDirectories
 import os as os
 
-# TODO:
-#   Write down structure of classes and methods, start broadly with what they need to do and what they should output...
-#   Think about what each class represents, the levels of abstraction, and the output of each class.
-
-# TODO: Refactor to read in edge lists from Pipeline
-# TODO: Finish chromosome and resolution filter methods
-# TODO: Make "as list" and "as dict" methods (not needed just save as files, to avoid using 10 different APIs)
-# TODO: Calculate overlap between nodes across cell lines, might not have any overlap in nodes
-
-# Set directories containing edge lists (theycan be names anything, but if they come from the Pipeline class they follow the standard naming convention.
-# So check if they follow the standard naming convention, if they do,
-# Standard naming: experiment_resolution_edgelist.txt, eg: IMR90_10000_edgelist.txt or chr18_lowres_500000_edgelist.txt
-# The root folder containing each set of raw data is the experiment name, e.g in out case chr18_lowres (can be for celline as well).
-
-# Where experiment is the Job name in HiC-Pro, and resolution is the resolution of the Hi-C data in bp.
-# But IDK what I'll name things yet when I run things on HPC yet, so just leave as is now I think, and then refactor later.
-
-# After setting input directories, we can read in the files, and process them to nodes.
-# The Node class has the following attributes: ID, edges, chromosome, start, end. Think start and end is nice for calculating overla with other nodes from other experiments later.
-# Or maybe redundant since Bedtools might be possible to use? IDK yet.
-
-# The next level of abstraction should be experiment dataclass (Cell line, chromosome_lowres etc)
-# containing list of all nodes for that experiment, as well as metadata like resolution, experiment name (cell line or chromosome_hires etc)
-# Methods can be used to filter on resolution, chromosome, cell line etc.
-
-# The next level of abstraction should be a class containing all experiments, and can be used to calculate overlap between nodes across experiments.
-# We also need to call filtering methods on the experiments, to filter on resolution, chromosome etc.
-# It makes no sense to compare data across resolution since it compares different genomic regions defined by different contraints, so we need to filter on resolution.
-# Method can be used to calculate overlap between nodes across experiments, and the filtering things defined in the experiment/Node class.
-
-# TODO: The goal of this (and the only thing I NEED to do) is to be able to calculate overlap between nodes across experiments. So start with that.
-# TODO: Make comparisons between normalized and raw data somehow? Nah idk... the only point of these classes should be to filter data on crieria:
-#  (chr, res, experiment (cell lines), and then calculate things like overlap between nodes across experiments.
-#  all the networking occurs using other packages.
-
-
-class SetInputDir:
-    """
-    Sets input directory for processing, by default same as output directory used in Pipeline.
-    Overwrite default input directory by defining user defined input directory.
-    """
-
-    user_defined_input_dirs = None
-
-    @classmethod
-    def default_input_dir(cls):
-        default_input_dir = os.path.abspath(SetDirectories.get_output_dir())
-        return default_input_dir
-
-    @classmethod
-    def defined_input_dir(cls, user_defined_input_dir):
-        defined_input_dir = os.path.abspath(user_defined_input_dir)
-        return defined_input_dir
-
-    @classmethod
-    def get_input_dir(cls):
-        if SetInputDir.default_input_dir() is None and SetInputDir.defined_input_dir() is None:
-            return print("No input directory defined. Please define an input directory in SetInputDir class.")
-        if SetInputDir.defined_input_dir() is not None and SetInputDir.default_input_dir() is not None:
-            return print("Both default and user defined input directories are set. Please remove one of them.")
-        if SetInputDir.defined_input_dir() is None:
-            return [os.path.abspath(dirs) for dirs in SetInputDir.user_defined_input_dirs.split(";")]
-        else:
-            return [os.path.abspath(SetInputDir.default_input_dir())]
-
-
-@dataclass(frozen=True, eq=True)
-class nodelists:
-    id: str
-    edges = list[str]
-    chr: str
-    start: int
-    end: int
-
-    @classmethod
-    def process_edgelist_to_node(cls, *input_directories):
-        """
-        This method processes the files to nodes, and stores them in a list.
-        Input files are edge lists processed by the Pipeline class.
-        :param args: Directory containing the edge lists
-        :return: Instances of Node class
-        """
-
-        nodes = []
-        for input_dir in input_directories:
-            for file in os.listdir(input_dir):
-                if file.endswith(".txt"):
-                    with open(os.path.join(input_dir, file)) as f:
-                        for line in f:
-                            columns = line.strip().split("\t")
-                            # node = Node_test(columns[])
-                            node = nodelists(columns[3], columns[6].split(";"), columns[0], int(columns[4]), int(columns[5]))
-                            nodes.append(node)
-        return nodes
-
-    """
-    chr18:200000-250000  chr18-2650000:2700000
-    chr18:200000-250000  chr18-2700000:2750000
-    chr18:250000-300000  chr18-1000000:1050000
-    """
-
-    """ 
-    edgelists/chr18_lowres_50000_edgelist.txt
-    """
-
-
-
-
-
-
-
-
+# This is old and abandoned, but I'm keeping it for now, first attempt at using classes to process data :)
+# This functionality (and more) is now in Network_Metrics.py
+# Made to read in already pre-processed GTrack files and filter on them.
 
 @dataclass(frozen=True, eq=True)
 class Node:
@@ -221,7 +112,7 @@ class Cellines:
     # defualt dir to make calling methods faster
     @classmethod
     def from_default(cls):
-        return cls.from_dir("/Users/GBS/Master/HiC-Data/Hi-C_data_fra_Jonas/4linescopy")
+        return cls.from_dir("data")
 
     # instantiating Celline class
     # and pre-processing gtrack files in directory
@@ -276,23 +167,13 @@ class Cellines:
         return Cellines(chromosomes_gotten)
 
 
-# # list of all cellines
+# List of all cellines
 # all_cellines = Cellines.from_default()
-#
-# # examples of use
+
+# Examples of use:
 # K562_iso = Cellines.from_default().with_strain("K562").only_iso()
 # HMEC_con = Cellines.from_default().with_strain("HMEC").only_con()
 # HMEC_iso = Cellines.from_default().with_strain("HMEC").only_iso()  # .chromosome("1-10").as_dict() OR as.list()
-#
 # print(HMEC_con)
-#
-#
-# K562 = chromosome_nodes.chromosome(1-10).only_overlap() as_dict()
-#
-# Need to add functionality for filtering on chromosomes
-# and maybe write function that creates objects of the cell lines automatically
-# and maybe write function that can "export" the cell line objects in a correct format, check the iGraph API for instance
-#
-# Write method for chromosome filtering and transposing input
-# HUVEC_chr1_to_10 = Cellines.from_default().with_strain("HUVEC").only_con().with_chromosome("1-10")
+
 

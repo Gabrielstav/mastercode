@@ -1,4 +1,6 @@
 # Import modules
+from collections import defaultdict
+
 import igraph as ig
 from matplotlib import pyplot as plt
 from pathlib import Path
@@ -94,7 +96,9 @@ class FilterGraphs:
                 continue
 
             if resolutions is not None:
-                graph_name_resolution = re.search(r"_(\d+)_", graph_name).group(1)
+                # graph_name_resolution = re.search(r"_(\d+)_", graph_name).group(1)
+                print(f"Processing graph name: {graph_name}")
+                graph_name_resolution = re.search(r'(\d+)(?=\D*$)', graph_name).group(1)
                 if graph_name_resolution not in resolutions:
                     continue
 
@@ -257,7 +261,7 @@ class NetworkMetrics:
             print()
 
 
-class LCC_ratio:
+class LCC_Ratio:
 
     def __init__(self, graph_dict):
         self.graph_dict = graph_dict
@@ -270,9 +274,109 @@ class LCC_ratio:
             lcc_ratio_dict[graph_name] = parent_graph_size, lcc_graph_size
         return lcc_ratio_dict
 
+    def calculate_lcc_ratio_per_chromosome(self, chromosomes=None):
+        lcc_ratio_dict = defaultdict(list)
+
+        # Filter on chromosome and store unique chromosomes in set
+        if chromosomes is None:
+            # We can filter the graphs by chromosome and store the unique chromosome names in a set
+            chromosomes = set()
+            for graph_name, graph in self.graph_dict.items():
+                for edge in graph.es:
+                    source_chromosome = edge.source_vertex['name'].split(':')[0]
+                    target_chromosome = edge.target_vertex['name'].split(':')[0]
+                    chromosomes.add(source_chromosome)
+                    chromosomes.add(target_chromosome)
+
+        for chromosome in chromosomes:
+            filtered_graphs = FilterGraphs(self.graph_dict).filter_graphs(chromosomes=chromosome)
+            for graph_name, graph in filtered_graphs.items():
+                lcc_graph_size = graph.connected_components().giant().vcount()
+                parent_graph_size = graph.vcount()
+                lcc_ratio = lcc_graph_size / parent_graph_size
+                lcc_ratio_dict[chromosome].append(lcc_ratio)
+
+        return lcc_ratio_dict
+
     def print_lcc_ratio(self):
         for graph_name, graph in self.calculate_lcc_ratio().items():
             print(f"LCC ratio for: {graph_name} \n size: {graph[0]} \n size: {graph[1]}")
+
+
+class Filter_Graphs_on_Metrics:
+
+    def __init__(self, graph_dict, degree):
+        self.graph_dict = graph_dict
+        self.degree = degree
+
+    def filter_degree(self):
+        filtered_graph_dict = {}
+        for graph_name, graph in self.graph_dict.items():
+            nodes_to_keep = [v.index for v in graph.vs if v.degree() >= self.degree]
+            subgraph = graph.subgraph(nodes_to_keep)
+            filtered_graph_dict[graph_name] = subgraph
+        return filtered_graph_dict
+
+    def filter_on_size(self, size):
+        filtered_graph_dict = {}
+        for graph_name, graph in self.graph_dict.items():
+            components = graph.components()
+            large_components = [comp for comp in components if len(comp) >= size]
+            if large_components:
+                subgraph = graph.subgraph(large_components[0])
+                filtered_graph_dict[graph_name] = subgraph
+        return filtered_graph_dict
+
+
+
+
+
+class BetweennessCentrality:
+
+    def __init__(self, graph_dict):
+        self.graph_dict = graph_dict
+
+    def calculate_betweenness_centrality(self):
+        betweenness_centrality_dict = {}
+        for graph_name, graph in self.graph_dict.items():
+            betweenness_centrality_dict[graph_name] = graph.betweenness()
+        return betweenness_centrality_dict
+
+    def print_betweenness_centrality(self):
+        for graph_name, graph in self.calculate_betweenness_centrality().items():
+            print(f"Betweenness centrality for: {graph_name} \n {graph}")
+
+class ClosenessCentrality:
+
+    def __init__(self, graph_dict):
+        self.graph_dict = graph_dict
+
+    def calculate_closeness_centrality(self):
+        closeness_centrality_dict = {}
+        for graph_name, graph in self.graph_dict.items():
+            closeness_centrality_dict[graph_name] = graph.closeness()
+        return closeness_centrality_dict
+
+    def print_closeness_centrality(self):
+        for graph_name, graph in self.calculate_closeness_centrality().items():
+            print(f"Closeness centrality for: {graph_name} \n {graph}")
+
+class JaccardIndex:
+
+    def __init__(self, graph_dict):
+        self.graph_dict = graph_dict
+
+    def calculate_jaccard_index(self):
+        jaccard_index_dict = {}
+        for graph_name, graph in self.graph_dict.items():
+            jaccard_index_dict[graph_name] = graph.similarity_jaccard()
+        return jaccard_index_dict
+
+    def print_jaccard_index(self):
+        for graph_name, graph in self.calculate_jaccard_index().items():
+            print(f"Jaccard index for: {graph_name} \n {graph}")
+
+# class Alpaca:
 
 
 # TODO: Find lcc to total size ratio for each graph
@@ -347,106 +451,141 @@ class ConvertIgraphToNetworkx:
 
 if __name__ == "__main__":
 
-    # All raw graphs:
-    def mcf710_raw_graphs():
-        root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/lowres_mcf7_mcf10/raw")
+    # IMR90
+    def imr90_graphs():
+        root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/imr90/edgelists")
         graph_creator = CreateGraphsFromDirectory(root_dir)
         graph_creator.from_edgelists()
-        mcf710_graphs = graph_creator.graph_dict
-        return mcf710_graphs
-    print(mcf710_raw_graphs())
+        imr90_graphss = graph_creator.graph_dict
+        return imr90_graphss
+    print(imr90_graphs())
 
-    # All norm graphs:
-    def mcf710_norm_graphs():
-        root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/lowres_mcf7_mcf10/norm")
+    def imr90_chr18():
+        graph_filter = FilterGraphs(imr90_graphs())
+        filtered_graph = graph_filter.filter_graphs(chromosomes="chr18", resolutions="1000000")
+        graph_filter.print_filtered_edges()
+        return filtered_graph
+
+    # HUVEC
+    def huvec_graphs():
+        root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/huvec/edgelists")
         graph_creator = CreateGraphsFromDirectory(root_dir)
         graph_creator.from_edgelists()
-        mcf7_10_graphs = graph_creator.graph_dict
-        return mcf7_10_graphs
+        huvec_graphss = graph_creator.graph_dict
+        return huvec_graphss
 
-    print(mcf710_norm_graphs())
-
-    # MCF7 raw filtering
-    def mcf7_raw_filtered():
-        graph_filter = FilterGraphs(mcf710_raw_graphs())
-        filtered_graphs = graph_filter.filter_graphs(cell_lines=["mcf7"], chromosomes=["chr18"], resolutions=["1000000", "500000"])
-        # graph_filter.print_filtered_edges()
-        return filtered_graphs
-
-    mcf7_raw_filtered()
-
-    # MCF7 norm filtering
-    def mcf7_norm_filtered():
-        graph_filter = FilterGraphs(mcf710_norm_graphs())
-        filtered_graphs = graph_filter.filter_graphs(cell_lines=["mcf7"], chromosomes=["chr18"], resolutions=["1000000", "500000"])
-        return filtered_graphs
-
-    mcf7_norm_filtered()
-
-    # MCF10 raw filtering
-    def mcf10_raw_filtered():
-        graph_filter = FilterGraphs(mcf710_raw_graphs())
-        filtered_graphs = graph_filter.filter_graphs(cell_lines=["mcf10"], chromosomes=["chr18"], resolutions=["1000000", "500000"])
-        return filtered_graphs
-
-    # MCF10 norm filtering
-    def mcf10_norm_filtered():
-        graph_filter = FilterGraphs(mcf710_norm_graphs())
-        filtered_graphs = graph_filter.filter_graphs(cell_lines=["mcf10"], chromosomes=["chr18"], resolutions=["1000000", "500000"])
-        return filtered_graphs
-
-    # LCC for MCF10 raw vs norm
-    LargestComponent(mcf10_norm_filtered()).print_lcc()
-    LargestComponent(mcf10_raw_filtered()).print_lcc()
-
-    # LCC for MCF7 raw vs norm
-    LargestComponent(mcf7_norm_filtered()).print_lcc()
-    LargestComponent(mcf7_raw_filtered()).print_lcc()
-
-    # Metrics for MCF7 raw filtered:
-    def mcf7_raw_filtered_metrics():
-        metrics = NetworkMetrics.get_metrics(
-            graph_dict_or_function=mcf7_raw_filtered(),
-            metrics=[
-                "size", "edges", "fg_communities", "betweenness", "closeness", "degree", "average_path_length"
-            ])
-        return NetworkMetrics.print_metrics(metrics)
-
-    mcf7_raw_filtered_metrics()
+    def huvec_chr18():
+        graph_filter = FilterGraphs(huvec_graphs())
+        filtered_graph = graph_filter.filter_graphs(chromosomes="chr18", resolutions="1000000")
+        graph_filter.print_filtered_edges()
+        return filtered_graph
 
 
-    # Metrics for MCF7 norm filtered LCC:
-    def mcf7_norm_filtered_metrics():
-        metrics = NetworkMetrics.get_metrics(
-            graph_dict_or_function=LargestComponent(mcf7_norm_filtered()).find_lcc(),
-            metrics=[
-                "size", "edges", "fg_communities"
-            ])
-        return NetworkMetrics.print_metrics(metrics)
 
 
-    mcf7_norm_filtered_metrics()
 
-    # Metrics for MCF10 raw filtered:
-    def mcf10_raw_filtered_metrics():
-        metrics = NetworkMetrics.get_metrics(
-            graph_dict_or_function=mcf10_raw_filtered(),
-            metrics=[
-                "size", "edges", "fg_communities", "betweenness", "closeness", "degree", "average_path_length"
-            ])
-        return NetworkMetrics.print_metrics(metrics)
+    # # All raw graphs:
+    # def mcf710_raw_graphs():
+    #     root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/lowres_mcf7_mcf10/raw")
+    #     graph_creator = CreateGraphsFromDirectory(root_dir)
+    #     graph_creator.from_edgelists()
+    #     mcf710_graphs = graph_creator.graph_dict
+    #     return mcf710_graphs
+    # print(mcf710_raw_graphs())
 
-    # Metrics for MCF10 norm filtered:
-    def mcf10_norm_filtered_metrics():
-        metrics = NetworkMetrics.get_metrics(
-            graph_dict_or_function=LargestComponent(mcf10_norm_filtered()).find_lcc(),
-            metrics=[
-                "size", "edges", "fg_communities"
-            ])
-        return NetworkMetrics.print_metrics(metrics)
+    # # All norm graphs:
+    # def mcf710_norm_graphs():
+    #     root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/lowres_mcf7_mcf10/norm")
+    #     graph_creator = CreateGraphsFromDirectory(root_dir)
+    #     graph_creator.from_edgelists()
+    #     mcf7_10_graphs = graph_creator.graph_dict
+    #     return mcf7_10_graphs
+    #
+    # print(mcf710_norm_graphs())
 
-    # LCC ratio for MCF7 raw vs norm
-    LCC_ratio(mcf7_raw_filtered()).print_lcc_ratio()
-    LCC_ratio(mcf7_norm_filtered()).print_lcc_ratio()
-    LCC_ratio(mcf10_raw_filtered()).print_lcc_ratio()
-    LCC_ratio(mcf10_norm_filtered()).print_lcc_ratio()
+    # # MCF7 raw filtering
+    # def mcf7_raw_filtered():
+    #     graph_filter = FilterGraphs(mcf710_raw_graphs())
+    #     filtered_graphs = graph_filter.filter_graphs(cell_lines=["mcf7"], chromosomes=["chr18"], resolutions=["1000000", "500000"])
+    #     # graph_filter.print_filtered_edges()
+    #     return filtered_graphs
+
+    # mcf7_raw_filtered()
+    #
+    # # MCF7 norm filtering
+    # def mcf7_norm_filtered():
+    #     graph_filter = FilterGraphs(mcf710_norm_graphs())
+    #     filtered_graphs = graph_filter.filter_graphs(cell_lines=["mcf7"], chromosomes=["chr18"], resolutions=["1000000", "500000"])
+    #     return filtered_graphs
+    #
+    # mcf7_norm_filtered()
+    #
+    # # MCF10 raw filtering
+    # def mcf10_raw_filtered():
+    #     graph_filter = FilterGraphs(mcf710_raw_graphs())
+    #     filtered_graphs = graph_filter.filter_graphs(cell_lines=["mcf10"], chromosomes=["chr18"], resolutions=["1000000", "500000"])
+    #     return filtered_graphs
+    #
+    # # MCF10 norm filtering
+    # def mcf10_norm_filtered():
+    #     graph_filter = FilterGraphs(mcf710_norm_graphs())
+    #     filtered_graphs = graph_filter.filter_graphs(cell_lines=["mcf10"], chromosomes=["chr18"], resolutions=["1000000", "500000"])
+    #     return filtered_graphs
+    #
+    # # LCC for MCF10 raw vs norm
+    # LargestComponent(mcf10_norm_filtered()).print_lcc()
+    # LargestComponent(mcf10_raw_filtered()).print_lcc()
+    #
+    # # LCC for MCF7 raw vs norm
+    # LargestComponent(mcf7_norm_filtered()).print_lcc()
+    # LargestComponent(mcf7_raw_filtered()).print_lcc()
+    #
+    # # Metrics for MCF7 raw filtered:
+    # def mcf7_raw_filtered_metrics():
+    #     metrics = NetworkMetrics.get_metrics(
+    #         graph_dict_or_function=mcf7_raw_filtered(),
+    #         metrics=[
+    #             "size", "edges", "fg_communities", "betweenness", "closeness", "degree", "average_path_length"
+    #         ])
+    #     return NetworkMetrics.print_metrics(metrics)
+    #
+    # mcf7_raw_filtered_metrics()
+    #
+    #
+    # # Metrics for MCF7 norm filtered LCC:
+    # def mcf7_norm_filtered_metrics():
+    #     metrics = NetworkMetrics.get_metrics(
+    #         graph_dict_or_function=LargestComponent(mcf7_norm_filtered()).find_lcc(),
+    #         metrics=[
+    #             "size", "edges", "fg_communities"
+    #         ])
+    #     return NetworkMetrics.print_metrics(metrics)
+    #
+    #
+    # mcf7_norm_filtered_metrics()
+    #
+    # # Metrics for MCF10 raw filtered:
+    # def mcf10_raw_filtered_metrics():
+    #     metrics = NetworkMetrics.get_metrics(
+    #         graph_dict_or_function=mcf10_raw_filtered(),
+    #         metrics=[
+    #             "size", "edges", "fg_communities", "betweenness", "closeness", "degree", "average_path_length"
+    #         ])
+    #     return NetworkMetrics.print_metrics(metrics)
+    #
+    # # Metrics for MCF10 norm filtered:
+    # def mcf10_norm_filtered_metrics():
+    #     metrics = NetworkMetrics.get_metrics(
+    #         graph_dict_or_function=LargestComponent(mcf10_norm_filtered()).find_lcc(),
+    #         metrics=[
+    #             "size", "edges", "fg_communities"
+    #         ])
+    #     return NetworkMetrics.print_metrics(metrics)
+    #
+    # # LCC ratio for MCF7 raw vs norm
+    # LCC_ratio(mcf7_raw_filtered()).print_lcc_ratio()
+    # LCC_ratio(mcf7_norm_filtered()).print_lcc_ratio()
+    # LCC_ratio(mcf10_raw_filtered()).print_lcc_ratio()
+    # LCC_ratio(mcf10_norm_filtered()).print_lcc_ratio()
+
+

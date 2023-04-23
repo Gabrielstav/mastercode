@@ -12,39 +12,52 @@ import re as re
 import argparse as argparse
 import pickle as pickle
 import threading as threading
+from collections import defaultdict
+import concurrent.futures
 
+####################################################
+# Pre-processing pipeline for Hi-C data from HiC-Pro
+####################################################
 
-
-
-#########################################################################################
-# Pre-processing pipeline for Hi-C data from HiC-Pro (command line version, parallelized)
-#########################################################################################
-
-help_message = "Pipeline for processing Hi-C data from HiC-Pro to statistically significant edge-lists for HG19. Data is run on one output folder from Hi-C pro at a time. \n\n" \
+help_message = "Pipeline for processing Hi-C data from HiC-Pro to statistically significant edge-lists. \n\n" \
                "INPUT DIR: -i\n" \
                "Directory containing HiC-Pro output folders (bed and matrix files) is set as input directory. Any folder can be the input, as long as it contains the HiC-Pro output folders (raw, matrix) for one HiC-Pro run. \n\n" \
-               "OUTPUT DIR: -o \n"\
-               "Any directory to output processed data is set as output directory. The output directory will contain extremenly large temp files if running whole genome analysis (At least 60 GB needed). \n\n" \
+               "OUTPUT DIR: -o \n" \
+               "Any directory to output processed data is set as output directory.  \n\n" \
                "REFERENCE DIR: -r \n" \
                "Directory containing reference genome files is set as reference directory. Put the reference files in a folder called hg19. \n" \
                "This directory should contain the following files: \n" \
-               "    cytoBand_hg19.txt (USCS cytoband reference file: https://hgdownload.cse.ucsc.edu/goldenpath/hg19/database/ \n" \
-               "    hg19-blacklist.v2.bed (Encode hg19 blacklisted regions: https://github.com/Boyle-Lab/Blacklist/tree/master/lists \n\n"\
-               "NCHG PATH: -n \n"\
+               "    cytoBand_hg19.txt (USCS cytoband reference file: https://hgdownload.cse.ucsc.edu/goldenpath/hg19/database/) \n" \
+               "    hg19-blacklist.v2.bed (Encode hg19 blacklisted regions: https://github.com/Boyle-Lab/Blacklist/tree/master/lists) \n\n" \
+               "NCHG PATH: -n \n" \
                "Path to NCHG executable is set as NCHG path. NCHG is a C++ tool for calculating p-values for Hi-C interactions using the NCHG distribution. \n" \
-               "It can be found here: https://github.com/Chrom3D/preprocess_scripts/blob/master/NCHG_hic.zip \n\n"\
-               "NORM OPTION: -m \n"\
-               "Specifies if normalized data or raw data is processed to edge lists. Options: raw, iced, norm, normalized. \n"\
-               "If raw is selected, the script will look for raw data in the HiC-Pro output folder. If iced is selected, the script will look for ICE normalized data in the HiC-Pro output folder. \n"\
-               "\n\n"\
-               "If no arguments are given, the script will run with the hardcoded paths set in the SetDirectories class. Meaning, it's possible to run without providing arguments. \n"\
-               "For instance, set the NCHG and reference paths hardcoded, and provide input and output directories for each run. \n\n"\
-               "WHOLE GENOME: -w \n"\
-               "If this flag is set, the NCHG script will consider both inter- and intra-chromosomal interactions for statistical testing using in the NCHG script. \n"\
-               "This will result in a much larger edge list, longer processing times and loss of power for intra-chromosomal interactions. \n\n"\
-               "THEADS: -t \n"\
-               "Int: Number of threads to use for processing. Default is cores available on machine. Always specify on HPC cluster. \n\n"\
-
+               "It can be found here: https://github.com/Chrom3D/preprocess_scripts/blob/master/NCHG_hic.zip.\n" \
+               "Credit: Jonas Paulsen (2017). \n\n" \
+               "NORM OPTION: -m \n" \
+               "Specifies if normalized data or raw data is processed to edge lists. Options: raw, iced, norm, normalized. \n" \
+               "Raw data is default, since the NCHG tool uses raw counts to calculate significance. \n" \
+               "If raw is selected, the script will look for raw data in the HiC-Pro output folder. If iced is selected, the script will look for ICE normalized data in the HiC-Pro output folder. \n" \
+               "\n\n" \
+               "If no arguments are given, the script will run with the hardcoded paths set in the SetDirectories class. Meaning, it's possible to run without providing arguments. \n" \
+               "For instance, set the NCHG and reference paths as hardcoded, and provide input and output directories for each run. \n\n" \
+               "INTER-CHROMOSOMAL INTERACTIONS: -inter. \n" \
+               "If specified, run NCHG with the -i flag, meaning interchromosmal interactions will be included in calculating significance. \n\n" \
+               "INTRA-CHROMOSOMAL INTERACTIONS: -intra. \n" \
+               "If specified, run NCHG without the -i flag, meaning only intrachromosmal interactions will be used to calcualte significance. This is the default. \n\n" \
+               "MIXED INTERACTIONS: -mixed \n" \
+               "If this flag is set, the NCHG script will consider if inter- or intrachromosomal interactions are appropriate per input file. \n" \
+               "Allows for running mixed input files, some of which contain inter-chromosomal interactions and some that do not. \n\n" \
+               "THREADS: -t \n" \
+               "Int: Number of threads to use for processing. Default is cores available on machine. \n\n" \
+               "FDR THRESHOLD: -f \n" \
+               "Float: FDR threshold for significance. Default is 0.05. \n\n" \
+               "RESOLUTIONS: -res \n" \
+               "INT: Resolution values can be provided to run the pipeline on specific resolutions (needs to match resolutions available in HiC-Pro output folder). \n" \
+               "The script will run on all resolutions if no resolution values are provided. \n\n" \
+               "EXECUTOR: -e \n" \
+               "String: Executor to use for parallelization. Options: thread, process. Default is multiprocessing. \n\n" \
+               "NO_SPLIT: -ns \n" \
+               "If specified, do not split input files to NCHG by each chromosome. Default is to split files, to allow increased multiprocessing of NCHG. \n\n" \
 
 parser = argparse.ArgumentParser(description=help_message, formatter_class=argparse.RawDescriptionHelpFormatter)
 
@@ -52,27 +65,31 @@ parser.add_argument("-i", "--input_dir", help="Directory containing HiC-Pro outp
 parser.add_argument("-o", "--output_dir", help="Any directory to output processed data", required=False)
 parser.add_argument("-r", "--reference_dir", help="Directory containing reference genome files.", required=False)
 parser.add_argument("-n", "--nchg_path", help="Path to NCHG executable", required=False)
-parser.add_argument("-m", "--norm_option", help="Normalization option", choices=["raw", "iced", "norm", "normalized"], required=False)
-parser.add_argument("-w", "--whole_genome", help="Consider inter-chromosomal interactions for statistical testing using in the NCHG script.", action="store_true", required=False)
+parser.add_argument("-m", "--norm_option", help="Normalization option, default is to use raw counts.", choices=["raw", "iced", "norm", "normalized"], required=False)
+parser.add_argument("-inter", "--interchromosomal_interactions", help="Consider inter-chromosomal interactions to find significant interactions.", action="store_true", required=False, default=None)
+parser.add_argument("-intra", "--intrachromosomal_interactions", help="Consider only intra-chromosomal interactions to find significant interactions (default).", action="store_true", required=False, default=None)
+parser.add_argument("-mixed", "--mixed_interactions", help="Consider inter-chromosomal and intra-chromosmal interactions on a file-by-file basis.", action="store_true", required=False, default=None)
 parser.add_argument("-t", "--threads", help="Int: Number of threads to use for processing. Default is cores available on machine. Always specify on HPC cluster.", required=False)
 parser.add_argument("-f", "--fdr_threshold", help="Float: FDR threshold for significance. Default is 0.05.", required=False, type=float)
 parser.add_argument("-res", "--resolutions", help="Int: Resolution values can be provided to run the pipeline on specific resolutions.", required=False, nargs="+", type=int)
+parser.add_argument("-e", "--executor", choices=["m", "t", "multi", "mp", "th", "thread", "multiprocessing", "threading"], default="multiprocessing", help="Choose between multiprocessing and threading for the NCHG script method. Default is multiprocessing.")
+parser.add_argument("-ns", "--no_split", action="store_true", required=False, help="Do not split input files to NCHG by chromosomes.")
 args = parser.parse_args()
 
 # Sets args to None if not provided in command line
-input_directory = args.input_dir if args.input_dir is not None else None
-output_directory = args.output_dir if args.output_dir is not None else None
-reference_directory = args.reference_dir if args.reference_dir is not None else None
-nchg_executable_path = args.nchg_path if args.nchg_path is not None else None
-norm_option = args.norm_option if args.norm_option is not None else None
-whole_genome = args.whole_genome if args.whole_genome is not None else None
-threads = args.threads if args.threads is not None else None
-
-def check_file_exists(file_path):
-    if os.path.exists(file_path):
-        print(f"File {file_path} exists")
-    else:
-        print(f"File {file_path} does not exist")
+input_directory = args.input_dir
+output_directory = args.output_dir
+reference_directory = args.reference_dir
+nchg_executable_path = args.nchg_path
+norm_option = args.norm_option
+interchromosomal_interactions = args.interchromosomal_interactions
+intrachromosomal_interactions = args.intrachromosomal_interactions
+mixed_interactions = args.mixed_interactions
+fdr_threshold = args.fdr_threshold
+threads = args.threads
+resolutions = args.resolutions
+executor_type = args.executor
+no_split = args.no_split
 
 
 class SetDirectories:
@@ -85,12 +102,18 @@ class SetDirectories:
     """
 
     input_dir = os.path.abspath("/Users/GBS/Master/HiC-Data/HiC-Pro_out/chr18_inc/chr18_inc")
-    output_dir = os.path.abspath("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm")
+    output_dir = os.path.abspath("/Users/GBS/Master/HiC-Data/testing_chrom_parallelization/output_terminal")
     reference_dir = os.path.abspath("/Users/GBS/Master/Reference")
     nchg_path = os.path.abspath("/Users/GBS/Master/Scripts/NCHG_hic/NCHG")
-    normalized_data = True  # Checks for ICE normalized data in matrix folder
-    whole_genome_nchg = False  # If true, considers both inter- and intra-chromosomal interactions for statistical testing using in the NCHG script.
+    no_split = False  # If true, do not split input files to NCHG by chromosomes. Default is to split files, to allow multiprocessing of NCHG on each chromosome.
+    normalized_data = None  # Checks for ICE normalized data in matrix folder, default is to use raw counts
+    inter_interactions = False  # If true, considers both intra- and inter-chromosomal interactions for statistical testing
+    intra_interactions = True  # If true, considers only intra-chromosomal interactions for statistical testing
+    mixed_interactions = False  # If true, considers both inter- and intra-chromosomal interactions for statistical testing on file-by-file basis, using in the NCHG script.
     threads = os.cpu_count()  # Sets threads to number of cores on machine, can be overwritten by user input in command line
+    fdr_threshold = 0.05  # Sets FDR threshold for significance, can be overwritten by user input in command line
+    resolutions = None  # Sets resolutions to None, can be overwritten by user input in command line
+    nchg_executor = "multiprocessing"  # Sets executor to threading by default (tested to be fastest), can be overwritten by user input in command line or here.
 
     @classmethod
     def set_normalized_data(cls, normalized_data):
@@ -133,16 +156,65 @@ class SetDirectories:
         return cls.nchg_path
 
     @classmethod
-    def set_whole_genome(cls, whole_genome_nchg):
-        cls.whole_genome = whole_genome_nchg
+    def set_mixed_interactions(cls, mixed_inter):
+        cls.mixed_interactions = mixed_inter
 
     @classmethod
-    def get_whole_genome(cls):
-        return cls.whole_genome_nchg
+    def get_mixed_interactions(cls):
+        return cls.mixed_interactions
+
+    @classmethod
+    def set_interchromosomal_interactions(cls, inter_interactions):
+        cls.interchromosomal_interactions = inter_interactions
+
+    @classmethod
+    def get_interchromosomal_interactions(cls):
+        return cls.inter_interactions
+
+    @classmethod
+    def set_intrachromosomal_interactions(cls, intra_interactions):
+        cls.intrachromosomal_interactions = intra_interactions
+
+    @classmethod
+    def get_intrachromosomal_interactions(cls):
+        return cls.intra_interactions
+
+    @classmethod
+    def set_no_split(cls, no_splitting):
+        cls.no_split = no_splitting
+
+    @classmethod
+    def get_no_split(cls):
+        return cls.no_split
+
+    @classmethod
+    def set_fdr_threshold(cls, fdr_thresh):
+        cls.fdr_threshold = fdr_thresh
+
+    @classmethod
+    def get_fdr_threshold(cls):
+        return cls.fdr_threshold
+
+    @classmethod
+    def set_resolutions(cls, resolution):
+        cls.resolutions = resolution
+
+    @classmethod
+    def get_resolutions(cls):
+        return cls.resolutions
 
     @classmethod
     def set_temp_dir(cls, temp_dir):
         cls.temp_dir = os.path.abspath(temp_dir)
+
+    # Newline
+    @classmethod
+    def set_nchg_executor(cls, executor):
+        cls.nchg_executor = executor
+
+    @classmethod
+    def get_nchg_executor(cls):
+        return cls.nchg_executor
 
     @staticmethod
     def get_temp_dir():
@@ -171,7 +243,8 @@ class SetDirectories:
         return pbt_temp_dir
 
 
-# Sets input, output and reference directories if not provided in command line
+
+# Sets input, output and reference directories and flags if to values held in SetDirectories class if not provided by user on command line
 if input_directory is not None:
     SetDirectories.set_input_dir(input_directory)
 
@@ -189,34 +262,52 @@ if norm_option is not None:
         SetDirectories.set_normalized_data(False)
     elif norm_option in ["iced", "norm", "normalized"]:
         SetDirectories.set_normalized_data(True)
+else:
+    # Set the default value for normalized_data if no -m flag is provided
+    SetDirectories.set_normalized_data(True)
 
-if whole_genome is not None:
-    SetDirectories.set_whole_genome(whole_genome)
+if mixed_interactions is not None:
+    SetDirectories.set_mixed_interactions(mixed_interactions)
+if interchromosomal_interactions is not None:
+    SetDirectories.set_interchromosomal_interactions(interchromosomal_interactions)
+if intrachromosomal_interactions is not None:
+    SetDirectories.set_intrachromosomal_interactions(intrachromosomal_interactions)
+
+# If no interaction type flag is provided, set intrachromosomal interactions as the default
+if all(arg is None for arg in (mixed_interactions, interchromosomal_interactions, intrachromosomal_interactions)):
+    SetDirectories.set_intrachromosomal_interactions(True)
+
+SetDirectories.set_no_split(no_split)
 
 if threads is not None:
     SetDirectories.set_threads(threads)
+
+if resolutions is not None:
+    SetDirectories.set_resolutions(resolutions)
+
+if executor_type == "m" or executor_type == "mp" or executor_type == "multi":
+    executor_type = "multiprocessing"
+elif executor_type == "t" or executor_type == "thread" or executor_type == "th":
+    executor_type = "threading"
+
+if executor_type is not None:
+    SetDirectories.set_nchg_executor(executor_type)
 
 # Sets temporary directory for pbt without cleanup
 pbt.set_tempdir(SetDirectories.get_pbt_temp_dir())
 pbt.cleanup(False)
 
 
-
 class Pipeline_Input:
 
     @staticmethod
     def find_files(*root_directories):
-        """
-        Finds all files bed and matrix files in the raw data subdirectory of the root directory.
-        :param root_directories: one or more root directories to search in
-        :return: a list of file paths for each BED and matrix file found
-        """
-
         raw_subdirectory_name = "raw"
         iced_subdirectory_name = "iced"
         bedfiles = []
         matrixfiles = []
         iced_matrixfiles = []
+        resolutions_provided = SetDirectories.get_resolutions()
 
         # Find the raw data subdirectory in the root directory
         raw_subdirectories = []
@@ -225,15 +316,6 @@ class Pipeline_Input:
                 if os.path.basename(root) == raw_subdirectory_name:
                     raw_subdirectories.append(root)
 
-        # Recursively search raw data subdirectory for bed and matrix files
-        for subdirectory_path in raw_subdirectories:
-            for root, _, files in os.walk(subdirectory_path):
-                for file in files:
-                    if file.endswith(".bed"):
-                        bedfiles.append(os.path.join(root, file))
-                    if file.endswith(".matrix"):
-                        matrixfiles.append(os.path.join(root, file))
-
         # Find the ICE-normalized data subdirectory in the root directory
         iced_subdirectories = []
         for root_directory in root_directories:
@@ -241,12 +323,54 @@ class Pipeline_Input:
                 if os.path.basename(root) == iced_subdirectory_name:
                     iced_subdirectories.append(root)
 
+        def filter_files_on_resolution(input_files, found_resolutions_in):
+            filtered_files = []
+            for file in input_files:
+                file_name = os.path.basename(file)
+                resolution_match = re.search(r'_(\d+)[_.]', file_name)
+                if resolution_match:
+                    resolution = int(resolution_match.group(1))
+                    if resolutions_provided is None or resolution in resolutions_provided:
+                        filtered_files.append(file)
+                    found_resolutions_in.add(resolution)
+            return filtered_files, found_resolutions
+
+        found_resolutions = set()
+
+        # Recursively search raw data subdirectory for bed and matrix files
+        for subdirectory_path in raw_subdirectories:
+            for root, _, files in os.walk(subdirectory_path):
+                bed_files = [os.path.join(root, file) for file in files if file.endswith(".bed")]
+                matrix_files = [os.path.join(root, file) for file in files if file.endswith(".matrix")]
+                filtered_bed_files, found_resolutions = filter_files_on_resolution(bed_files, found_resolutions)
+                bedfiles.extend(filtered_bed_files)
+                filtered_matrix_files, found_resolutions = filter_files_on_resolution(matrix_files, found_resolutions)
+                matrixfiles.extend(filtered_matrix_files)
+
         # Recursively search ICE-normalized data subdirectory for matrix files
         for subdirectory_path in iced_subdirectories:
             for root, _, files in os.walk(subdirectory_path):
-                for file in files:
-                    if file.endswith(".matrix"):
-                        iced_matrixfiles.append(os.path.join(root, file))
+                iced_matrix_files = [os.path.join(root, file) for file in files if file.endswith(".matrix")]
+                filtered_iced_matrix_files, found_resolutions = filter_files_on_resolution(iced_matrix_files, found_resolutions)
+                iced_matrixfiles.extend(filtered_iced_matrix_files)
+
+        # Get resolutions found in the data from the filtered files (OLD; but works)
+        file_counts = {
+            'bedfiles': len(bedfiles),
+            'matrixfiles': len(matrixfiles),
+            'iced_matrixfiles': len(iced_matrixfiles)
+        }
+
+        # If no files were found for the provided resolutions, print an error message
+        if all(count == 0 for count in file_counts.values()) and resolutions_provided is not None:
+            print(f"No files found for the provided resolutions: {resolutions_provided}. "
+                  f"Resolutions found in the data: {found_resolutions}")
+
+        # If no iced or raw matrix files were found corresponding to the provided command line arg, print error message
+        if SetDirectories.get_normalized_data() and file_counts["iced_matrixfiles"] == 0:
+            print(f"No ICE-normalized matrix files found, but command line argument -m set to True")
+        elif not SetDirectories.get_normalized_data() and file_counts["matrixfiles"] == 0:
+            print(f"No raw matrix files found, but command line argument -m set to False")
 
         return bedfiles, matrixfiles, iced_matrixfiles
 
@@ -258,9 +382,7 @@ class Pipeline_Input:
         :return: dict of file paths for each BED and matrix file found, grouped by resolution and experiment
         """
 
-        bedfiles = Pipeline_Input.find_files(*dirs)[0]
-        matrixfiles = Pipeline_Input.find_files(*dirs)[1]
-        iced_matrixfiles = Pipeline_Input.find_files(*dirs)[2]
+        bedfiles, matrixfiles, iced_matrixfiles = Pipeline_Input.find_files(*dirs)
         inted_iced_matrixfiles = []
 
         # Round floats in ICE-normalized matrix files to integers if using ICE normalization
@@ -343,7 +465,24 @@ class Pipeline_Input:
         return grouped_files_checked
 
 
+first_print = True
+
+def custom_print(*argss, **kwargs):
+    global first_print
+    if first_print:
+        print("\n", end="")
+        first_print = False
+    print(*argss, **kwargs)
+
+def check_file_exists(file_path):
+    if os.path.exists(file_path):
+        print(f"File {file_path} exists")
+    else:
+        print(f"File {file_path} does not exist")
+
+
 class Pipeline:
+
     @staticmethod
     def make_bedpe(bed_file, matrix_file):
         """
@@ -384,6 +523,9 @@ class Pipeline:
         :return: BEDPE files saved to temp directory
         """
 
+        global first_print
+        first_print = True
+
         os.chdir(SetDirectories.get_temp_dir())
         if not os.path.exists("bedpe"):
             os.mkdir("bedpe")
@@ -406,7 +548,6 @@ class Pipeline:
             experiment = '_'.join(filter(None, experiment.split('_')))
             resolution = '_'.join(filter(None, resolution.split('_')))
 
-            # Should separate the string formatting from the file handling?
             bedfile = val[0]
             matrixfile = val[1]
             bedpe = Pipeline.make_bedpe(bedfile, matrixfile)
@@ -439,12 +580,13 @@ class Pipeline:
                 raise ValueError(f"Window size must be an integer, {window_size} is not an integer.")
 
             no_overlap_bedpe = blacklisted_bedpe.window(blacklisted_pbt, w=int(window_size), r=False, v=True)
-            print(f"Finished processing file: {bedpe_file}, PID: {os.getpid()}, TID: {threading.get_ident()}")
+            custom_print(f"Finished processing file: {os.path.basename(bedpe_file)}, PID: {os.getpid()}, TID: {threading.get_ident()}")
+
             return no_overlap_bedpe
 
         except Exception as e:
             tid = threading.get_ident()
-            print(f"Error processing file: {bedpe_file}, {e}, PID: {os.getpid()}, TID: {tid}")
+            print(f"\nError processing file: {bedpe_file}, {e}, PID: {os.getpid()}, TID: {tid}")
             raise
 
     @staticmethod
@@ -452,6 +594,9 @@ class Pipeline:
         """
         Calls the remove_blacklisted_regions function on each file in the BEDPE directory
         """
+
+        global first_print
+        first_print = True
 
         bedpe_dir = SetDirectories.get_temp_dir() + "/bedpe"
         bedpe_files = [os.path.join(bedpe_dir, file) for file in os.listdir(bedpe_dir)]
@@ -488,7 +633,6 @@ class Pipeline:
                     tid = threading.get_ident()
                     print(f"Error processing {bedpe_file}: {e}, PID: {os.getpid()}, TID: {tid}")
 
-
     @staticmethod
     def remove_cytobands(blacklisted_bedpe_file):
         """
@@ -515,8 +659,7 @@ class Pipeline:
                 raise ValueError(f"Window size must be an integer, {window_size} is not an integer.")
 
             no_cytobands = blacklisted_pbt.window(centromeric_regions, w=int(window_size), r=False, v=True)
-            tid = threading.get_ident()
-            print(f"Finished processing file: {blacklisted_bedpe_file}, PID: {os.getpid()}, TID: {tid}")
+            custom_print(f"Finished processing file: {os.path.basename(blacklisted_bedpe_file)}, PID: {os.getpid()}, TID: {threading.get_ident()}")
             return no_cytobands
 
         except Exception as e:
@@ -530,9 +673,11 @@ class Pipeline:
         Calls the remove_cytobands function on each file in the blacklisted directory
         """
 
+        global first_print
+        first_print = True
+
         blacklisted_dir_path = SetDirectories.get_temp_dir() + "/blacklisted"
         blacklisted_dir = os.listdir(blacklisted_dir_path)
-
 
         # Create the output directory if it doesn't exist
         output_dir = os.path.join(SetDirectories.get_temp_dir(), "no_cytobands")
@@ -563,9 +708,8 @@ class Pipeline:
                     tid = threading.get_ident()
                     print(f"Error processing {bedpe_file}: {e}, PID: {os.getpid()}, TID: {tid}")
 
-
     @staticmethod
-    def find_siginificant_interactions(bedpe_file):
+    def find_significant_interactions(bedpe_file):
         """
         NCHG script to calculate the significance of interactions:
         m = minimum interaction length in bp, should be same as window size used to make the bedpe file (resolution)
@@ -575,19 +719,67 @@ class Pipeline:
 
         try:
             # Setting min interactions length to same as bin size from HiC-Pro
-            window_size = int(re.search(r"(\d+)[^/\d]*$", bedpe_file).group(1))
+            window_size = int(re.search(r"_(\d+)_", bedpe_file).group(1))  # Any number in file name with underscores on both sides
             if not isinstance(window_size, int):
                 raise ValueError(f"Window size must be an integer, {window_size} is not an integer.")
 
             # Run NCHG
-            if SetDirectories.whole_genome_nchg is False:
-                nchg_run = sp.run([SetDirectories.get_nchg_path(), bedpe_file, "-m", str(window_size), "-p"], capture_output=True)
-            else:
-                nchg_run = sp.run([SetDirectories.get_nchg_path(), bedpe_file, "-m", str(window_size), "-p", "-i"], capture_output=True)
+            nchg_flags = []
+            if SetDirectories.inter_interactions:
+                nchg_flags.append("-i")
+            elif SetDirectories.mixed_interactions:
+                intrachromosomal = True
+                with open(bedpe_file, "r") as f:
+                    for line in f:
+                        columns = line.strip().split("\t")
+                        if columns[0] != columns[3]:
+                            intrachromosomal = False
+                            break
 
+                if not intrachromosomal:
+                    nchg_flags.append("-i")
+
+            if not SetDirectories.inter_interactions and not SetDirectories.intra_interactions and not SetDirectories.mixed_interactions:
+                raise ValueError("Must select at least one type of interaction type for significance testing: Inter, intra, or mixed.")
+
+            # Run NCHG and clean up completed processes
+            nchg_command = [SetDirectories.get_nchg_path(), bedpe_file, "-m", str(window_size), "-p"] + nchg_flags
+            nchg_run = sp.Popen(nchg_command, stdout=sp.PIPE, stderr=sp.PIPE)
+            stdout, stderr = nchg_run.communicate()
+            nchg_run.kill()
+            nchg_run.wait()
+            print(f"Finished processing file: {os.path.basename(bedpe_file)}, PID: {os.getpid()}, TID: {threading.get_ident()}")
+            return stdout.decode("utf-8").split("\t")
+
+        except Exception as e:
             tid = threading.get_ident()
-            print(f"Finished processing file: {bedpe_file}, PID: {os.getpid()}, TID: {tid}")
-            return nchg_run.stdout.decode("utf-8").split("\t")
+            print(f"Error in {bedpe_file}: {e}, PID: {os.getpid()}, TID: {tid}")
+            raise
+
+    @staticmethod
+    def split_bedpe_by_chromosome(bedpe_file, output_dir):
+        try:
+            with open(bedpe_file, "r") as f:
+                data = f.readlines()
+
+            # Group data by chromosome
+            chromosomes = {}
+            for line in data:
+                chr_name = line.split("\t")[0]
+                if chr_name not in chromosomes:
+                    chromosomes[chr_name] = []
+                chromosomes[chr_name].append(line.strip())  # Strip whitespace from the line
+
+            # Write each chromosome to a separate file
+            chr_files = []
+            for chr_name, chr_data in chromosomes.items():
+                output_filename = f"{os.path.basename(bedpe_file)[:-len('.bedpe')]}_{chr_name}_split.bedpe"
+                output_filepath = os.path.join(output_dir, output_filename)
+                with open(output_filepath, "w") as f:
+                    f.write("\n".join(chr_data) + "\n")
+                chr_files.append(output_filepath)
+
+            return chr_files
 
         except Exception as e:
             tid = threading.get_ident()
@@ -611,28 +803,74 @@ class Pipeline:
             shutil.rmtree(output_dir)
             os.mkdir(output_dir)
 
-        for file in no_cytobands_dir:
-            full_path = os.path.join(no_cytobands_dir_path, file)
-            if not os.path.isfile(full_path):
-                print(f"File {file} does not exist.")
+        if SetDirectories.get_no_split():
+            all_files = [os.path.join(no_cytobands_dir_path, file) for file in no_cytobands_dir]
+            input_file_map = {file: file for file in all_files}
+            files_to_process = all_files
 
-        with concurrent.futures.ProcessPoolExecutor(max_workers=SetDirectories.get_threads()) as executor:
-            full_paths = [os.path.join(no_cytobands_dir_path, file) for file in no_cytobands_dir]
-            futures = list(executor.map(Pipeline.find_siginificant_interactions, full_paths))
-            for bedpe_file, future in zip(no_cytobands_dir, futures):
+        else:
+            # Create a directory to store split chromosome files
+            chr_split_base_dir = os.path.join(SetDirectories.get_temp_dir(), "input_to_nchg")
+            if not os.path.exists(chr_split_base_dir):
+                os.mkdir(chr_split_base_dir)
+            else:
+                shutil.rmtree(chr_split_base_dir)
+                os.mkdir(chr_split_base_dir)
+
+            # Split input files by chromosome
+            all_chr_files = []
+            # keep original input file name for each chromosome file
+            input_file_map = {}
+
+            for file in no_cytobands_dir:
+                full_path = os.path.join(no_cytobands_dir_path, file)
+                if not os.path.isfile(full_path):
+                    print(f"File {file} does not exist.")
+
+                # Create a subdirectory for each input file inside the chr_split_base_dir
+                file_split_dir = os.path.join(chr_split_base_dir, f"{file[:-len('_no_blacklist_no_cytobands.bedpe')]}_split")
+                if not os.path.exists(file_split_dir):
+                    os.mkdir(file_split_dir)
+                else:
+                    shutil.rmtree(file_split_dir)
+                    os.mkdir(file_split_dir)
+
+                chr_files = Pipeline.split_bedpe_by_chromosome(full_path, file_split_dir)
+
+                for chr_file in chr_files:
+                    input_file_map[chr_file] = file
+                all_chr_files.extend(chr_files)
+
+            files_to_process = all_chr_files
+
+        # Run find_significant_interactions on chromosome-specific files in parallel
+        output_file_data = defaultdict(list)
+        executorclass = concurrent.futures.ProcessPoolExecutor if executor_type == 'multiprocessing' else concurrent.futures.ThreadPoolExecutor
+        with executorclass(max_workers=SetDirectories.get_threads()) as executor:
+            futures = list(executor.map(Pipeline.find_significant_interactions, files_to_process))
+            for bedpe_file, future in zip(files_to_process, futures):
                 try:
                     nchg_output = future
-                    output_filename = f"{bedpe_file[:-len('.bedpe')]}_nchg_output.txt"
-                    output_filepath = os.path.join(output_dir, output_filename)
-                    with open(output_filepath, "w") as f:
-                        f.writelines(nchg_output)
+                    input_file = input_file_map[bedpe_file]
+                    output_file_data[input_file].append(nchg_output)
 
                 except Exception as e:
                     tid = threading.get_ident()
                     print(f"Error processing {bedpe_file}: {e}, PID: {os.getpid()}, TID: {tid}")
 
+        executor.shutdown(wait=True)
+
+        if not SetDirectories.get_no_split():
+            # Merge output files back together
+            for input_file, nchg_outputs in output_file_data.items():
+                output_filename = f"{os.path.basename(input_file)[:-len('_no_blacklist_no_cytobands.bedpe')]}_nchg_output.txt"
+                output_filepath = os.path.join(output_dir, output_filename)
+                with open(output_filepath, "w") as f:
+                    for nchg_output in nchg_outputs:
+                        f.writelines(nchg_output)
+
     @staticmethod
-    def adjust_pvalues(nchg_file, fdr_threshold=0.01, log_ratio_threshold=2, method="fdr_bh"):
+    def adjust_pvalues(nchg_file, fdr_thresh=SetDirectories.get_fdr_threshold(), log_ratio_threshold=2, method="fdr_bh"):
         """
         Adjusts the p-values using the Benjamini-Hochberg method
         """
@@ -641,10 +879,12 @@ class Pipeline:
             # Finds the p-values and log ratios of the interactions
             p_values = []
             processed_lines = []
-            with open(nchg_file, "r") as nchg_file:
-                for line in nchg_file:
+            with open(nchg_file, "r") as nchg_f:
+                for line in nchg_f:
                     col = line.split()
-                    if col[7] == '0':
+                    if len(col) < 11:  # Expect 11 columns in the input file
+                        print(f"Error: {nchg_file} does not have the correct number of columns.")
+                    if col[7] == "0":
                         continue  # Skips the line if interactions/edges is 0
 
                     p_values.append(float(col[6]))
@@ -663,11 +903,10 @@ class Pipeline:
             for i, processed_line in enumerate(processed_lines):
                 col = processed_line.split()
                 col.append(str(padj[1][i]))
-                if float(col[11]) >= log_ratio_threshold and float(col[12]) <= fdr_threshold:
+                if float(col[11]) >= log_ratio_threshold and float(col[12]) <= fdr_thresh:
                     padj_out.append("\t".join(col[:6] + [col[12]]))
 
-            tid = threading.get_ident()
-            print(f"Finished processing file: {nchg_file}, PID: {os.getpid()}, TID: {tid}")
+            print(f"Finished processing file: {os.path.basename(nchg_file)}, PID: {os.getpid()}, TID: {threading.get_ident()}")
             return padj_out
 
         except Exception as e:
@@ -696,6 +935,7 @@ class Pipeline:
             full_path = os.path.join(nchg_dir_path, file)
             if not os.path.isfile(full_path):
                 print(f"File {file} does not exist.")
+                continue
 
         with concurrent.futures.ProcessPoolExecutor(max_workers=SetDirectories.get_threads()) as executor:
             full_paths = [os.path.join(nchg_dir_path, file) for file in nchg_dir]
@@ -712,19 +952,19 @@ class Pipeline:
                     tid = threading.get_ident()
                     print(f"Error processing {nchg_file}: {e}, PID: {os.getpid()}, TID: {tid}")
 
-
     @staticmethod
-    def make_weighted_edgelist(padj_file):
+    def make_weighted_edgelist(padj_file_path):
         """
         makes a weighted edgelist from padj file, padj values are weights
         """
 
         try:
             edge_list = []
-            with open(padj_file, "r") as padj_file:
+            with open(padj_file_path, "r") as padj_file:
                 for line in padj_file:
                     line = line.split()
-                    edge_list.append(line[0] + ":" + line[1] + "-" + line[2] + " " + line[3] + "-" + line[4] + ":" + line[5] + " " + line[6])
+                    edge_list.append(line[0] + ":" + line[1] + "-" + line[2] + " " + line[3] + ":" + line[4] + "-" + line[5] + " " + line[6])
+
             return edge_list
 
         except Exception as e:
@@ -737,6 +977,9 @@ class Pipeline:
         """
         calls make_weighted_edgelist on all padj files
         """
+
+        global first_print
+        first_print = True
 
         padj_dir_path = SetDirectories.get_temp_dir() + "/padj"
         padj_dir = os.listdir(padj_dir_path)
@@ -757,31 +1000,31 @@ class Pipeline:
         with concurrent.futures.ThreadPoolExecutor(max_workers=SetDirectories.get_threads()) as executor:
             full_paths = [os.path.join(padj_dir_path, file) for file in padj_dir]
             futures = list(executor.map(Pipeline.make_weighted_edgelist, full_paths))
-            for padj_file, future in zip(padj_dir, futures):
+            for padj_file_path, future in zip(padj_dir, futures):
                 try:
                     weighted_edgelist = future
-                    output_filename = f"{padj_file[:-len('_no_blacklist_no_cytobands_padj.txt')]}_weighted_edgelist.txt"
+                    output_filename = f"{os.path.basename(padj_file_path)[:-len('_padj.txt')]}_edgelist.txt"
                     output_filepath = os.path.join(output_dir, output_filename)
                     with open(output_filepath, "w") as f:
                         for line in weighted_edgelist:
                             f.write(line + "\n")
                 except Exception as e:
                     tid = threading.get_ident()
-                    print(f"Error processing {padj_file}: {e}, PID: {os.getpid()}, TID: {tid}")
+                    print(f"Error processing {padj_file_path}: {e}, PID: {os.getpid()}, TID: {tid}")
 
     @staticmethod
-    def make_edgelist(padj_file):
+    def make_edgelist(padj_file_path):
+
         """Makes edge list from padj file"""
 
         try:
             edge_list = []
-            with open(padj_file, "r") as padj_file:
+            with open(padj_file_path, "r") as padj_file:
                 for line in padj_file:
                     line = line.split()
-                    edge_list.append(line[0] + ":" + line[1] + "-" + line[2] + "  " + line[3] + "-" + line[4] + ":" + line[5])
+                    edge_list.append(line[0] + ":" + line[1] + "-" + line[2] + "  " + line[3] + ":" + line[4] + "-" + line[5])
 
-            tid = threading.get_ident()
-            print(f"Finished processing file: {padj_file}, PID: {os.getpid()}, tid: {tid}")
+            custom_print(f"Finished processing file: {os.path.basename(padj_file_path)}, PID: {os.getpid()}, TID: {threading.get_ident()}")
             return edge_list
 
         except Exception as e:
@@ -795,6 +1038,9 @@ class Pipeline:
         Calls make_edgelist on all padj files
         """
 
+        global first_print
+        first_print = True
+
         padj_dir_path = SetDirectories.get_temp_dir() + "/padj"
         padj_dir = os.listdir(padj_dir_path)
 
@@ -806,25 +1052,21 @@ class Pipeline:
             shutil.rmtree(output_dir)
             os.mkdir(output_dir)
 
-        for file in padj_dir:
-            full_path = os.path.join(padj_dir_path, file)
-            if not os.path.isfile(full_path):
-                print(f"File {file} does not exist.")
+        full_paths = [os.path.join(padj_dir_path, file) for file in padj_dir]
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=SetDirectories.get_threads()) as executor:
-            full_paths = [os.path.join(padj_dir_path, file) for file in padj_dir]
             futures = list(executor.map(Pipeline.make_edgelist, full_paths))
-            for padj_file, future in zip(padj_dir, futures):
+            for padj_file_path, future in zip(full_paths, futures):
                 try:
                     edgelist = future
-                    output_filename = f"{padj_file[:-len('_no_blacklist_no_cytobands_padj.txt')]}_edgelist.txt"
+                    output_filename = f"{os.path.basename(padj_file_path)[:-len('_padj.txt')]}_edgelist.txt"
                     output_filepath = os.path.join(output_dir, output_filename)
                     with open(output_filepath, "w") as f:
                         for line in edgelist:
                             f.write(line + "\n")
                 except Exception as e:
                     tid = threading.get_ident()
-                    print(f"Error processing {padj_file}: {e}, PID: {os.getpid()}, TID: {tid}")
+                    print(f"Error processing {padj_file_path}: {e}, PID: {os.getpid()}, TID: {tid}")
 
 
 def run_pipeline():
@@ -832,17 +1074,19 @@ def run_pipeline():
     Call selected methods of the Pipeline, in the order specified
     """
 
+    global first_print
+    first_print = True
+
     start_time = time.time()
 
-    # List of static method names to call
+    # List of methods to call
     method_names = [
         (lambda: Pipeline.input_to_make_bedpe(Pipeline_Input.group_files(SetDirectories.get_input_dir()))),
         "input_to_remove_blacklist",
         "input_to_remove_cytobands",
         "input_to_nchg",
         "input_to_adjust_pvalues",
-        "input_to_make_edgelist",
-        "input_to_make_weighted_edgelist"
+        "input_to_make_edgelist"
     ]
 
     # Call each method once
@@ -853,7 +1097,8 @@ def run_pipeline():
 
     # Print runtime on completion
     end_time = time.time()
-    print(f"Pipeline completed in {end_time - start_time:.2f} seconds.")
+    print(f"Pipeline completed in {end_time - start_time:.2f} seconds. ({(end_time - start_time) / 60:.2f} minutes, {((end_time - start_time) / 60) / 60:.2f} hours).")
+
 
 if __name__ == "__main__":
     run_pipeline()

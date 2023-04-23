@@ -45,13 +45,29 @@ def mcf7_10_norm_lowres_graphs_inter():
     mcf7_10_graphs = graph_creator.graph_dict
     return mcf7_10_graphs
 
+def imr90_graphs():
+    root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/imr90/edgelists")
+    graph_creator = NM.CreateGraphsFromDirectory(root_dir)
+    graph_creator.from_edgelists()
+    imr90_graphss = graph_creator.graph_dict
+    return imr90_graphss
+print(imr90_graphs())
+
+def imr90_chr18():
+    graph_filter = NM.FilterGraphs(imr90_graphs())
+    filtered_graph = graph_filter.filter_graphs(chromosomes=["chr2"], resolutions=["250000"])
+    graph_filter.print_filtered_edges()
+    return filtered_graph
+# imr90_chr18()
+
+
 
 def mcf7_chr18_1mb():
     graph_filter = NM.FilterGraphs(mcf7_10_norm_lowres_graphs_inter())
-    filtered_graphs = graph_filter.filter_graphs(cell_lines=["mcf10"], chromosomes=["chr18"], resolutions=["500000"])
+    filtered_graphs = graph_filter.filter_graphs(cell_lines=["mcf10"], chromosomes=["chr18"], resolutions=["1000000"])
     # graph_filter.print_filtered_edges(filtered_graphs)
     return filtered_graphs
-mcf7_chr18_1mb()
+# mcf7_chr18_1mb()
 
 # TODO: Make plotting class that takes any graph dict from any class in Network_Metrics and plots it as a network
 #   need to compare the LCC to the full graphs, because the number of communities and merges are the same but the sizes are different.
@@ -87,6 +103,7 @@ class plot_graph:
         return f"{chrom}:{start_unit}-{end_unit} {unit}"
 
     def show_graph(self):
+        print(self.graph_dict)
         for graph_name, graph in self.graph_dict.items():
             ig.plot(graph)
             plt.show()
@@ -94,10 +111,16 @@ class plot_graph:
     def show_graph_with_lcc(self, largest_component_obj):
         for graph_name, graph in self.graph_dict.items():
             lcc_membership = largest_component_obj.lcc_membership()[graph_name]
-
             node_colors = ["red" if membership == 1 else "black" for membership in lcc_membership]
             edge_colors = ["red" if lcc_membership[edge.source] == 1 and lcc_membership[edge.target] else "black" for edge in graph.es]
             ig.plot(graph, vertex_color=node_colors, edge_color=edge_colors)
+            plt.show()
+
+    def show_only_lcc(self, largest_component_obj):
+        for graph_name, graph in self.graph_dict.items():
+            lcc_membership = largest_component_obj.lcc_membership()[graph_name]
+            lcc_graph = graph.subgraph([node.index for node in graph.vs if lcc_membership[node.index] == 1])
+            ig.plot(lcc_graph, vertex_color="red", edge_color="black")
             plt.show()
 
     def save_graph(self):
@@ -106,13 +129,13 @@ class plot_graph:
             # Remove special characters from graph name to use as file name:
             safe_graph_name = "".join(e for e in graph_name if e.isalnum() or e == "_")
             output_filename = self.output_dir / f"{safe_graph_name}.png"
-            ig.plot(graph, output_filename, **visual_style)
+            ig.plot(graph, output_filename)  # **visual_style)
             print(f"Saved plot to {output_filename}")
 
 def plot_full():
     dir_manager = SetDirectories()
     output_dir = dir_manager.get_output_dir()
-    plot = plot_graph(mcf7_chr18_1mb(), output_dir)
+    plot = plot_graph(imr90_chr18(), output_dir)
     plot.show_graph()
 # plot_full()
 
@@ -123,25 +146,93 @@ def plot_lcc():
     plot = plot_graph(graph_dict, output_dir)
     largest_component_obj = NM.LargestComponent(graph_dict)
     plot.show_graph_with_lcc(largest_component_obj)
-plot_lcc()
+# plot_lcc()
 
+def plot_only_lcc():
+    dir_manager = SetDirectories()
+    output_dir = dir_manager.get_output_dir()
+    graph_dict = imr90_chr18()
+    plot = plot_graph(graph_dict, output_dir)
+    largest_component_obj = NM.LargestComponent(graph_dict)
+    plot.show_only_lcc(largest_component_obj)
+# plot_only_lcc()
+
+
+# Seems redundant, gets almost same results as LCC membership:
+# def plot_cc():
+#     degree = 1
+#     size = 2
+#     graph_dict = imr90_chr18()
+#
+#     filter_components = NM.FilterComponents(graph_dict, degree)
+#     filtered_graphs = filter_components.filter_on_size(size)
+#
+#     dir_manager = SetDirectories()
+#     output_dir = dir_manager.get_output_dir()
+#     plot = plot_graph(filtered_graphs, output_dir)
+#     plot.show_graph()
+#
+# plot_cc()
 
 # TODO: Make stacked bar plots showing ratio of nodes in LCC to total nodes for each cell line and each resolution, takes graph dicts as input.
+
+
+
 
 class plot_lcc_ratio:
     def __init__(self, graph_dict, output_dir):
         self.graph_dict = graph_dict
         self.output_dir = output_dir
 
-    def get_lcc_ratio(self):
-        for graph_name, graph in self.graph_dict.items():
-            lcc = NM.LCC_ratio(graph).calculate_lcc_ratio()
-
     def plot_lcc_ratio_bar(self):
-        for graph_name, graph in self.graph_dict.items():
-            lcc = graph.components(mode="weak").giant()
-            lcc_ratio = len(lcc.vs) / len(graph.vs)
-            print(f"{graph_name}: {lcc_ratio}")
+        lcc_ratio_calculator = NM.LCC_Ratio(self.graph_dict)
+        lcc_ratio_dict = lcc_ratio_calculator.calculate_lcc_ratio()
+
+        for graph_name, graph_sizes in lcc_ratio_dict.items():
+            ratio = graph_sizes[1] / graph_sizes[0]
+            plt.bar(graph_name, ratio)
+
+        plt.title("LCC ratio")
+        plt.xlabel("Graph")
+        plt.ylabel("Ratio")
+        plt.show()
+
+    def plot_lcc_ratio_per_chromosome(self):
+        lcc_ratio_calc = NM.LCC_Ratio(self)
+        lcc_ratio_dict = lcc_ratio_calc.calculate_lcc_ratio_per_chromosome()
+
+        for graph_name, graph_sizes in lcc_ratio_dict.items():
+            ratio = graph_sizes[1] / graph_sizes[0]
+            plt.bar(graph_name, ratio)
+
+        plt.title("LCC ratio")
+        plt.xlabel("Graph")
+        plt.ylabel("Ratio")
+        plt.show()
+
+
+def plot_imr90_lcc_ratios():
+    graph_dict = imr90_graphs()
+    plot_lcc_ratio.plot_lcc_ratio_per_chromosome(graph_dict)
+
+# plot_imr90_lcc_ratios()
+
+def print_lcc_ratios():
+    graph_dict = imr90_graphs()
+    lcc_ratio_object = NM.LCC_Ratio(graph_dict)
+    lcc_ratio_dict = lcc_ratio_object.calculate_lcc_ratio_per_chromosome()
+    print(lcc_ratio_dict)
+
+print_lcc_ratios()
+
+
+def plot_lcc_ratio_imr90():
+    dir_manager = SetDirectories()
+    output_dir = dir_manager.get_output_dir()
+    graph_dict = imr90_graphs()
+    plot = plot_lcc_ratio(graph_dict, output_dir)
+    plot.plot_lcc_ratio_bar()
+# plot_lcc_ratio_imr90()
 
 
 
