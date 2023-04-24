@@ -134,7 +134,7 @@ class FilterGraphs:
 
             if chromosomes is not None:
                 for chromosome in chromosomes:
-                    # Create a new empty graph with the same vertices as the original graph
+                    # Create empty graph with same nodes as input
                     new_graph = ig.Graph()
                     new_graph.add_vertices(graph.vs['name'])
                     new_edges = [(graph.vs[e.source]['name'], graph.vs[e.target]['name']) for e in graph.es
@@ -142,7 +142,7 @@ class FilterGraphs:
                                      or graph.vs[e.target]['name'].split(':')[0] == chromosome)]
                     new_graph.add_edges(new_edges)
 
-                    # Add the filtered chromosome to the graph name
+                    # Add filtered chromosome(s) to graph name
                     new_graph_name = f"{graph_name}, {chromosome}"
                     self.filtered_graph_dict[new_graph_name] = new_graph
             else:
@@ -170,16 +170,12 @@ class ConvertIgraphToNetworkx:
         for graph_key in self.graph_dict:
             graph = self.graph_dict[graph_key]
 
-            # Create an empty NetworkX graph
+            # Create empty NetworkX graph, add nodes and edges
             nx_graph = nx.Graph()
-
-            # Add nodes from the iGraph graph
             nx_graph.add_nodes_from(range(graph.vcount()))
-
-            # Add edges from the iGraph graph
             nx_graph.add_edges_from(graph.get_edgelist())
 
-            # Copy vertex attributes
+            # Copy node attributes
             for v in graph.vs:
                 for attr in v.attributes():
                     nx_graph.nodes[v.index][attr] = v[attr]
@@ -196,7 +192,7 @@ class ConvertIgraphToNetworkx:
 
     def __str__(self):
         if not self.nx_graph_dict:
-            return "No NetworkX graph generated yet. Please run the convert() method first."
+            return "No NetworkX graph generated yet. Run the convert() method first."
 
         output_str = ""
         for graph_key, nx_graph in self.nx_graph_dict.items():

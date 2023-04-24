@@ -12,15 +12,18 @@ import Graph_Analysis as Ga
 from matplotlib import pyplot as plt
 from pathlib import Path
 ig.config["plotting.backend"] = "matplotlib"
-# Default and deprecated backend:
+# Default (?) and deprecated backend:
 # ig.config["plotting.backend"] = "cairo"
 
-class SetDirectories:
+class Settings:
+
     def __init__(self):
         self.root_dir = Path("/Users/GBS/Master/Figures/iGraph")
 
     def get_output_dir(self):
         return self.root_dir
+
+
 
 # MCF7 and MCF10 from chrom parallel inter (raw)
 def mcf7_10_raw_lowres_graphs_inter():

@@ -6,7 +6,14 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import hicexplorer as he
 import re as re
-from Pipeline import SetDirectories
+from HiEdge import SetDirectories as Sd
+import fithic as fh
+
+
+a.load_data("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm/temp_dir/bedpe/chr18_norm_250000.bedpe")
+a.fit()
+a.plot()
+
 
 
 # TODO: Make plots of Hi-C heat maps to compare with LCC plots.

@@ -13,7 +13,6 @@ import argparse as argparse
 import pickle as pickle
 import threading as threading
 from collections import defaultdict
-import concurrent.futures
 
 ####################################################
 # Pre-processing pipeline for Hi-C data from HiC-Pro
@@ -72,7 +71,7 @@ parser.add_argument("-mixed", "--mixed_interactions", help="Consider inter-chrom
 parser.add_argument("-t", "--threads", help="Int: Number of threads to use for processing. Default is cores available on machine. Always specify on HPC cluster.", required=False)
 parser.add_argument("-f", "--fdr_threshold", help="Float: FDR threshold for significance. Default is 0.05.", required=False, type=float)
 parser.add_argument("-res", "--resolutions", help="Int: Resolution values can be provided to run the pipeline on specific resolutions.", required=False, nargs="+", type=int)
-parser.add_argument("-e", "--executor", choices=["m", "t", "multi", "mp", "th", "thread", "multiprocessing", "threading"], default="multiprocessing", help="Choose between multiprocessing and threading for the NCHG script method. Default is multiprocessing.")
+parser.add_argument("-e", "--executor", choices=["m", "t", "multi", "mp", "th", "thread", "processing", "multiprocessing", "threading"], default="multiprocessing", help="Choose between multiprocessing and threading for the NCHG script method. Default is multiprocessing.")
 parser.add_argument("-ns", "--no_split", action="store_true", required=False, help="Do not split input files to NCHG by chromosomes.")
 args = parser.parse_args()
 
@@ -285,9 +284,9 @@ if threads is not None:
 if resolutions is not None:
     SetDirectories.set_resolutions(resolutions)
 
-if executor_type == "m" or executor_type == "mp" or executor_type == "multi":
+if executor_type == "m" or executor_type == "mp" or executor_type == "multi" or executor_type == "multiprocessing":
     executor_type = "multiprocessing"
-elif executor_type == "t" or executor_type == "thread" or executor_type == "th":
+elif executor_type == "t" or executor_type == "th" or executor_type == "thread" or executor_type == "threading":
     executor_type = "threading"
 
 if executor_type is not None:
@@ -748,6 +747,7 @@ class Pipeline:
             stdout, stderr = nchg_run.communicate()
             nchg_run.kill()
             nchg_run.wait()
+
             print(f"Finished processing file: {os.path.basename(bedpe_file)}, PID: {os.getpid()}, TID: {threading.get_ident()}")
             return stdout.decode("utf-8").split("\t")
 
@@ -860,14 +860,13 @@ class Pipeline:
 
         executor.shutdown(wait=True)
 
-        if not SetDirectories.get_no_split():
-            # Merge output files back together
-            for input_file, nchg_outputs in output_file_data.items():
-                output_filename = f"{os.path.basename(input_file)[:-len('_no_blacklist_no_cytobands.bedpe')]}_nchg_output.txt"
-                output_filepath = os.path.join(output_dir, output_filename)
-                with open(output_filepath, "w") as f:
-                    for nchg_output in nchg_outputs:
-                        f.writelines(nchg_output)
+        # Merge output files back together
+        for input_file, nchg_outputs in output_file_data.items():
+            output_filename = f"{os.path.basename(input_file)[:-len('_no_blacklist_no_cytobands.bedpe')]}_nchg_output.txt"
+            output_filepath = os.path.join(output_dir, output_filename)
+            with open(output_filepath, "w") as f:
+                for nchg_output in nchg_outputs:
+                    f.writelines(nchg_output)
 
     @staticmethod
     def adjust_pvalues(nchg_file, fdr_thresh=SetDirectories.get_fdr_threshold(), log_ratio_threshold=2, method="fdr_bh"):

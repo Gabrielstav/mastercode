@@ -171,7 +171,7 @@ if __name__ == "__main__":
 
     # IMR90
     def imr90_graphs():
-        root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/imr90/edgelists")
+        root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/intra/imr90/edgelists")
         graph_creator = Gp.CreateGraphsFromDirectory(root_dir)
         graph_creator.from_edgelists()
         imr90_graphss = graph_creator.graph_dict
@@ -186,7 +186,7 @@ if __name__ == "__main__":
 
     # HUVEC
     def huvec_graphs():
-        root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/huvec/edgelists")
+        root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/intra/huvec/edgelists")
         graph_creator = Gp.CreateGraphsFromDirectory(root_dir)
         graph_creator.from_edgelists()
         huvec_graphss = graph_creator.graph_dict

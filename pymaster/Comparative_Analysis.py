@@ -25,6 +25,7 @@ import Graph_Analysis as Ga
 
 # TODO: Plot the differential community detection stuff.
 
+# Move betweenness and closeness to graph analysis? Since this is not necessarily comparative. "But it is comparative in the sense that it is comparing the same graph to itself" -copilot 24/4 23
 
 class BetweennessCentrality:
 
