@@ -4,7 +4,7 @@ from Pipeline import SetDirectories
 import os as os
 
 # This is old and abandoned, but I'm keeping it for now, first attempt at using classes to process data :)
-# This functionality (and more) is now in Network_Metrics.py
+# This functionality (and more) is now in Graph_Processing.py
 # Made to read in already pre-processed GTrack files and filter on them.
 
 @dataclass(frozen=True, eq=True)
