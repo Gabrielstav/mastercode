@@ -18,7 +18,7 @@ from collections import defaultdict
 # Pre-processing pipeline for Hi-C data from HiC-Pro
 ####################################################
 
-help_message = "Pipeline for processing Hi-C data from HiC-Pro to statistically significant edge-lists. \n\n" \
+help_message = "HiC_Pipeline for processing Hi-C data from HiC-Pro to statistically significant edge-lists. \n\n" \
                "INPUT DIR: -i\n" \
                "Directory containing HiC-Pro output folders (bed and matrix files) is set as input directory. Any folder can be the input, as long as it contains the HiC-Pro output folders (raw, matrix) for one HiC-Pro run. \n\n" \
                "OUTPUT DIR: -o \n" \
@@ -471,7 +471,7 @@ class Pipeline_Input:
                     else:
                         grouped_iced_files[key] += (bedfile, inted_matrixfile)
 
-        # Checks if Pipeline should be run on raw or ICE-normalized data
+        # Checks if HiC_Pipeline should be run on raw or ICE-normalized data
         grouped_files_checked = None
         if SetDirectories.get_normalized_data():
             grouped_files_checked = grouped_iced_files
@@ -744,10 +744,8 @@ class Pipeline:
 
             if SetDirectories.inter_interactions:
                 nchg_flags.append("-i")
-                print("Adding -i flag for inter_interactions")
 
             elif SetDirectories.mixed_interactions:
-                print("Adding -i flag for inter_interactions")
                 intrachromosomal = True
                 with open(bedpe_file, "r") as f:
                     for line in f:
@@ -784,7 +782,7 @@ class Pipeline:
     @staticmethod
     def split_bedpe_by_chromosome(bedpe_file, output_dir):
         """
-        For splitting intrachromosomal input files to NCHG, gives different results than not splitting, but much faster. 
+        For splitting intrachromosomal input files to NCHG, gives different results than not splitting, but much faster.
         Split a bedpe file by chromosome, only used for intra data split on chromosome.
         Does not currently work for inter data, since that needs the whole genome for statistical significance testing.
         :param bedpe_file: BEDPE file with interactions and blacklisted/centromeric regions removed
@@ -1179,7 +1177,7 @@ class Pipeline:
 
 def run_pipeline():
     """
-    Call selected methods of the Pipeline, in the order specified
+    Call selected methods of the HiC_Pipeline, in the order specified
     """
 
     global first_print
@@ -1205,7 +1203,7 @@ def run_pipeline():
 
     # Print runtime on completion
     end_time = time.time()
-    print(f"Pipeline completed in {end_time - start_time:.2f} seconds. ({(end_time - start_time) / 60:.2f} minutes, {((end_time - start_time) / 60) / 60:.2f} hours).")
+    print(f"HiC_Pipeline completed in {end_time - start_time:.2f} seconds. ({(end_time - start_time) / 60:.2f} minutes, {((end_time - start_time) / 60) / 60:.2f} hours).")
 
 
 if __name__ == "__main__":

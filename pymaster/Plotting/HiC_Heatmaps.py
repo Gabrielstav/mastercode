@@ -1,14 +1,9 @@
 # Import modules
 import os.path
 
-import numpy as np
-import matplotlib.pyplot as plt
 import pandas as pd
 import hicexplorer as he
 import re as re
-from HiEdge import SetDirectories as Sd
-import fithic as fh
-
 
 a.load_data("/Users/GBS/Master/HiC-Data/Pipeline_out/chr18_INC/chr18_norm/temp_dir/bedpe/chr18_norm_250000.bedpe")
 a.fit()

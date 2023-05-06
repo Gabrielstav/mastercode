@@ -1,13 +1,19 @@
 # Import modules
-import igraph as ig
+from Network_Analysis import Graph_Processing as Gp
+from Network_Analysis import Graph_Instances as Gi
+from Network_Analysis import Graph_Analysis as Ga
 from pathlib import Path
-import re as re
-import types as types
-import networkx as nx
 import pandas as pd
+import numpy as np
 import os as os
-import Graph_Processing as Gp
-import Graph_Analysis as Ga
+import scipy as sp
+import matplotlib.pyplot as plt
+import seaborn as sns
+import igraph as ig
+import networkx as nx
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+
 
 
 # TODO: Find lcc to total size ratio for each graph

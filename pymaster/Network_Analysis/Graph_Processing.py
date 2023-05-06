@@ -6,6 +6,7 @@ import types as types
 import networkx as nx
 import pandas as pd
 import os as os
+import io as io
 # Set backend of igraph to matplotlib:
 ig.config["plotting.backend"] = "matplotlib"
 
@@ -20,9 +21,14 @@ class CreateGraphsFromDirectory:
         self.graph_dict = {}
 
     def get_files(self, pattern):
-        files = (file_path for file_path in self.input_directory.rglob(pattern) if file_path.is_file())
+        files = (file_path for file_path in self.input_directory.rglob(pattern) if file_path.is_file() and not file_path.name.startswith('.'))
         files_list = [str(file_path.resolve()) for file_path in files]
         return files_list
+
+    # def get_files(self, pattern):
+    #     files = (file_path for file_path in self.input_directory.rglob(pattern) if file_path.is_file())
+    #     files_list = [str(file_path.resolve()) for file_path in files]
+    #     return files_list
 
     def from_edgelists(self, cell_lines=None, chromosomes=None, resolutions=None):
         all_files = self.get_files("*")
@@ -43,13 +49,24 @@ class CreateGraphsFromDirectory:
             # TODO: Maybe the error is due to this?:
 
             edges = []
-            with open(file_path, "r") as f:
+            with open(file_path, "rb") as f:
                 for line_number, line in enumerate(f, start=1):
                     try:
-                        edge = tuple(filter(None, line.strip().split()))
+                        line = line.decode("utf-8").strip()
+                        edge = tuple(filter(None, line.split()))
                         edges.append(edge)
-                    except UnicodeDecodeError:
-                        print(f"Error decoding line {line_number} in file {file_path}")
+                    except UnicodeDecodeError as e:
+                        print(f"Error decoding line {line_number} in file {file_path}: {e}")
+
+            # edges = []
+            # with open(file_path, "r") as f:
+            #     for line_number, line in enumerate(f, start=1):
+            #         try:
+            #             edge = tuple(filter(None, line.strip().split()))
+            #             edges.append(edge)
+            #         except UnicodeDecodeError as e:
+            #             print(f"Error decoding line {line_number} in file {file_path}: {e}")
+            #             continue
 
             # with open(file_path, "r") as f:
             #     edges = [tuple(filter(None, line.strip().split())) for line in f]

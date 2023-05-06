@@ -1,19 +1,14 @@
 # Import modules
 import igraph as ig
 import networkx as nx
-import seaborn as sb
-import plotly as ply
-import altair as alt
-import matplotlib.pyplot as plt
-import pandas as pd
-import numpy as np
-import Graph_Processing as Gp
-import Graph_Analysis as Ga
+from Network_Analysis import Graph_Analysis as Ga, Graph_Processing as Gp
 from matplotlib import pyplot as plt
 from pathlib import Path
+
 ig.config["plotting.backend"] = "matplotlib"
 # Default (?) and deprecated backend:
 # ig.config["plotting.backend"] = "cairo"
+
 
 class Settings:
 
@@ -22,6 +17,24 @@ class Settings:
 
     def get_output_dir(self):
         return self.root_dir
+
+# MCF10 raw graphs
+def mcf10_intra_raw_graphs():
+    root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/intra/raw/mcf10")
+    graph_creator = Gp.CreateGraphsFromDirectory(root_dir)
+    graph_creator.from_edgelists()
+    mcf10_graphs = graph_creator.graph_dict
+    return mcf10_graphs
+
+def mcf10_intra_norm_graphs():
+    root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/intra/norm/mcf10")
+    graph_creator = Gp.CreateGraphsFromDirectory(root_dir)
+    graph_creator.from_edgelists()
+    mcf10_graphs = graph_creator.graph_dict
+    return mcf10_graphs
+
+def mcf10_inter_graphs():
+    root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/inter/mcf10")
 
 
 # MCF7 and MCF10 from chrom parallel inter (raw)
