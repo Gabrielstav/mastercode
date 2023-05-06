@@ -57,6 +57,8 @@ help_message = "Pipeline for processing Hi-C data from HiC-Pro to statistically 
                "String: Executor to use for parallelization. Options: thread, process. Default is multiprocessing. \n\n" \
                "NO_SPLIT: -ns \n" \
                "If specified, do not split input files to NCHG by each chromosome. Default is to split files, to allow increased multiprocessing of NCHG. \n\n" \
+               "N_QUANTILES: -nq \n" \
+               "Int: Number of quantiles to use in NCHG for estimation of expected number of interactions given a genomic distance. Default is 100. \n\n" \
 
 parser = argparse.ArgumentParser(description=help_message, formatter_class=argparse.RawDescriptionHelpFormatter)
 
@@ -73,6 +75,7 @@ parser.add_argument("-f", "--fdr_threshold", help="Float: FDR threshold for sign
 parser.add_argument("-res", "--resolutions", help="Int: Resolution values can be provided to run the pipeline on specific resolutions.", required=False, nargs="+", type=int)
 parser.add_argument("-e", "--executor", choices=["m", "t", "multi", "mp", "th", "thread", "processing", "multiprocessing", "threading"], default="multiprocessing", help="Choose between multiprocessing and threading for the NCHG script method. Default is multiprocessing.")
 parser.add_argument("-ns", "--no_split", action="store_true", required=False, help="Do not split input files to NCHG by chromosomes.")
+parser.add_argument("-nq", "--n_quantiles", help="Int: Number of quantiles to use for NCHG. Default is 100.", required=False, type=int)
 args = parser.parse_args()
 
 # Sets args to None if not provided in command line
@@ -89,6 +92,7 @@ threads = args.threads
 resolutions = args.resolutions
 executor_type = args.executor
 no_split = args.no_split
+n_quantiles = args.n_quantiles
 
 
 class SetDirectories:
@@ -100,8 +104,8 @@ class SetDirectories:
     Set normalized data = True to process ICE matrices, False to process raw data.
     """
 
-    input_dir = os.path.abspath("/Users/GBS/Master/HiC-Data/HiC-Pro_out/chr18_inc/chr18_inc")
-    output_dir = os.path.abspath("/Users/GBS/Master/HiC-Data/testing_chrom_parallelization/output_terminal")
+    input_dir = os.path.abspath("/Users/GBS/Master/HiC-Data/testing_chrom_parallelization/input_test_chrom_parallel/combined")
+    output_dir = os.path.abspath("/Users/GBS/Master/HiC-Data/testing_chrom_parallelization/output")
     reference_dir = os.path.abspath("/Users/GBS/Master/Reference")
     nchg_path = os.path.abspath("/Users/GBS/Master/Scripts/NCHG_hic/NCHG")
     no_split = False  # If true, do not split input files to NCHG by chromosomes. Default is to split files, to allow multiprocessing of NCHG on each chromosome.
@@ -113,6 +117,8 @@ class SetDirectories:
     fdr_threshold = 0.05  # Sets FDR threshold for significance, can be overwritten by user input in command line
     resolutions = None  # Sets resolutions to None, can be overwritten by user input in command line
     nchg_executor = "multiprocessing"  # Sets executor to threading by default (tested to be fastest), can be overwritten by user input in command line or here.
+    n_quantiles = 100  # Sets number of quantiles to 100, can be overwritten by user input in command line
+
 
     @classmethod
     def set_normalized_data(cls, normalized_data):
@@ -164,7 +170,7 @@ class SetDirectories:
 
     @classmethod
     def set_interchromosomal_interactions(cls, inter_interactions):
-        cls.interchromosomal_interactions = inter_interactions
+        cls.inter_interactions = inter_interactions
 
     @classmethod
     def get_interchromosomal_interactions(cls):
@@ -193,6 +199,14 @@ class SetDirectories:
     @classmethod
     def get_fdr_threshold(cls):
         return cls.fdr_threshold
+
+    @classmethod
+    def set_quantiles(cls, num_quantiles):
+        cls.n_quantiles = num_quantiles
+
+    @classmethod
+    def get_n_quantiles(cls):
+        return cls.n_quantiles
 
     @classmethod
     def set_resolutions(cls, resolution):
@@ -280,6 +294,9 @@ SetDirectories.set_no_split(no_split)
 
 if threads is not None:
     SetDirectories.set_threads(threads)
+
+if n_quantiles is not None:
+    SetDirectories.set_quantiles(n_quantiles)
 
 if resolutions is not None:
     SetDirectories.set_resolutions(resolutions)
@@ -724,9 +741,13 @@ class Pipeline:
 
             # Run NCHG
             nchg_flags = []
+
             if SetDirectories.inter_interactions:
                 nchg_flags.append("-i")
+                print("Adding -i flag for inter_interactions")
+
             elif SetDirectories.mixed_interactions:
+                print("Adding -i flag for inter_interactions")
                 intrachromosomal = True
                 with open(bedpe_file, "r") as f:
                     for line in f:
@@ -737,6 +758,10 @@ class Pipeline:
 
                 if not intrachromosomal:
                     nchg_flags.append("-i")
+
+            if SetDirectories.n_quantiles:
+                nchg_flags.append("-n ")
+                nchg_flags.append(str(SetDirectories.n_quantiles))
 
             if not SetDirectories.inter_interactions and not SetDirectories.intra_interactions and not SetDirectories.mixed_interactions:
                 raise ValueError("Must select at least one type of interaction type for significance testing: Inter, intra, or mixed.")
@@ -758,11 +783,18 @@ class Pipeline:
 
     @staticmethod
     def split_bedpe_by_chromosome(bedpe_file, output_dir):
+        """
+        For splitting intrachromosomal input files to NCHG, gives different results than not splitting, but much faster. 
+        Split a bedpe file by chromosome, only used for intra data split on chromosome.
+        Does not currently work for inter data, since that needs the whole genome for statistical significance testing.
+        :param bedpe_file: BEDPE file with interactions and blacklisted/centromeric regions removed
+        :param output_dir: Directory containing the split BEDPE files, one BEDPE file per chromosome
+        :return: BEDPE file containing one chromosome's worth of interactions
+        """
         try:
             with open(bedpe_file, "r") as f:
                 data = f.readlines()
 
-            # Group data by chromosome
             chromosomes = {}
             for line in data:
                 chr_name = line.split("\t")[0]
@@ -774,6 +806,48 @@ class Pipeline:
             chr_files = []
             for chr_name, chr_data in chromosomes.items():
                 output_filename = f"{os.path.basename(bedpe_file)[:-len('.bedpe')]}_{chr_name}_split.bedpe"
+                output_filepath = os.path.join(output_dir, output_filename)
+                with open(output_filepath, "w") as f:
+                    f.write("\n".join(chr_data) + "\n")
+                chr_files.append(output_filepath)
+
+            return chr_files
+
+        except Exception as e:
+            tid = threading.get_ident()
+            print(f"Error in {bedpe_file}: {e}, PID: {os.getpid()}, TID: {tid}")
+            raise
+
+    @staticmethod
+    def split_bedpe_by_chromosome_pairs(bedpe_file, output_dir):
+        """
+        For splitting input files to NCHG in interchromosomal interactions. Gives different results than not splitting, but much faster.
+        Split a bedpe file by chromosome pairs, only used for inter data split on chromosome pairs.
+        This gives inter interactions, but needs to be validated against no_split inter interactions.
+        :param bedpe_file: BEDPE file containing inter interactions with blacklisted/centromeric regions removed.
+        :param output_dir: Output directory for the split BEDPE files, one BEDPE file per chromosome pair.
+        :return: BEDPE file containing one chromosome pair's worth of inter interactions.
+        """
+        try:
+            with open(bedpe_file, "r") as f:
+                data = f.readlines()
+
+            # Group data by chromosome pairs
+            chromosome_pairs = {}
+            for line in data:
+                columns = line.split("\t")
+                chr1, chr2 = columns[0], columns[3]
+                chr_pair_key = tuple(sorted([chr1, chr2]))
+
+                if chr_pair_key in chromosome_pairs:
+                    chromosome_pairs[chr_pair_key].append(line.strip())
+                else:
+                    chromosome_pairs[chr_pair_key] = [line.strip()]
+
+            # Write each chromosome pair to a separate file
+            chr_files = []
+            for (chr1, chr2), chr_data in chromosome_pairs.items():
+                output_filename = f"{os.path.basename(bedpe_file)[:-len('.bedpe')]}_{chr1}-{chr2}_split.bedpe"
                 output_filepath = os.path.join(output_dir, output_filename)
                 with open(output_filepath, "w") as f:
                     f.write("\n".join(chr_data) + "\n")
@@ -807,6 +881,41 @@ class Pipeline:
             all_files = [os.path.join(no_cytobands_dir_path, file) for file in no_cytobands_dir]
             input_file_map = {file: file for file in all_files}
             files_to_process = all_files
+
+        elif SetDirectories.inter_interactions:
+            # Create a directory to store split chromosome files
+            chr_split_base_dir = os.path.join(SetDirectories.get_temp_dir(), "input_to_nchg")
+            if not os.path.exists(chr_split_base_dir):
+                os.mkdir(chr_split_base_dir)
+            else:
+                shutil.rmtree(chr_split_base_dir)
+                os.mkdir(chr_split_base_dir)
+
+            # Split input files by chromosome pairs
+            all_chr_files = []
+            # keep original input file name for each chromosome file
+            input_file_map = {}
+
+            for file in no_cytobands_dir:
+                full_path = os.path.join(no_cytobands_dir_path, file)
+                if not os.path.isfile(full_path):
+                    print(f"File {file} does not exist.")
+
+                # Create a subdirectory for each input file inside the chr_split_base_dir
+                file_split_dir = os.path.join(chr_split_base_dir, f"{file[:-len('_no_blacklist_no_cytobands.bedpe')]}_split")
+                if not os.path.exists(file_split_dir):
+                    os.mkdir(file_split_dir)
+                else:
+                    shutil.rmtree(file_split_dir)
+                    os.mkdir(file_split_dir)
+
+                chr_files = Pipeline.split_bedpe_by_chromosome_pairs(full_path, file_split_dir)
+
+                for chr_file in chr_files:
+                    input_file_map[chr_file] = file
+                all_chr_files.extend(chr_files)
+
+            files_to_process = all_chr_files
 
         else:
             # Create a directory to store split chromosome files

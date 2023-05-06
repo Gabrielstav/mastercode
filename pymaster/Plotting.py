@@ -24,7 +24,6 @@ class Settings:
         return self.root_dir
 
 
-
 # MCF7 and MCF10 from chrom parallel inter (raw)
 def mcf7_10_raw_lowres_graphs_inter():
     root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/lowres_mcf7_mcf10/raw")
@@ -42,7 +41,7 @@ def mcf7_10_norm_lowres_graphs_inter():
     return mcf7_10_graphs
 
 def imr90_graphs():
-    root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/imr90/edgelists")
+    root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/intra/imr90")
     graph_creator = Gp.CreateGraphsFromDirectory(root_dir)
     graph_creator.from_edgelists()
     imr90_graphss = graph_creator.graph_dict
@@ -129,14 +128,14 @@ class plot_graph:
             print(f"Saved plot to {output_filename}")
 
 def plot_full():
-    dir_manager = SetDirectories()
+    dir_manager = Settings()
     output_dir = dir_manager.get_output_dir()
     plot = plot_graph(imr90_chr18(), output_dir)
     plot.show_graph()
 # plot_full()
 
 def plot_lcc():
-    dir_manager = SetDirectories()
+    dir_manager = Settings()
     output_dir = dir_manager.get_output_dir()
     graph_dict = mcf7_chr18_1mb()
     plot = plot_graph(graph_dict, output_dir)
@@ -145,13 +144,13 @@ def plot_lcc():
 # plot_lcc()
 
 def plot_only_lcc():
-    dir_manager = SetDirectories()
+    dir_manager = Settings()
     output_dir = dir_manager.get_output_dir()
     graph_dict = imr90_chr18()
     plot = plot_graph(graph_dict, output_dir)
     largest_component_obj = Gp.LargestComponent(graph_dict)
     plot.show_only_lcc(largest_component_obj)
-# plot_only_lcc()
+plot_only_lcc()
 
 
 # Seems redundant, gets almost same results as LCC membership:
@@ -223,7 +222,7 @@ print_lcc_ratios()
 
 
 def plot_lcc_ratio_imr90():
-    dir_manager = SetDirectories()
+    dir_manager = Settings()
     output_dir = dir_manager.get_output_dir()
     graph_dict = imr90_graphs()
     plot = plot_lcc_ratio(graph_dict, output_dir)

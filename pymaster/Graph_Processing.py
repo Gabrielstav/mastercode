@@ -40,8 +40,19 @@ class CreateGraphsFromDirectory:
                 if graph_name_resolution not in resolutions:
                     continue
 
+            # TODO: Maybe the error is due to this?:
+
+            edges = []
             with open(file_path, "r") as f:
-                edges = [tuple(filter(None, line.strip().split())) for line in f]
+                for line_number, line in enumerate(f, start=1):
+                    try:
+                        edge = tuple(filter(None, line.strip().split()))
+                        edges.append(edge)
+                    except UnicodeDecodeError:
+                        print(f"Error decoding line {line_number} in file {file_path}")
+
+            # with open(file_path, "r") as f:
+            #     edges = [tuple(filter(None, line.strip().split())) for line in f]
 
             df = pd.DataFrame(edges, columns=['source', 'target'])
 
@@ -89,6 +100,8 @@ class LargestComponent:
         for graph_name, graph in self.find_lcc().items():
             print(f"LCC for: {graph_name} \n size: {graph.vcount()} \n edges: {graph.ecount()}")
 
+
+# TODO: add filtering of inter graphs, where if inter > only return inter edges
 
 class FilterGraphs:
     """

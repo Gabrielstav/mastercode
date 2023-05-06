@@ -165,18 +165,35 @@ class Filter_Graphs_on_Metrics:
                 filtered_graph_dict[graph_name] = subgraph
         return filtered_graph_dict
 
+# TODO: Make clustering and hub detection class?
 
 # Just for quick testing:
 if __name__ == "__main__":
 
+    # # All (intra, raw) graphs
+    # def intrachromosomal_graphs():
+    #     root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/intra/raw")
+    #     graph_creator = Gp.CreateGraphsFromDirectory(root_dir)
+    #     graph_creator.from_edgelists()
+    #     all_intra_graphss = graph_creator.graph_dict
+    #     return all_intra_graphss
+
     # IMR90
     def imr90_graphs():
-        root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/intra/imr90/edgelists")
+        root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/intra/imr90")
         graph_creator = Gp.CreateGraphsFromDirectory(root_dir)
         graph_creator.from_edgelists()
         imr90_graphss = graph_creator.graph_dict
         return imr90_graphss
     print(imr90_graphs())
+
+    def mcf10_graphs():
+        root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/intra/mcf10/raw")
+        graph_creator = Gp.CreateGraphsFromDirectory(root_dir)
+        graph_creator.from_edgelists()
+        mcf10_graphss = graph_creator.graph_dict
+        return mcf10_graphss
+    print(mcf10_graphs())
 
     def imr90_chr18():
         graph_filter = Gp.FilterGraphs(imr90_graphs())
@@ -200,8 +217,9 @@ if __name__ == "__main__":
 
     def imr90_degree():
         graphs = Gp.FilterGraphs(imr90_graphs())  # instance
-        filtered_graph = graphs.filter_graphs(chromosomes="chr18", resolutions="1000000")  # instance to filter on
-        metrics = NetworkMetrics.calculate_metrics(filtered_graph, selected_metrics=["degree"])  # instance to calculate metrics on
+        filtered_graph = graphs.filter_graphs(chromosomes="chr1", resolutions="1000000")  # instance to filter on
+        network_metrics = NetworkMetrics(filtered_graph)  # instance to calculate metrics on
+        metrics = NetworkMetrics.calculate_metrics(network_metrics, selected_metrics=["degree"])  # instance to calculate metrics on
         return metrics
 
     print(imr90_degree())
