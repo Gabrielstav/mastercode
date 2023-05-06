@@ -1,12 +1,12 @@
 # Import modules
 import igraph as ig
 from pathlib import Path
-import re as re
 import types as types
 import networkx as nx
 import pandas as pd
 import os as os
-import io as io
+import re
+
 # Set backend of igraph to matplotlib:
 ig.config["plotting.backend"] = "matplotlib"
 
@@ -25,10 +25,23 @@ class CreateGraphsFromDirectory:
         files_list = [str(file_path.resolve()) for file_path in files]
         return files_list
 
-    # def get_files(self, pattern):
-    #     files = (file_path for file_path in self.input_directory.rglob(pattern) if file_path.is_file())
-    #     files_list = [str(file_path.resolve()) for file_path in files]
-    #     return files_list
+    def create_graphs(self):
+        for file in os.listdir(self.input_directory):
+            # Create the graph object from the file
+            graph = ig.Graph.Read_Ncol(os.path.join(self.input_directory, file))
+
+            # Extract cell line, resolution, and chromosomes
+            cell_line = re.search(r"(\w+)(?=_\d)", file).group(1)
+            resolution = re.search(r"(\d+)(?=\D*$)", file).group(1)
+            chromosomes = sorted(set(v["name"].split(":")[0] for v in graph.vs))
+
+            # Add graph-level attributes
+            graph["cell_line"] = cell_line
+            graph["resolution"] = int(resolution)
+            graph["chromosomes"] = chromosomes
+
+            # Add the graph object to the dictionary
+            self.graph_dict[file] = graph
 
     def from_edgelists(self, cell_lines=None, chromosomes=None, resolutions=None):
         all_files = self.get_files("*")
@@ -42,11 +55,9 @@ class CreateGraphsFromDirectory:
                     continue
 
             if resolutions is not None:
-                graph_name_resolution = re.search(r"_([\d]+)$", graph_name).group(1)
+                graph_name_resolution = re.search(r"_(\d+)$", graph_name).group(1)
                 if graph_name_resolution not in resolutions:
                     continue
-
-            # TODO: Maybe the error is due to this?:
 
             edges = []
             with open(file_path, "rb") as f:
@@ -58,19 +69,6 @@ class CreateGraphsFromDirectory:
                     except UnicodeDecodeError as e:
                         print(f"Error decoding line {line_number} in file {file_path}: {e}")
 
-            # edges = []
-            # with open(file_path, "r") as f:
-            #     for line_number, line in enumerate(f, start=1):
-            #         try:
-            #             edge = tuple(filter(None, line.strip().split()))
-            #             edges.append(edge)
-            #         except UnicodeDecodeError as e:
-            #             print(f"Error decoding line {line_number} in file {file_path}: {e}")
-            #             continue
-
-            # with open(file_path, "r") as f:
-            #     edges = [tuple(filter(None, line.strip().split())) for line in f]
-
             df = pd.DataFrame(edges, columns=['source', 'target'])
 
             # Filter the edges based on chromosomes
@@ -80,6 +78,9 @@ class CreateGraphsFromDirectory:
             graph = ig.Graph.TupleList(df.itertuples(index=False), directed=False)
             graph.vs['name'] = [v['name'] for v in graph.vs]  # Assign name attribute to edges
             self.graph_dict[graph_name] = graph
+
+        return self.graph_dict
+
 
 class LargestComponent:
     """
@@ -125,12 +126,13 @@ class FilterGraphs:
     Class that filters the graphs based on cell line, chromosome, and resolution.
     """
 
+    # Old implementation that works but does not use graph attribute functionality from igraph
     def __init__(self, graph_dict):
         self.graph_dict = graph_dict
         self.filtered_chromosomes = set()
         self.filtered_graph_dict = {}
 
-    def filter_graphs(self, cell_lines=None, chromosomes=None, resolutions=None, graph_dict=None):
+    def filter_graphs(self, cell_lines=None, chromosomes=None, resolutions=None, interaction_type=None, graph_dict=None):
         if graph_dict is None:
             graph_dict = self.graph_dict
 
@@ -178,8 +180,43 @@ class FilterGraphs:
             else:
                 self.filtered_graph_dict[graph_name] = graph
 
+            if interaction_type is not None:
+                if interaction_type not in ["intra", "inter"]:
+                    raise ValueError("Invalid interaction_type: choose 'intra' or 'inter'")
+                filtered_graph_dict = self.filter_interactions(interaction_type)
+                self.filtered_graph_dict = filtered_graph_dict
+
         return self.filtered_graph_dict
 
+    def filter_interactions(self, interaction_type):
+        filtered_graph_dict = {}
+
+        for graph_name, graph in self.graph_dict.items():
+            # Create an empty graph with the same vertices as the input graph
+            new_graph = ig.Graph()
+            new_graph.add_vertices(graph.vs["name"])
+
+            if interaction_type == "intra":
+                new_edges = [
+                    (graph.vs[e.source]["name"], graph.vs[e.target]["name"])
+                    for e in graph.es
+                    if graph.vs[e.source]["name"].split(":")[0]
+                    == graph.vs[e.target]["name"].split(":")[0]
+                ]
+            elif interaction_type == "inter":
+                new_edges = [
+                    (graph.vs[e.source]["name"], graph.vs[e.target]["name"])
+                    for e in graph.es
+                    if graph.vs[e.source]["name"].split(":")[0]
+                    != graph.vs[e.target]["name"].split(":")[0]
+                ]
+            else:
+                raise ValueError("Invalid interaction_type: choose 'intra' or 'inter'")
+
+            new_graph.add_edges(new_edges)
+            filtered_graph_dict[graph_name] = new_graph
+
+        return filtered_graph_dict
 
     def print_filtered_edges(self):
         for graph_name, graph in self.filtered_graph_dict.items():
@@ -188,6 +225,7 @@ class FilterGraphs:
                 source = graph.vs[edge.source]['name']
                 target = graph.vs[edge.target]['name']
                 print(f"{source} -- {target}")
+
 
 # If I need to use networkx for some reason later:
 class ConvertIgraphToNetworkx:

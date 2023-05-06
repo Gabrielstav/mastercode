@@ -67,6 +67,8 @@ def mcf7_inter_split_graphs():
     return mcf7_graphs
 
 
+
+
 # IMR90
 
 def imr90_intra_graphs():
@@ -141,4 +143,20 @@ def gsm2824367_inter_split_graphs():
 # Filtered graphs here ?
 
 
+def imr90_chr18():
+    all_imr90 = imr90_intra_graphs()
+    graph_filter = Gp.FilterGraphs(all_imr90)
+    filtered_graph = graph_filter.filter_graphs(chromosomes="chr15", resolutions="1000000")
+    graph_filter.print_filtered_edges()
+    return filtered_graph
 
+# imr90_chr18()
+
+def imr90_chr1_inter():
+    all_imr90 = imr90_inter_graphs()
+    graph_filter = Gp.FilterGraphs(all_imr90)
+    filtered_graph = graph_filter.filter_graphs(chromosomes="chr1", resolutions="1000000", interaction_type="inter")
+    graph_filter.print_filtered_edges()
+    return filtered_graph
+
+imr90_chr1_inter()
