@@ -3,7 +3,8 @@
 # TODO ALL:
 #  1. Get gene expression data from GEO or from the TCGA portal (need pre-processed, normalized data).
 #  2. Read this data in using pandas?
-#  3. Use pybedtools to intersect the gene expression data with nodes in the network?
+#  3. Use pybedtools to intersect the gene expression data with nodes in the network,
+#     using a class that takes a graph object dict and inersects the edge list with the gene expression data.
 #  4. Use the gene expression data average to weight the edges in the network? Or color them according to expression?
 #  5. Make gene expression plots for each cell line, per chromosome, per resolution.
 #  6. Make correlation plots between gene expression and network metrics for each cell line?

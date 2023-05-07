@@ -1,7 +1,7 @@
 # Import modules
 import igraph as ig
 import networkx as nx
-from Network_Analysis import Graph_Analysis as Ga, Graph_Processing as Gp
+from Network_Analysis import graph_analysis as Ga, graph_processing as Gp
 from matplotlib import pyplot as plt
 from pathlib import Path
 
@@ -18,64 +18,66 @@ class Settings:
     def get_output_dir(self):
         return self.root_dir
 
-# MCF10 raw graphs
-def mcf10_intra_raw_graphs():
-    root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/intra/raw/mcf10")
-    graph_creator = Gp.CreateGraphsFromDirectory(root_dir)
-    graph_creator.from_edgelists()
-    mcf10_graphs = graph_creator.graph_dict
-    return mcf10_graphs
-
-def mcf10_intra_norm_graphs():
-    root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/intra/norm/mcf10")
-    graph_creator = Gp.CreateGraphsFromDirectory(root_dir)
-    graph_creator.from_edgelists()
-    mcf10_graphs = graph_creator.graph_dict
-    return mcf10_graphs
-
-def mcf10_inter_graphs():
-    root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/inter/mcf10")
 
 
-# MCF7 and MCF10 from chrom parallel inter (raw)
-def mcf7_10_raw_lowres_graphs_inter():
-    root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/lowres_mcf7_mcf10/raw")
-    graph_creator = Gp.CreateGraphsFromDirectory(root_dir)
-    graph_creator.from_edgelists()
-    mcf7_10_graphs = graph_creator.graph_dict
-    return mcf7_10_graphs
+# # MCF10 raw graphs
+# def mcf10_intra_raw_graphs():
+#     root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/intra/raw/mcf10")
+#     graph_creator = Gp.CreateGraphsFromDirectory(root_dir)
+#     graph_creator.from_edgelists()
+#     mcf10_graphs = graph_creator.graph_dict
+#     return mcf10_graphs
+#
+# def mcf10_intra_norm_graphs():
+#     root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/intra/norm/mcf10")
+#     graph_creator = Gp.CreateGraphsFromDirectory(root_dir)
+#     graph_creator.from_edgelists()
+#     mcf10_graphs = graph_creator.graph_dict
+#     return mcf10_graphs
+#
+# def mcf10_inter_graphs():
+#     root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/inter/mcf10")
+#
+#
+# # MCF7 and MCF10 from chrom parallel inter (raw)
+# def mcf7_10_raw_lowres_graphs_inter():
+#     root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/lowres_mcf7_mcf10/raw")
+#     graph_creator = Gp.CreateGraphsFromDirectory(root_dir)
+#     graph_creator.from_edgelists()
+#     mcf7_10_graphs = graph_creator.graph_dict
+#     return mcf7_10_graphs
+#
+# # MCF7 and MCF10 from chrom parallel inter (norm)
+# def mcf7_10_norm_lowres_graphs_inter():
+#     root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/lowres_mcf7_mcf10/norm")
+#     graph_creator = Gp.CreateGraphsFromDirectory(root_dir)
+#     graph_creator.from_edgelists()
+#     mcf7_10_graphs = graph_creator.graph_dict
+#     return mcf7_10_graphs
+#
+# def imr90_graphs():
+#     root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/intra/imr90")
+#     graph_creator = Gp.CreateGraphsFromDirectory(root_dir)
+#     graph_creator.from_edgelists()
+#     imr90_graphss = graph_creator.graph_dict
+#     return imr90_graphss
+# # print(imr90_graphs())
+#
+# def imr90_chr18():
+#     graph_filter = Gp.FilterGraphs(imr90_graphs())
+#     filtered_graph = graph_filter.filter_graphs(chromosomes=["chr2"], resolutions=["250000"])
+#     graph_filter.print_filtered_edges()
+#     return filtered_graph
+# # imr90_chr18()
 
-# MCF7 and MCF10 from chrom parallel inter (norm)
-def mcf7_10_norm_lowres_graphs_inter():
-    root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/lowres_mcf7_mcf10/norm")
-    graph_creator = Gp.CreateGraphsFromDirectory(root_dir)
-    graph_creator.from_edgelists()
-    mcf7_10_graphs = graph_creator.graph_dict
-    return mcf7_10_graphs
-
-def imr90_graphs():
-    root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/intra/imr90")
-    graph_creator = Gp.CreateGraphsFromDirectory(root_dir)
-    graph_creator.from_edgelists()
-    imr90_graphss = graph_creator.graph_dict
-    return imr90_graphss
-print(imr90_graphs())
-
-def imr90_chr18():
-    graph_filter = Gp.FilterGraphs(imr90_graphs())
-    filtered_graph = graph_filter.filter_graphs(chromosomes=["chr2"], resolutions=["250000"])
-    graph_filter.print_filtered_edges()
-    return filtered_graph
-# imr90_chr18()
 
 
-
-def mcf7_chr18_1mb():
-    graph_filter = Gp.FilterGraphs(mcf7_10_norm_lowres_graphs_inter())
-    filtered_graphs = graph_filter.filter_graphs(cell_lines=["mcf10"], chromosomes=["chr18"], resolutions=["1000000"])
-    # graph_filter.print_filtered_edges(filtered_graphs)
-    return filtered_graphs
-# mcf7_chr18_1mb()
+# def mcf7_chr18_1mb():
+#     graph_filter = Gp.FilterGraphs(mcf7_10_norm_lowres_graphs_inter())
+#     filtered_graphs = graph_filter.filter_graphs(cell_lines=["mcf10"], chromosomes=["chr18"], resolutions=["1000000"])
+#     # graph_filter.print_filtered_edges(filtered_graphs)
+#     return filtered_graphs
+# # mcf7_chr18_1mb()
 
 # TODO: Make plotting class that takes any graph dict from any class in Network_Metrics and plots it as a network
 #   need to compare the LCC to the full graphs, because the number of communities and merges are the same but the sizes are different.
@@ -105,7 +107,7 @@ class plot_graph:
             end_unit = int(end)
             unit = "B"
 
-        # Use to label graphs like this:
+        # Can be used to abel graphs like this, not useful for large graphs:
         # resolution = int(re.search(r"_([^_]+)_", graph_name).group(1))
         # abbreviated_labels = [self.abbreviate_label(label, resolution) for label in graph.vs["name"]]
         return f"{chrom}:{start_unit}-{end_unit} {unit}"
@@ -140,30 +142,32 @@ class plot_graph:
             ig.plot(graph, output_filename)  # **visual_style)
             print(f"Saved plot to {output_filename}")
 
-def plot_full():
-    dir_manager = Settings()
-    output_dir = dir_manager.get_output_dir()
-    plot = plot_graph(imr90_chr18(), output_dir)
-    plot.show_graph()
-# plot_full()
+def plot_imr90_chr18_1mb
 
-def plot_lcc():
-    dir_manager = Settings()
-    output_dir = dir_manager.get_output_dir()
-    graph_dict = mcf7_chr18_1mb()
-    plot = plot_graph(graph_dict, output_dir)
-    largest_component_obj = Gp.LargestComponent(graph_dict)
-    plot.show_graph_with_lcc(largest_component_obj)
-# plot_lcc()
-
-def plot_only_lcc():
-    dir_manager = Settings()
-    output_dir = dir_manager.get_output_dir()
-    graph_dict = imr90_chr18()
-    plot = plot_graph(graph_dict, output_dir)
-    largest_component_obj = Gp.LargestComponent(graph_dict)
-    plot.show_only_lcc(largest_component_obj)
-plot_only_lcc()
+# def plot_full():
+#     dir_manager = Settings()
+#     output_dir = dir_manager.get_output_dir()
+#     plot = plot_graph(imr90_chr18(), output_dir)
+#     plot.show_graph()
+# # plot_full()
+#
+# def plot_lcc():
+#     dir_manager = Settings()
+#     output_dir = dir_manager.get_output_dir()
+#     graph_dict = mcf7_chr18_1mb()
+#     plot = plot_graph(graph_dict, output_dir)
+#     largest_component_obj = Gp.LargestComponent(graph_dict)
+#     plot.show_graph_with_lcc(largest_component_obj)
+# # plot_lcc()
+#
+# def plot_only_lcc():
+#     dir_manager = Settings()
+#     output_dir = dir_manager.get_output_dir()
+#     graph_dict = imr90_chr18()
+#     plot = plot_graph(graph_dict, output_dir)
+#     largest_component_obj = Gp.LargestComponent(graph_dict)
+#     plot.show_only_lcc(largest_component_obj)
+# plot_only_lcc()
 
 
 # Seems redundant, gets almost same results as LCC membership:
@@ -219,28 +223,28 @@ class plot_lcc_ratio:
         plt.show()
 
 
-def plot_imr90_lcc_ratios():
-    graph_dict = imr90_graphs()
-    plot_lcc_ratio.plot_lcc_ratio_per_chromosome(graph_dict)
+# def plot_imr90_lcc_ratios():
+#     graph_dict = imr90_graphs()
+#     plot_lcc_ratio.plot_lcc_ratio_per_chromosome(graph_dict)
 
 # plot_imr90_lcc_ratios()
 
-def print_lcc_ratios():
-    graph_dict = imr90_graphs()
-    lcc_ratio_object = Ga.LCC_Ratio(graph_dict)
-    lcc_ratio_dict = lcc_ratio_object.calculate_lcc_ratio_per_chromosome()
-    print(lcc_ratio_dict)
+# def print_lcc_ratios():
+#     graph_dict = imr90_graphs()
+#     lcc_ratio_object = Ga.LCC_Ratio(graph_dict)
+#     lcc_ratio_dict = lcc_ratio_object.calculate_lcc_ratio_per_chromosome()
+#     print(lcc_ratio_dict)
+#
+# print_lcc_ratios()
 
-print_lcc_ratios()
 
-
-def plot_lcc_ratio_imr90():
-    dir_manager = Settings()
-    output_dir = dir_manager.get_output_dir()
-    graph_dict = imr90_graphs()
-    plot = plot_lcc_ratio(graph_dict, output_dir)
-    plot.plot_lcc_ratio_bar()
-# plot_lcc_ratio_imr90()
+# def plot_lcc_ratio_imr90():
+#     dir_manager = Settings()
+#     output_dir = dir_manager.get_output_dir()
+#     graph_dict = imr90_graphs()
+#     plot = plot_lcc_ratio(graph_dict, output_dir)
+#     plot.plot_lcc_ratio_bar()
+# # plot_lcc_ratio_imr90()
 
 
 

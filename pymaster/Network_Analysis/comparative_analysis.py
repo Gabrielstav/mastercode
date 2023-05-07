@@ -1,7 +1,7 @@
 # Import modules
-from Network_Analysis import Graph_Processing as Gp
-from Network_Analysis import Graph_Instances as Gi
-from Network_Analysis import Graph_Analysis as Ga
+from Network_Analysis import graph_processing as Gp
+from Network_Analysis import graph_instances as Gi
+from Network_Analysis import graph_analysis as Ga
 from pathlib import Path
 import pandas as pd
 import numpy as np

@@ -2,7 +2,7 @@
 from collections import defaultdict
 from pathlib import Path
 from typing import Union
-from Network_Analysis import Graph_Processing as Gp
+from Network_Analysis import graph_processing as Gp
 
 
 class NetworkMetrics:
