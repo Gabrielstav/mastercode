@@ -344,6 +344,26 @@ class GraphCombiner:
                 print(f"{source} -- {target}")
 
 
+class ExportGraphToEdgelist:
+
+    def __init__(self, graph_dict, output_dir):
+        self.graph_dict = graph_dict
+        self.output_dir = output_dir
+        self.export()
+
+    def export(self):
+        for graph_name, graph in self.graph_dict.items():
+            self.export_edgelist(graph, os.path.join(self.output_dir, f"{graph_name}_edgelist.txt"))
+
+    @staticmethod
+    def export_edgelist(graph, file_path):
+        with open(file_path, 'w') as f:
+            for edge in graph.es:
+                source = graph.vs[edge.source]['name']
+                target = graph.vs[edge.target]['name']
+                f.write(f"{source} {target}\n")
+
+
 class ConvertIgraphToNetworkx:
 
     def __init__(self, graph_dict):

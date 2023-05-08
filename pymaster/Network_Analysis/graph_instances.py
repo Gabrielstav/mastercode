@@ -227,7 +227,11 @@ def mcf10_chr18_combined_single_function():
     graph_combiner.print_edges(combined_graphs)
     return combined_graphs
 
-print(mcf10_chr18_combined_single_function())
+# print(mcf10_chr18_combined_single_function())
+
+# gp.ExportGraphToEdgelist(mcf10_chr18_combined_single_function(), "/Users/GBS/Master/HiC-Data/edgelists/others/combined")
+gp.ExportGraphToEdgelist(mcf10_inter_graphs(), "/Users/GBS/Master/HiC-Data/edgelists/others/")
+
 
 
 
