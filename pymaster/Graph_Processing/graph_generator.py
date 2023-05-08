@@ -279,35 +279,6 @@ class GraphCombiner:
 
         return combined_graph
 
-    # @staticmethod
-    # def combine_graphs(graphs, graph_names, interaction_type):
-    #     combined_graph = graphs[0].copy()
-    #
-    #     # Add graph_origin attribute to vertices in the first graph
-    #     for v in combined_graph.vs:
-    #         v["graph_origin"] = {graph_names[0]}
-    #
-    #     for graph, graph_name in zip(graphs[1:], graph_names[1:]):
-    #         for v in graph.vs:
-    #             if not combined_graph.vs.select(name_eq=v["name"]):
-    #                 new_vertex = combined_graph.add_vertex(name=v["name"])
-    #                 new_vertex["graph_origin"] = {graph_name}
-    #             else:
-    #                 new_vertex = combined_graph.vs.select(name_eq=v["name"])[0]
-    #                 new_vertex["graph_origin"].add(graph_name)
-    #
-    #         # Add edges from the filtered graphs that match the desired interaction type
-    #         for e in graph.es:
-    #             source_vertex = graph.vs[e.source]
-    #             target_vertex = graph.vs[e.target]
-    #
-    #             # if graph_name.startswith(interaction_type) and not combined_graph.are_connected(source_vertex["name"], target_vertex["name"]):
-    #             if interaction_type is not None and graph_name.startswith(interaction_type) and not combined_graph.are_connected(source_vertex["name"], target_vertex["name"]):
-    #                 combined_graph.add_edge(source_vertex["name"], target_vertex["name"])
-    #
-    #
-    #     return combined_graph
-
     @staticmethod
     def matching_graphs(graph_name1, graph_name2):
         graph_name_parts1 = graph_name1.split("_")

@@ -1,5 +1,5 @@
 # Import modules
-from Network_Analysis import graph_processing as gp
+from Graph_Processing import graph_generator as gp
 # from Network_Analysis import Graph_Analysis as Ga
 from pathlib import Path
 

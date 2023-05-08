@@ -1,19 +1,4 @@
 # Import modules
-from Network_Analysis import graph_processing as Gp
-from Network_Analysis import graph_instances as Gi
-from Network_Analysis import graph_analysis as Ga
-from pathlib import Path
-import pandas as pd
-import numpy as np
-import os as os
-import scipy as sp
-import matplotlib.pyplot as plt
-import seaborn as sns
-import igraph as ig
-import networkx as nx
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-
 
 
 # TODO: Find lcc to total size ratio for each graph
@@ -63,19 +48,11 @@ class ClosenessCentrality:
         for graph_name, graph in self.calculate_closeness_centrality().items():
             print(f"Closeness centrality for: {graph_name} \n {graph}")
 
-class JaccardIndex:
+class Degree:
+    pass
 
-    def __init__(self, graph_dict):
-        self.graph_dict = graph_dict
 
-    def calculate_jaccard_index(self):
-        jaccard_index_dict = {}
-        for graph_name, graph in self.graph_dict.items():
-            jaccard_index_dict[graph_name] = graph.similarity_jaccard()
-        return jaccard_index_dict
 
-    def print_jaccard_index(self):
-        for graph_name, graph in self.calculate_jaccard_index().items():
-            print(f"Jaccard index for: {graph_name} \n {graph}")
 
-# class Alpaca:
+
+
