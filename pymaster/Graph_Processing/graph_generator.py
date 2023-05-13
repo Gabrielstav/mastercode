@@ -22,7 +22,7 @@ class CreateGraphsFromDirectory:
         self.graph_dict = {}
 
     def get_files(self, pattern):
-        files = (file_path for file_path in self.input_directory.rglob(pattern) if file_path.is_file() and not file_path.name.startswith('.'))
+        files = [file_path for file_path in self.input_directory.rglob(pattern) if file_path.is_file() and not file_path.name.startswith('.')]
         files_list = [str(file_path.resolve()) for file_path in files]
         return files_list
 
@@ -53,12 +53,17 @@ class CreateGraphsFromDirectory:
 
             if cell_lines is not None:
                 if not any(cell_line in graph_name for cell_line in cell_lines):
+                    print(f"File name '{file_name}' does not contain a valid cell line name.")
                     continue
 
             if resolutions is not None:
-                graph_name_resolution = re.search(r"_(\d+)$", graph_name).group(1)
-                if graph_name_resolution not in resolutions:
+                graph_name_resolution_match = re.search(r"_(\d+)(?=_)", graph_name)
+                if graph_name_resolution_match is None:
+                    print(f"File name '{file_name}' does not contain a valid resolution.")
                     continue
+                graph_name_resolution = int(graph_name_resolution_match.group(1))
+            else:
+                graph_name_resolution = None
 
             edges = []
             with open(file_path, "rb") as f:
@@ -77,10 +82,80 @@ class CreateGraphsFromDirectory:
                 df = df[df['source'].str.startswith(tuple(chromosomes)) & df['target'].str.startswith(tuple(chromosomes))]
 
             graph = ig.Graph.TupleList(df.itertuples(index=False), directed=False)
-            graph.vs['name'] = [v['name'] for v in graph.vs]  # Assign name attribute to edges
+
+            # Assign name attribute to edges
+            graph.vs['name'] = [v['name'] for v in graph.vs]
+
+            # Assign graph-level attributes
+            graph["cell_line"] = graph_name.split("_")[0]
+            graph["resolution"] = graph_name_resolution
+            graph["chromosomes"] = sorted(set(v["name"].split(":")[0] for v in graph.vs))
+
             self.graph_dict[graph_name] = graph
 
         return self.graph_dict
+
+    # Old implementation: Works, but does not assign attributes to edges/nodes on creation of graphs
+    # def from_edgelists(self, cell_lines=None, chromosomes=None, resolutions=None):
+    #     all_files = self.get_files("*")
+    #
+    #     for file_path in all_files:
+    #         file_name = os.path.basename(file_path)
+    #         graph_name = re.sub(r"_edgelist\.txt$", "", file_name)
+    #
+    #         if cell_lines is not None:
+    #             if not any(cell_line in graph_name for cell_line in cell_lines):
+    #                 continue
+    #
+    #         if resolutions is not None:
+    #             graph_name_resolution = re.search(r"_(\d+)$", graph_name).group(1)
+    #             if graph_name_resolution not in resolutions:
+    #                 continue
+    #
+    #         edges = []
+    #         with open(file_path, "rb") as f:
+    #             for line_number, line in enumerate(f, start=1):
+    #                 try:
+    #                     line = line.decode("utf-8").strip()
+    #                     edge = tuple(filter(None, line.split()))
+    #                     edges.append(edge)
+    #                 except UnicodeDecodeError as e:
+    #                     print(f"Error decoding line {line_number} in file {file_path}: {e}")
+    #
+    #         df = pd.DataFrame(edges, columns=['source', 'target'])
+    #
+    #         # Filter the edges based on chromosomes
+    #         if chromosomes is not None:
+    #             df = df[df['source'].str.startswith(tuple(chromosomes)) & df['target'].str.startswith(tuple(chromosomes))]
+    #
+    #         graph = ig.Graph.TupleList(df.itertuples(index=False), directed=False)
+    #         graph.vs['name'] = [v['name'] for v in graph.vs]  # Assign name attribute to edges
+    #         self.graph_dict[graph_name] = graph
+    #
+    #     return self.graph_dict
+
+
+class ConnectedComponents:
+    """
+    Class to find all connected components from a given graph object.
+    """
+
+    def __init__(self, graph_dict):
+        self.graph_dict = graph_dict
+
+    def find_components(self):
+        components_dict = {}
+        for graph_name, graph in self.graph_dict.items():
+            components = graph.components()
+            subgraphs = components.subgraphs()
+            components_dict[graph_name] = subgraphs
+        return components_dict
+
+    def print_components(self):
+        for graph_name, components in self.find_components().items():
+            print(f"Components for: {graph_name}")
+            for i, component in enumerate(components):
+                print(f"Component {i} nodes: {component.vs['name']}")
 
 
 class LargestComponent:
@@ -89,16 +164,15 @@ class LargestComponent:
     Pass any graph obj dict and return largest conected component.
     """
 
-    def __init__(self, graph_dict_or_function):
-        if isinstance(graph_dict_or_function, types.FunctionType):
-            self.graph_dict = graph_dict_or_function()
-        else:
-            self.graph_dict = graph_dict_or_function
+    def __init__(self, graph_dict):
+        self.graph_dict = graph_dict
+        self.largest_component_dict = self.find_lcc()
 
     def find_lcc(self):
         largest_component_dict = {}
         for graph_name, graph in self.graph_dict.items():
-            largest_component = graph.connected_components().giant()  # or g.clusters().giant() or graph.components().giant()?
+            components = graph.components()
+            largest_component = components.giant()
             largest_component_dict[graph_name] = largest_component
         return largest_component_dict
 
@@ -107,7 +181,7 @@ class LargestComponent:
         for graph_name, graph in self.graph_dict.items():
             components = graph.components()
             sizes = components.sizes()
-            largest_component_index = sizes.index(max(sizes))
+            largest_component_index = max(range(len(sizes)), key=sizes.__getitem__)
 
             lcc_membership_dict[graph_name] = [
                 1 if membership == largest_component_index else 0
@@ -116,8 +190,9 @@ class LargestComponent:
         return lcc_membership_dict
 
     def print_lcc(self):
-        for graph_name, graph in self.find_lcc().items():
-            print(f"LCC for: {graph_name} \n size: {graph.vcount()} \n edges: {graph.ecount()}")
+        for graph_name, graph in self.largest_component_dict.items():
+            print(f"LCC for: {graph_name}\nsize: {graph.vcount()}\nedges: {graph.ecount()}")
+
 
 
 class FilterGraphs:
@@ -234,6 +309,27 @@ class FilterGraphs:
                 source = graph.vs[edge.source]['name']
                 target = graph.vs[edge.target]['name']
                 print(f"{source} -- {target}")
+
+    def print_graph_attributes(self):
+        for graph_dict in self.graph_dict:
+            for graph_name, graph in graph_dict.items():
+
+                # Graph-level attributes
+                print(f"Graph: {graph_name}")
+                graph_attributes = graph.attributes()
+                print("Graph attributes:")
+                print(graph_attributes)
+
+                # Node-level attributes
+                node_attributes = graph.vs.attributes()
+                print("Node attributes:")
+                print(node_attributes)
+
+                # Edge-level attributes
+                edge_attributes = graph.es.attributes()
+                print("Edge attributes:")
+                print(edge_attributes)
+                print("-" * 30)
 
 
 

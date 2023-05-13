@@ -2,7 +2,7 @@
 from collections import defaultdict
 from pathlib import Path
 from typing import Union
-from Graph_Processing import graph_generator as gp
+from Graph_Processing import graph_generator as gg
 
 
 class NetworkMetrics:
@@ -127,7 +127,7 @@ class LCC_Ratio:
                     chromosomes.add(target_chromosome)
 
         for chromosome in chromosomes:
-            filtered_graphs = gp.FilterGraphs(self.graph_dict).filter_graphs(chromosomes=chromosome)
+            filtered_graphs = gg.FilterGraphs(self.graph_dict).filter_graphs(chromosomes=chromosome)
             for graph_name, graph in filtered_graphs.items():
                 lcc_graph_size = graph.connected_components().giant().vcount()
                 parent_graph_size = graph.vcount()
@@ -180,7 +180,7 @@ if __name__ == "__main__":
     # IMR90
     def imr90_graphs():
         root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/intra/imr90")
-        graph_creator = gp.CreateGraphsFromDirectory(root_dir)
+        graph_creator = gg.CreateGraphsFromDirectory(root_dir)
         graph_creator.from_edgelists()
         imr90_graphss = graph_creator.graph_dict
         return imr90_graphss
@@ -188,14 +188,14 @@ if __name__ == "__main__":
 
     def mcf10_graphs():
         root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/intra/mcf10/raw")
-        graph_creator = gp.CreateGraphsFromDirectory(root_dir)
+        graph_creator = gg.CreateGraphsFromDirectory(root_dir)
         graph_creator.from_edgelists()
         mcf10_graphss = graph_creator.graph_dict
         return mcf10_graphss
     print(mcf10_graphs())
 
     def imr90_chr18():
-        graph_filter = gp.FilterGraphs(imr90_graphs())
+        graph_filter = gg.FilterGraphs(imr90_graphs())
         filtered_graph = graph_filter.filter_graphs(chromosomes="chr18", resolutions="1000000")
         graph_filter.print_filtered_edges()
         return filtered_graph
@@ -203,19 +203,19 @@ if __name__ == "__main__":
     # HUVEC
     def huvec_graphs():
         root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/intra/huvec/edgelists")
-        graph_creator = gp.CreateGraphsFromDirectory(root_dir)
+        graph_creator = gg.CreateGraphsFromDirectory(root_dir)
         graph_creator.from_edgelists()
         huvec_graphss = graph_creator.graph_dict
         return huvec_graphss
 
     def huvec_chr18():
-        graph_filter = gp.FilterGraphs(huvec_graphs())
+        graph_filter = gg.FilterGraphs(huvec_graphs())
         filtered_graph = graph_filter.filter_graphs(chromosomes="chr18", resolutions="1000000")
         graph_filter.print_filtered_edges()
         return filtered_graph
 
     def imr90_degree():
-        graphs = gp.FilterGraphs(imr90_graphs())  # instance
+        graphs = gg.FilterGraphs(imr90_graphs())  # instance
         filtered_graph = graphs.filter_graphs(chromosomes="chr1", resolutions="1000000")  # instance to filter on
         network_metrics = NetworkMetrics(filtered_graph)  # instance to calculate metrics on
         metrics = NetworkMetrics.calculate_metrics(network_metrics, selected_metrics=["degree"])  # instance to calculate metrics on

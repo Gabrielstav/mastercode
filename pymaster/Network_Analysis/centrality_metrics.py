@@ -1,4 +1,8 @@
 # Import modules
+from Graph_Processing import graph_instances as gi
+from Graph_Processing import graph_metrics as gm
+from Graph_Processing import graph_generator as gp
+
 
 
 # TODO: Find lcc to total size ratio for each graph
@@ -33,6 +37,9 @@ class BetweennessCentrality:
         for graph_name, graph in self.calculate_betweenness_centrality().items():
             print(f"Betweenness centrality for: {graph_name} \n {graph}")
 
+# mcf10_graphs = gi.MCF10_G
+
+
 class ClosenessCentrality:
 
     def __init__(self, graph_dict):
@@ -47,6 +54,7 @@ class ClosenessCentrality:
     def print_closeness_centrality(self):
         for graph_name, graph in self.calculate_closeness_centrality().items():
             print(f"Closeness centrality for: {graph_name} \n {graph}")
+
 
 class Degree:
     pass

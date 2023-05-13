@@ -1,7 +1,9 @@
 # Import modules
 import igraph as ig
 import networkx as nx
-from Graph_Processing import graph_metrics as Ga
+from Graph_Processing import graph_metrics as gm
+from Graph_Processing import graph_generator as gg
+from Graph_Processing import graph_instances as gi
 from matplotlib import pyplot as plt
 from pathlib import Path
 
@@ -57,7 +59,7 @@ class plot_graph:
         print(self.graph_dict)
         for graph_name, graph in self.graph_dict.items():
             ig.plot(graph)
-            plt.show()
+            # plt.show()
 
     def show_graph_with_lcc(self, largest_component_obj):
         for graph_name, graph in self.graph_dict.items():
@@ -85,22 +87,31 @@ class plot_graph:
 
 # def plot_imr90_chr18_1mb
 
-# def plot_full():
-#     dir_manager = Settings()
-#     output_dir = dir_manager.get_output_dir()
-#     plot = plot_graph(imr90_chr18(), output_dir)
-#     plot.show_graph()
-# # plot_full()
+def show_graph(self):
+    print(self.graph_dict)
+    for graph_name, graph in self.graph_dict.items():
+        plot = ig.plot(graph)
+        plot.show()
+show_graph()
+
+def plot_full():
+    dir_manager = Settings()
+    output_dir = dir_manager.get_output_dir()
+    plot = plot_graph(gi.imr90_chr18(), output_dir)
+    plot.show_graph()
+plot_full()
+
 #
-# def plot_lcc():
-#     dir_manager = Settings()
-#     output_dir = dir_manager.get_output_dir()
-#     graph_dict = mcf7_chr18_1mb()
-#     plot = plot_graph(graph_dict, output_dir)
-#     largest_component_obj = Gp.LargestComponent(graph_dict)
-#     plot.show_graph_with_lcc(largest_component_obj)
-# # plot_lcc()
-#
+def plot_lcc():
+    dir_manager = Settings()
+    output_dir = dir_manager.get_output_dir()
+    graph_dict = gi.mcf10_combined()
+    plot = plot_graph(graph_dict, output_dir)
+    largest_component_obj = gg.LargestComponent(graph_dict)
+    plot.show_graph_with_lcc(largest_component_obj)
+# plot_lcc()
+
+
 # def plot_only_lcc():
 #     dir_manager = Settings()
 #     output_dir = dir_manager.get_output_dir()
@@ -138,7 +149,7 @@ class plot_lcc_ratio:
         self.output_dir = output_dir
 
     def plot_lcc_ratio_bar(self):
-        lcc_ratio_calculator = Ga.LCC_Ratio(self.graph_dict)
+        lcc_ratio_calculator = gm.LCC_Ratio(self.graph_dict)
         lcc_ratio_dict = lcc_ratio_calculator.calculate_lcc_ratio()
 
         for graph_name, graph_sizes in lcc_ratio_dict.items():
@@ -151,7 +162,7 @@ class plot_lcc_ratio:
         plt.show()
 
     def plot_lcc_ratio_per_chromosome(self):
-        lcc_ratio_calc = Ga.LCC_Ratio(self)
+        lcc_ratio_calc = gm.LCC_Ratio(self)
         lcc_ratio_dict = lcc_ratio_calc.calculate_lcc_ratio_per_chromosome()
 
         for graph_name, graph_sizes in lcc_ratio_dict.items():
