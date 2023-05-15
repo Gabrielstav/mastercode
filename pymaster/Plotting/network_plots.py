@@ -6,34 +6,61 @@ from Graph_Processing import graph_generator as gg
 from Graph_Processing import graph_instances as gi
 from matplotlib import pyplot as plt
 from pathlib import Path
+import cairocffi as cairo
+from multiprocessing import Pool
 
-ig.config["plotting.backend"] = "matplotlib"
-# Default (?) and deprecated backend:
-# ig.config["plotting.backend"] = "cairo"
-
-# Classes for plotting networks
+ig.config["plotting.backend"] = "cairo"
+ig.backend = "cairo"
+# ig.config["plotting.backend"] = "matplotlib"
 
 
-class Settings:
+# define edge list
+edges = [
+    ("chr2:0-1000000", "chr2:1000000-2000000"),
+    ("chr2:0-1000000", "chr2:2000000-3000000"),
+    ("chr2:0-1000000", "chr2:3000000-4000000"),
+    ("chr2:0-1000000", "chr2:4000000-5000000"),
+]
 
-    def __init__(self):
-        self.root_dir = Path("/Users/GBS/Master/Figures/iGraph")
+# create graph
+graph = ig.Graph.TupleList(edges, directed=False)
 
-    def get_output_dir(self):
-        return self.root_dir
+# get connected components
+components = graph.components()
+
+# print each component and its nodes
+for i, component in enumerate(components):
+    print(f"Component {i + 1} nodes: {component}")
+
+
+class OutputDirectory:
+    output_dir = Path("/Users/GBS/Master/Figures/iGraph")
+
+    @classmethod
+    def set_output_dir(cls, output_dir):
+        cls.output_dir = output_dir
+
+    @classmethod
+    def get_output_dir(cls):
+        return cls.output_dir
+
+    # def __init__(self):
+    #     self.root_dir = Path("/Users/GBS/Master/Figures/iGraph")
+    #
+    # def get_output_dir(self):
+    #     return self.root_dir
 
 
 # TODO: Make plotting class that takes any graph dict from any class in Network_Metrics and plots it as a network
 
-
-class plot_graph:
+class PlotGraph:
 
     def __init__(self, graph_dict, output_dir):
         self.graph_dict = graph_dict
         self.output_dir = output_dir
 
     @staticmethod
-    def abbreviate_label(self, label, resolution):
+    def abbreviate_label(label, resolution):
         chrom, region = label.split(':')
         start, end = region.split('-')
 
@@ -50,65 +77,131 @@ class plot_graph:
             end_unit = int(end)
             unit = "B"
 
-        # Can be used to abel graphs like this, not useful for large graphs:
-        # resolution = int(re.search(r"_([^_]+)_", graph_name).group(1))
-        # abbreviated_labels = [self.abbreviate_label(label, resolution) for label in graph.vs["name"]]
         return f"{chrom}:{start_unit}-{end_unit} {unit}"
 
     def show_graph(self):
         print(self.graph_dict)
-        for graph_name, graph in self.graph_dict.items():
-            ig.plot(graph)
-            # plt.show()
+        for graph_name, graphs in self.graph_dict.items():
+            ig.plot(graphs)
 
     def show_graph_with_lcc(self, largest_component_obj):
-        for graph_name, graph in self.graph_dict.items():
-            lcc_membership = largest_component_obj.lcc_membership()[graph_name]
+        lcc_memberships = largest_component_obj.lcc_membership()
+        for graph_name, graphs in self.graph_dict.items():
+            lcc_membership = lcc_memberships[graph_name]
             node_colors = ["red" if membership == 1 else "black" for membership in lcc_membership]
-            edge_colors = ["red" if lcc_membership[edge.source] == 1 and lcc_membership[edge.target] else "black" for edge in graph.es]
-            ig.plot(graph, vertex_color=node_colors, edge_color=edge_colors)
-            plt.show()
+            edge_colors = ["red" if lcc_membership[edge.source] == 1 and lcc_membership[edge.target] else "black" for edge in graphs.es]
+            ig.plot(graphs, vertex_color=node_colors, edge_color=edge_colors)
 
     def show_only_lcc(self, largest_component_obj):
-        for graph_name, graph in self.graph_dict.items():
-            lcc_membership = largest_component_obj.lcc_membership()[graph_name]
-            lcc_graph = graph.subgraph([node.index for node in graph.vs if lcc_membership[node.index] == 1])
+        lcc_memberships = largest_component_obj.lcc_membership()
+        for graph_name, graphs in self.graph_dict.items():
+            lcc_membership = lcc_memberships[graph_name]
+            lcc_graph = graphs.subgraph(node.index for node in graphs.vs if lcc_membership[node.index] == 1)
             ig.plot(lcc_graph, vertex_color="red", edge_color="black")
-            plt.show()
 
-    def save_graph(self):
-        for graph_name, graph in self.graph_dict.items():
-            visual_style = {"vertex_size": 1, "vertex_label": graph.vs["name"], "layout": graph.layout("kk")}
-            # Remove special characters from graph name to use as file name:
+    def save_graph(self, graph_dict):
+        for graph_name, graphs in graph_dict.items():
+            visual_style = {"vertex_size": 0.05, "edge_width": 0.3, "layout": graphs.layout("fruchterman_reingold")}
             safe_graph_name = "".join(e for e in graph_name if e.isalnum() or e == "_")
-            output_filename = self.output_dir / f"{safe_graph_name}.png"
-            ig.plot(graph, output_filename)  # **visual_style)
+            output_filename = self.output_dir / f"{safe_graph_name}.pdf"
+            ig.plot(graphs, output_filename, **visual_style, bbox=(2000, 2000))
             print(f"Saved plot to {output_filename}")
+
+    def save_all_graphs(self):
+        with Pool() as p:
+            p.starmap(self.save_graph, self.graph_dict.items())
+
+
+for graph_names, graph in gi.imr90_chr18().items():
+    print(graph_names, graph)
+    ig.plot(graph)
+
+
+# plotter = PlotGraph(gi.imr90_chr18(), OutputDirectory.get_output_dir())
+# plotter.save_graph(gi.imr90_chr18())
+
+
+# class plot_graph:
+#
+#     def __init__(self, graph_dict, output_dir):
+#         self.graph_dict = graph_dict
+#         self.output_dir = output_dir
+#
+#     @staticmethod
+#     def abbreviate_label(self, label, resolution):
+#         chrom, region = label.split(':')
+#         start, end = region.split('-')
+#
+#         if resolution >= 1000000:
+#             start_unit = int(start) // 1000000
+#             end_unit = int(end) // 1000000
+#             unit = "MB"
+#         elif resolution >= 1000:
+#             start_unit = int(start) // 1000
+#             end_unit = int(end) // 1000
+#             unit = "KB"
+#         else:
+#             start_unit = int(start)
+#             end_unit = int(end)
+#             unit = "B"
+#
+#         # Can be used to label graphs like this, not useful for large graphs:
+#         # resolution = int(re.search(r"_([^_]+)_", graph_name).group(1))
+#         # abbreviated_labels = [self.abbreviate_label(label, resolution) for label in graph.vs["name"]]
+#         return f"{chrom}:{start_unit}-{end_unit} {unit}"
+#
+#     def show_graph(self):
+#         print(self.graph_dict)
+#         for graph_name, graphs in self.graph_dict.items():
+#             ig.plot(graphs)
+#
+#     def show_graph_with_lcc(self, largest_component_obj):
+#         for graph_name, graphs in self.graph_dict.items():
+#             lcc_membership = largest_component_obj.lcc_membership()[graph_name]
+#             node_colors = ["red" if membership == 1 else "black" for membership in lcc_membership]
+#             edge_colors = ["red" if lcc_membership[edge.source] == 1 and lcc_membership[edge.target] else "black" for edge in graphs.es]
+#             ig.plot(graphs, vertex_color=node_colors, edge_color=edge_colors)
+#
+#     def show_only_lcc(self, largest_component_obj):
+#         for graph_name, graphs in self.graph_dict.items():
+#             lcc_membership = largest_component_obj.lcc_membership()[graph_name]
+#             lcc_graph = graphs.subgraph([node.index for node in graph.vs if lcc_membership[node.index] == 1])
+#             ig.plot(lcc_graph, vertex_color="red", edge_color="black")
+#
+#     def save_graph(self):
+#         for graph_name, graphs in self.graph_dict.items():
+#             visual_style = {"vertex_size": 1, "vertex_label": graph.vs["name"], "layout": graph.layout("kk")}
+#             safe_graph_name = "".join(e for e in graph_name if e.isalnum() or e == "_")
+#             output_filename = self.output_dir / f"{safe_graph_name}.png"
+#             ig.plot(graphs, output_filename, **visual_style)
+#             print(f"Saved plot to {output_filename}")
 
 # def plot_imr90_chr18_1mb
 
-def show_graph(self):
-    print(self.graph_dict)
-    for graph_name, graph in self.graph_dict.items():
-        plot = ig.plot(graph)
-        plot.show()
-show_graph()
-
-def plot_full():
-    dir_manager = Settings()
-    output_dir = dir_manager.get_output_dir()
-    plot = plot_graph(gi.imr90_chr18(), output_dir)
-    plot.show_graph()
-plot_full()
-
+# def plot_imr():
+#     dir_manager = Settings()
+#     output_dir = dir_manager.get_output_dir()
+#     graphs = gi.imr90_chr18()
+#     plot = plot_graph(graphs, output_dir)
+#     plot.save_graph()
+#     return plot
+# plot_imr()
 #
-def plot_lcc():
-    dir_manager = Settings()
-    output_dir = dir_manager.get_output_dir()
-    graph_dict = gi.mcf10_combined()
-    plot = plot_graph(graph_dict, output_dir)
-    largest_component_obj = gg.LargestComponent(graph_dict)
-    plot.show_graph_with_lcc(largest_component_obj)
+# def plot_full():
+#     dir_manager = Settings()
+#     output_dir = dir_manager.get_output_dir()
+#     plot = plot_graph(gi.imr90_chr18(), output_dir)
+#     plot.show_graph()
+# plot_full()
+#
+# #
+# def plot_lcc():
+#     dir_manager = Settings()
+#     output_dir = dir_manager.get_output_dir()
+#     graph_dict = gi.mcf10_combined()
+#     plot = plot_graph(graph_dict, output_dir)
+#     largest_component_obj = gg.LargestComponent(graph_dict)
+#     plot.show_graph_with_lcc(largest_component_obj)
 # plot_lcc()
 
 
@@ -139,8 +232,6 @@ def plot_lcc():
 # plot_cc()
 
 # TODO: Make stacked bar plots showing ratio of nodes in LCC to total nodes for each cell line and each resolution, takes graph dicts as input.
-
-
 
 
 class plot_lcc_ratio:
@@ -199,13 +290,11 @@ class plot_lcc_ratio:
 # # plot_lcc_ratio_imr90()
 
 
-
 # TODO: Make degree distribution plots for each cell lines LCC for each chromosome, per resolution? Takes graph dict as input.
 
 # TODO: Make betweenness plot that colors the nodes by betwenness centrality, takes a graph dict as input. Make
 
 # TODO: Make closeness plot that colors the nodes by closeness, takes graph dict as input.
-
 
 
 # Networkx plot
@@ -224,11 +313,3 @@ class PlotNetworkxGraphs:
 
 # plotter = PlotNetworkxGraphs(ConvertIgraphToNetworkx(chr18_inc_norm_graphs_50kb()).convert())
 # plotter.plot()
-
-
-
-
-
-
-
-
