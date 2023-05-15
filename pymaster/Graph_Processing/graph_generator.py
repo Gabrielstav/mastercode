@@ -1,7 +1,6 @@
 # Import modules
 import igraph as ig
 from pathlib import Path
-import types as types
 import networkx as nx
 import pandas as pd
 import os as os
@@ -38,7 +37,6 @@ class CreateGraphsFromDirectory:
                     try:
                         edge = list(filter(None, line.strip().split()))
                         source_chromosome, target_chromosome = edge[0].split(":")[0], edge[1].split(":")[0]
-                        # print(source_chromosome, target_chromosome) # Debug
                         interaction_type = "inter" if source_chromosome != target_chromosome else "intra"
                         edges.append((*edge, interaction_type))
                     except Exception as e:
@@ -62,9 +60,6 @@ class CreateGraphsFromDirectory:
             # Assign graph-level attributes
             graph["cell_line"] = cell_line
             graph["resolution"] = graph_name_resolution
-
-            print(f"Graph {graph_name} attributes:")  # Debug print statement
-            print(graph.attributes())  # Debug print statement
 
             self.graph_dict[graph_name] = graph
 
@@ -264,7 +259,7 @@ class GraphCombiner:
         return combined_graph
 
     @staticmethod
-    def matching_graphs(graph1, graph2):
+    def matching_graphs():
         return True
         # return graph1["cell_line"] == graph2["cell_line"] and graph1["resolution"] != graph2["resolution"] # make different combinators later based on attributes
 
@@ -284,7 +279,7 @@ class GraphCombiner:
                 if (i, j) in combined_pairs or (j, i) in combined_pairs:
                     continue
 
-                if self.matching_graphs(graph1, graph2):
+                if self.matching_graphs:
                     combined_graph_name = self.create_combined_graph_name([graph_name1, graph_name2])
                     combined_graph = self.combine_graphs([graph1, graph2], [graph_name1, graph_name2])
                     combined_graph_dict[combined_graph_name] = combined_graph
