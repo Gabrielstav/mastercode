@@ -1,9 +1,254 @@
 # Import modules
 from collections import defaultdict
-from pathlib import Path
 from typing import Union
-from Graph_Processing import graph_generator as gg
+import itertools as it
 
+
+class ConnectedComponents:
+    """
+    Class to find all connected components from a given graph object.
+    """
+
+    def __init__(self, graph_dict):
+        self.graph_dict = graph_dict
+
+    def find_components(self):
+        components_dict = {}
+        for graph_name, graph in self.graph_dict.items():
+            components = graph.components()
+            for i, component in enumerate(components):
+                if len(component) == 1:
+                    print(f"Isolated node in {graph_name}: {graph.vs[component[0]]['name']}")
+            components_dict[graph_name] = components
+        return components_dict
+
+    def print_components(self):
+        for graph_name, components in self.find_components().items():
+            print(f"Components for: {graph_name}")
+            for i, component in enumerate(components):
+                # Get the node names for this component from the original graph
+                component_nodes = [v['name'] for v in self.graph_dict[graph_name].vs if v.index in component]
+                print(f"Component {i} nodes: {component_nodes}")
+
+
+class LargestComponent:
+    """
+    Class to find the LCC from a given graph object.
+    Pass any graph obj dict and return largest conected component.
+    """
+
+    def __init__(self, graph_dict):
+        self.graph_dict = graph_dict
+        self.largest_component_dict = self.find_lcc()
+
+    def find_lcc(self):
+        largest_component_dict = {}
+        for graph_name, graph in self.graph_dict.items():
+            components = graph.components()
+            largest_component = components.giant()
+            largest_component_dict[graph_name] = largest_component
+        return largest_component_dict
+
+    def lcc_membership(self):
+        lcc_membership_dict = {}
+        for graph_name, graph in self.graph_dict.items():
+            components = graph.components()
+            sizes = components.sizes()
+            largest_component_index = max(range(len(sizes)), key=sizes.__getitem__)
+
+            lcc_membership_dict[graph_name] = [
+                1 if membership == largest_component_index else 0
+                for membership in components.membership
+            ]
+        return lcc_membership_dict
+
+    def print_lcc(self):
+        for graph_name, graph in self.largest_component_dict.items():
+            print(f"LCC for: {graph_name}\nsize: {graph.vcount()}\nedges: {graph.ecount()}")
+
+
+class FilterGraphs:
+    """
+    Class that filters the graphs based on cell line, chromosome, resolution and interaction type.
+    """
+
+    def __init__(self, graph_dict):
+        self.graph_dict = graph_dict
+
+    def filter_graphs(self, cell_lines=None, chromosomes=None, resolutions=None, interaction_type=None, split_statuses=None, norm_statuses=None):
+        filtered_graph_dict = {}
+
+        for graph_name, graph in self.graph_dict.items():
+            if "cell_line" not in graph.attributes():
+                raise KeyError(f"Graph '{graph_name}' does not have a 'cell_line' attribute")
+            cell_line = graph["cell_line"]
+            resolution = graph["resolution"]
+            split_status = graph["split_status"]
+            norm_status = graph["norm_status"]
+
+            if cell_lines is not None and cell_line not in cell_lines:
+                continue
+
+            if resolutions is not None:
+                if resolution is None:
+                    print(f"Warning: Graph '{graph_name}' does not have a resolution attribute.")
+                    continue
+                if resolution not in resolutions:
+                    continue
+
+            if split_statuses is not None and split_status not in split_statuses:
+                continue
+
+            if norm_statuses is not None and norm_status not in norm_statuses:
+                continue
+
+            if chromosomes is not None:
+                selected_edges = [edge for edge in graph.es if any(graph.vs[node_index]['chromosome'] in chromosomes for node_index in edge.tuple)]
+
+                if interaction_type is not None and 'interaction_type' in graph.es.attributes():
+                    selected_edges = [edge for edge in selected_edges if edge['interaction_type'] == interaction_type]
+
+                if not selected_edges:
+                    print(f"No edges fulfilling the filtering criteria found in graph '{graph_name}'.")
+                    continue
+                else:
+                    graph = graph.subgraph_edges(selected_edges, delete_vertices=True)
+
+            if interaction_type is not None:
+                if 'interaction_type' in graph.es.attributes():
+                    selected_edges = [edge for edge in graph.es if edge['interaction_type'] == interaction_type]
+                    if selected_edges:
+                        graph = graph.subgraph_edges(selected_edges, delete_vertices=True)
+                    else:
+                        print(f"No edges with interaction type '{interaction_type}' found in graph '{graph_name}'.")
+
+            filtered_graph_dict[graph_name] = graph
+
+        self.graph_dict = filtered_graph_dict
+
+        return filtered_graph_dict
+
+    def print_graph_attributes(self):
+        for graph_name, graph in self.graph_dict.items():
+            print(graph.attributes())
+            print(graph.es.attributes())
+            print(graph.vs.attributes())
+
+    def print_filtered_edges(self):
+        for graph_name, graph in self.graph_dict.items():
+            print(f"Edges in filtered graph {graph_name}:")
+            for edge in graph.es:
+                source = graph.vs[edge.source]['name']
+                target = graph.vs[edge.target]['name']
+                print(f"{source} -- {target}")
+
+
+class GraphCombiner:
+
+    def __init__(self, graph_dicts, filter_parameters=None):
+        if filter_parameters is None:
+            self.graph_dicts = graph_dicts
+        else:
+            self.graph_dicts = [self.filter_graph_dict(graph_dict, filter_params)
+                                for graph_dict, filter_params in zip(graph_dicts, filter_parameters)]
+
+    @staticmethod
+    def filter_graph_dict(graph_dict, filter_params):
+        graph_filter = FilterGraphs(graph_dict)
+        return graph_filter.filter_graphs(chromosomes=filter_params.get("chromosomes"),
+                                          resolutions=filter_params.get("resolutions"),
+                                          interaction_type=filter_params.get("interaction_type"))
+
+    @staticmethod
+    def combine_graphs(graphs, graph_names):
+        combined_graph = graphs[0].copy()
+        vertex_names_to_indices = {v["name"]: v.index for v in combined_graph.vs}
+
+        # Add graph_origin attribute to vertices and edges in the first graph
+        for v in combined_graph.vs:
+            v["graph_origin"] = {graph_names[0]}
+        for e in combined_graph.es:
+            e["graph_origin"] = {graph_names[0]}
+
+        for graph, graph_name in zip(graphs[1:], graph_names[1:]):
+            for v in graph.vs:
+                v_index = vertex_names_to_indices.get(v["name"])
+                if v_index is None:
+                    new_vertex = combined_graph.add_vertex(name=v["name"])
+                    new_vertex["graph_origin"] = {graph_name}
+                    vertex_names_to_indices[v["name"]] = new_vertex.index
+                else:
+                    combined_graph.vs[v_index]["graph_origin"].add(graph_name)
+
+            # Add edges from the filtered graphs
+            for e in graph.es:
+                source_vertex = graph.vs[e.source]
+                target_vertex = graph.vs[e.target]
+
+                # Get edge index if the edge already exists
+                edge_index = combined_graph.get_eid(source_vertex["name"], target_vertex["name"], error=False)
+
+                if edge_index == -1:
+                    # If edge does not exist, add it with graph_name attribute
+                    combined_graph.add_edge(source_vertex["name"], target_vertex["name"], graph_origin={graph_name})
+                else:
+                    # If edge already exists, add graph_name to its graph_origin attribute
+                    combined_graph.es[edge_index]["graph_origin"].add(graph_name)
+
+        return combined_graph
+
+    @staticmethod
+    def matching_graphs():
+        return True
+        # return graph1["cell_line"] == graph2["cell_line"] and graph1["resolution"] != graph2["resolution"]
+        # make different combinators later based on attributes, like nested nodes using position etc
+
+    def combine_matching_graphs(self):
+        combined_graph_dict = {}
+
+        # Flatten the list of dicts into list of tuples with graph name + graph
+        graph_list = [(graph_name, graph) for graph_dict in self.graph_dicts for graph_name, graph in graph_dict.items()]
+
+        # Create set to store pairs of combined graph indices
+        combined_pairs = set()
+
+        # Compare each graph with every other graph only once
+        for i, (graph_name1, graph1) in enumerate(graph_list):
+            for j, (graph_name2, graph2) in enumerate(graph_list[i + 1:], start=i + 1):  # start parameter adjusts the index
+                # Check if the pair has already been combined
+                if (i, j) in combined_pairs or (j, i) in combined_pairs:
+                    continue
+
+                if self.matching_graphs:
+                    combined_graph_name = self.create_combined_graph_name([graph_name1, graph_name2])
+                    combined_graph = self.combine_graphs([graph1, graph2], [graph_name1, graph_name2])
+                    combined_graph_dict[combined_graph_name] = combined_graph
+
+                # Add the pair to the combined_pairs set
+                combined_pairs.add((i, j))
+
+        return combined_graph_dict
+
+    @staticmethod
+    def create_combined_graph_name(graph_names):
+        combined_graph_name_parts = [graph_name.split("_") for graph_name in graph_names]
+        combined_graph_name_parts = list(set(it.chain.from_iterable(combined_graph_name_parts)))
+        combined_graph_name = "_".join(sorted(combined_graph_name_parts, key=lambda x: x.strip("chr")))
+        combined_graph_name = "combined_" + combined_graph_name  # Add 'combined_' prefix
+        return combined_graph_name
+
+    @staticmethod
+    def print_edges(combined_graphs):
+        for graph_name, graph in combined_graphs.items():
+            if graph_name.startswith("combined_"):
+                print(f"Edges in graph {graph_name}:")
+                if not graph.es:
+                    print("No edges in this graph")
+                else:
+                    for edge in graph.es:
+                        source = graph.vs[edge.source]['name']
+                        target = graph.vs[edge.target]['name']
+                        print(f"{source} -- {target}")
 
 class NetworkMetrics:
     """
@@ -88,14 +333,11 @@ class NetworkMetrics:
         return metrics_data
 
     @classmethod
-    def print_metrics(cls, graph_dict, metric_names=None):
-        if metric_names is None:
-            metric_names = []
-
+    def print_metrics(cls, graph_dict):
         for graph_name, metrics in graph_dict.items():
             print(f"Metrics for {graph_name}:")
             for metric_name, metric_value in metrics.items():
-                print(f"  {metric_name}: {metric_value}")
+                print(f"{metric_name}: {metric_value}")
             print()
 
 
@@ -127,7 +369,7 @@ class LCC_Ratio:
                     chromosomes.add(target_chromosome)
 
         for chromosome in chromosomes:
-            filtered_graphs = gg.FilterGraphs(self.graph_dict).filter_graphs(chromosomes=chromosome)
+            filtered_graphs = FilterGraphs(self.graph_dict).filter_graphs(chromosomes=chromosome)
             for graph_name, graph in filtered_graphs.items():
                 lcc_graph_size = graph.connected_components().giant().vcount()
                 parent_graph_size = graph.vcount()
@@ -168,162 +410,6 @@ class Filter_Graphs_on_Metrics:
 
 # Just for quick testing:
 if __name__ == "__main__":
+    pass
 
-    # # All (intra, raw) graphs
-    # def intrachromosomal_graphs():
-    #     root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/intra/raw")
-    #     graph_creator = Gp.CreateGraphsFromDirectory(root_dir)
-    #     graph_creator.from_edgelists()
-    #     all_intra_graphss = graph_creator.graph_dict
-    #     return all_intra_graphss
-
-    # IMR90
-    def imr90_graphs():
-        root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/intra/imr90")
-        graph_creator = gg.CreateGraphsFromDirectory(root_dir)
-        graph_creator.from_edgelists()
-        imr90_graphss = graph_creator.graph_dict
-        return imr90_graphss
-    print(imr90_graphs())
-
-    def mcf10_graphs():
-        root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/intra/mcf10/raw")
-        graph_creator = gg.CreateGraphsFromDirectory(root_dir)
-        graph_creator.from_edgelists()
-        mcf10_graphss = graph_creator.graph_dict
-        return mcf10_graphss
-    print(mcf10_graphs())
-
-    def imr90_chr18():
-        graph_filter = gg.FilterGraphs(imr90_graphs())
-        filtered_graph = graph_filter.filter_graphs(chromosomes="chr18", resolutions="1000000")
-        graph_filter.print_filtered_edges()
-        return filtered_graph
-
-    # HUVEC
-    def huvec_graphs():
-        root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/intra/huvec/edgelists")
-        graph_creator = gg.CreateGraphsFromDirectory(root_dir)
-        graph_creator.from_edgelists()
-        huvec_graphss = graph_creator.graph_dict
-        return huvec_graphss
-
-    def huvec_chr18():
-        graph_filter = gg.FilterGraphs(huvec_graphs())
-        filtered_graph = graph_filter.filter_graphs(chromosomes="chr18", resolutions="1000000")
-        graph_filter.print_filtered_edges()
-        return filtered_graph
-
-    def imr90_degree():
-        graphs = gg.FilterGraphs(imr90_graphs())  # instance
-        filtered_graph = graphs.filter_graphs(chromosomes="chr1", resolutions="1000000")  # instance to filter on
-        network_metrics = NetworkMetrics(filtered_graph)  # instance to calculate metrics on
-        metrics = NetworkMetrics.calculate_metrics(network_metrics, selected_metrics=["degree"])  # instance to calculate metrics on
-        return metrics
-
-    print(imr90_degree())
-
-
-    # # All raw graphs:
-    # def mcf710_raw_graphs():
-    #     root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/lowres_mcf7_mcf10/raw")
-    #     graph_creator = CreateGraphsFromDirectory(root_dir)
-    #     graph_creator.from_edgelists()
-    #     mcf710_graphs = graph_creator.graph_dict
-    #     return mcf710_graphs
-    # print(mcf710_raw_graphs())
-
-    # # All norm graphs:
-    # def mcf710_norm_graphs():
-    #     root_dir = Path("/Users/GBS/Master/HiC-Data/edgelists/lowres_mcf7_mcf10/norm")
-    #     graph_creator = CreateGraphsFromDirectory(root_dir)
-    #     graph_creator.from_edgelists()
-    #     mcf7_10_graphs = graph_creator.graph_dict
-    #     return mcf7_10_graphs
-    #
-    # print(mcf710_norm_graphs())
-
-    # # MCF7 raw filtering
-    # def mcf7_raw_filtered():
-    #     graph_filter = FilterGraphs(mcf710_raw_graphs())
-    #     filtered_graphs = graph_filter.filter_graphs(cell_lines=["mcf7"], chromosomes=["chr18"], resolutions=["1000000", "500000"])
-    #     # graph_filter.print_filtered_edges()
-    #     return filtered_graphs
-
-    # mcf7_raw_filtered()
-    #
-    # # MCF7 norm filtering
-    # def mcf7_norm_filtered():
-    #     graph_filter = FilterGraphs(mcf710_norm_graphs())
-    #     filtered_graphs = graph_filter.filter_graphs(cell_lines=["mcf7"], chromosomes=["chr18"], resolutions=["1000000", "500000"])
-    #     return filtered_graphs
-    #
-    # mcf7_norm_filtered()
-    #
-    # # MCF10 raw filtering
-    # def mcf10_raw_filtered():
-    #     graph_filter = FilterGraphs(mcf710_raw_graphs())
-    #     filtered_graphs = graph_filter.filter_graphs(cell_lines=["mcf10"], chromosomes=["chr18"], resolutions=["1000000", "500000"])
-    #     return filtered_graphs
-    #
-    # # MCF10 norm filtering
-    # def mcf10_norm_filtered():
-    #     graph_filter = FilterGraphs(mcf710_norm_graphs())
-    #     filtered_graphs = graph_filter.filter_graphs(cell_lines=["mcf10"], chromosomes=["chr18"], resolutions=["1000000", "500000"])
-    #     return filtered_graphs
-    #
-    # # LCC for MCF10 raw vs norm
-    # LargestComponent(mcf10_norm_filtered()).print_lcc()
-    # LargestComponent(mcf10_raw_filtered()).print_lcc()
-    #
-    # # LCC for MCF7 raw vs norm
-    # LargestComponent(mcf7_norm_filtered()).print_lcc()
-    # LargestComponent(mcf7_raw_filtered()).print_lcc()
-    #
-    # # Metrics for MCF7 raw filtered:
-    # def mcf7_raw_filtered_metrics():
-    #     metrics = NetworkMetrics.get_metrics(
-    #         graph_dict_or_function=mcf7_raw_filtered(),
-    #         metrics=[
-    #             "size", "edges", "fg_communities", "betweenness", "closeness", "degree", "average_path_length"
-    #         ])
-    #     return NetworkMetrics.print_metrics(metrics)
-    #
-    # mcf7_raw_filtered_metrics()
-    #
-    #
-    # # Metrics for MCF7 norm filtered LCC:
-    # def mcf7_norm_filtered_metrics():
-    #     metrics = NetworkMetrics.get_metrics(
-    #         graph_dict_or_function=LargestComponent(mcf7_norm_filtered()).find_lcc(),
-    #         metrics=[
-    #             "size", "edges", "fg_communities"
-    #         ])
-    #     return NetworkMetrics.print_metrics(metrics)
-    #
-    #
-    # mcf7_norm_filtered_metrics()
-    #
-    # # Metrics for MCF10 raw filtered:
-    # def mcf10_raw_filtered_metrics():
-    #     metrics = NetworkMetrics.get_metrics(
-    #         graph_dict_or_function=mcf10_raw_filtered(),
-    #         metrics=[
-    #             "size", "edges", "fg_communities", "betweenness", "closeness", "degree", "average_path_length"
-    #         ])
-    #     return NetworkMetrics.print_metrics(metrics)
-    #
-    # # Metrics for MCF10 norm filtered:
-    # def mcf10_norm_filtered_metrics():
-    #     metrics = NetworkMetrics.get_metrics(
-    #         graph_dict_or_function=LargestComponent(mcf10_norm_filtered()).find_lcc(),
-    #         metrics=[
-    #             "size", "edges", "fg_communities"
-    #         ])
-    #     return NetworkMetrics.print_metrics(metrics)
-    #
-    # # LCC ratio for MCF7 raw vs norm
-    # LCC_ratio(mcf7_raw_filtered()).print_lcc_ratio()
-    # LCC_ratio(mcf7_norm_filtered()).print_lcc_ratio()
-    # LCC_ratio(mcf10_raw_filtered()).print_lcc_ratio()
-    # LCC_ratio(mcf10_norm_filtered()).print_lcc_ratio()
+# yo

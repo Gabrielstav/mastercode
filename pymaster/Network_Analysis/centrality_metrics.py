@@ -33,9 +33,7 @@ class BetweennessCentrality:
             betweenness_centrality_dict[graph_name] = graph.betweenness()
         return betweenness_centrality_dict
 
-    def print_betweenness_centrality(self):
-        for graph_name, graph in self.calculate_betweenness_centrality().items():
-            print(f"Betweenness centrality for: {graph_name} \n {graph}")
+    def calculate
 
 # mcf10_graphs = gi.MCF10_G
 

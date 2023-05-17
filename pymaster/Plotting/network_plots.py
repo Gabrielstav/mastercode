@@ -48,16 +48,28 @@ g.vs["name"] = ["Node 0", "Node 1", "Node 2"]
 # ig.plot(g, vertex_label=g.vs["name"])
 
 
+def combined():
+    # Instantiate the FilterGraphs class
+    all_graphs = gg.GraphDatabaseManager.from_default_path().get_all_graphs()
+    graph_filter_intra = gm.FilterGraphs(all_graphs)
+    graph_filter_inter = gm.FilterGraphs(all_graphs)
 
-def plot_graph(graph_dict):
-    for graph_name, graph in graph_dict.items():
-        print(graph.vs["name"])
-        fig, ax = plt.subplots()
-        ig.plot(graph, target=ax, bbox=(2000, 2000), vertex_size=0.7, edge_width=0.1, vertex_label_size=10, layout="kk", vertex_label=graph.vs["name"])
-        plt.show()
+    # Filter the intra_graphs and inter_graphs
+    filtered_intra_graphs = graph_filter_intra.filter_graphs(cell_lines=["mcf10"], resolutions=[500000], chromosomes=["chr18"], interaction_type="intra", split_statuses=["split"], norm_statuses=["raw"])
+    filtered_inter_graphs = graph_filter_inter.filter_graphs(cell_lines=["mcf10"], resolutions=[1000000], chromosomes=["chr1"], interaction_type="inter", split_statuses=["nosplit"], norm_statuses=["raw"])
 
-plot_graph(gi.imr90_chr18())
+    # Combine the filtered graphs
+    graph_combiner = gm.GraphCombiner([filtered_intra_graphs, filtered_inter_graphs])
+    combined_graphs = graph_combiner.combine_matching_graphs()
+    # graph_combiner.print_edges(combined_graphs)
+    return combined_graphs
 
+filtered_graph_dict = combined()
+graph_name, filtered_graph = list(filtered_graph_dict.items())[0]
+
+fig, ax = plt.subplots()
+ig.plot(filtered_graph, bbox=(0, 0, 300, 300), target=ax, vertex_size=0.1, edge_width=0.5)  # node_color=filtered_graph.vs["chromosome"])
+plt.show()
 
 # TODO: Make plotting class that takes any graph dict from any class in Network_Metrics and plots it as a network
 
