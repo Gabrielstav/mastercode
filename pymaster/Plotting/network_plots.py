@@ -4,34 +4,19 @@ import networkx as nx
 from Graph_Processing import graph_metrics as gm
 from Graph_Processing import graph_generator as gg
 from Graph_Processing import graph_instances as gi
-from matplotlib import pyplot as plt
+import matplotlib.pyplot as plt
 from pathlib import Path
 import cairocffi as cairo
 from multiprocessing import Pool
 
-ig.config["plotting.backend"] = "cairo"
-ig.backend = "cairo"
-# ig.config["plotting.backend"] = "matplotlib"
+# ig.config["plotting.backend"] = "cairo"
+# ig.backend = "cairo"
+ig.config["plotting.backend"] = "matplotlib"
 
-
-# define edge list
-edges = [
-    ("chr2:0-1000000", "chr2:1000000-2000000"),
-    ("chr2:0-1000000", "chr2:2000000-3000000"),
-    ("chr2:0-1000000", "chr2:3000000-4000000"),
-    ("chr2:0-1000000", "chr2:4000000-5000000"),
-]
-
-# create graph
-graph = ig.Graph.TupleList(edges, directed=False)
-
-# get connected components
-components = graph.components()
-
-# print each component and its nodes
-for i, component in enumerate(components):
-    print(f"Component {i + 1} nodes: {component}")
-
+# fig, ax = plt.subplots()
+# g = ig.Graph.Famous("petersen")
+# ig.plot(g, target=ax)
+# plt.show()
 
 class OutputDirectory:
     output_dir = Path("/Users/GBS/Master/Figures/iGraph")
@@ -44,11 +29,34 @@ class OutputDirectory:
     def get_output_dir(cls):
         return cls.output_dir
 
-    # def __init__(self):
-    #     self.root_dir = Path("/Users/GBS/Master/Figures/iGraph")
-    #
-    # def get_output_dir(self):
-    #     return self.root_dir
+# fig, ax = plt.subplots()
+# test_graph = ig.Graph.Erdos_Renyi(10, 0.5)
+# ig.plot(test_graph, target=ax)
+# plt.show()
+
+
+# Create a graph with 3 nodes and 3 edges
+g = ig.Graph(n=3, edges=[(0, 1), (0, 1), (1, 1)], directed=False)
+
+# Add labels to the vertices
+g.vs["name"] = ["Node 0", "Node 1", "Node 2"]
+
+# Plot the graph with vertex labels
+# fix, ax = plt.subplots()
+# ig.plot(g, target=ax, vertex_label=g.vs["name"])
+# plt.show()
+# ig.plot(g, vertex_label=g.vs["name"])
+
+
+
+def plot_graph(graph_dict):
+    for graph_name, graph in graph_dict.items():
+        print(graph.vs["name"])
+        fig, ax = plt.subplots()
+        ig.plot(graph, target=ax, bbox=(2000, 2000), vertex_size=0.7, edge_width=0.1, vertex_label_size=10, layout="kk", vertex_label=graph.vs["name"])
+        plt.show()
+
+plot_graph(gi.imr90_chr18())
 
 
 # TODO: Make plotting class that takes any graph dict from any class in Network_Metrics and plots it as a network
@@ -80,9 +88,8 @@ class PlotGraph:
         return f"{chrom}:{start_unit}-{end_unit} {unit}"
 
     def show_graph(self):
-        print(self.graph_dict)
         for graph_name, graphs in self.graph_dict.items():
-            ig.plot(graphs)
+            ig.plot(graphs, bbox=(2000, 2000))
 
     def show_graph_with_lcc(self, largest_component_obj):
         lcc_memberships = largest_component_obj.lcc_membership()
@@ -101,9 +108,9 @@ class PlotGraph:
 
     def save_graph(self, graph_dict):
         for graph_name, graphs in graph_dict.items():
-            visual_style = {"vertex_size": 0.05, "edge_width": 0.3, "layout": graphs.layout("fruchterman_reingold")}
+            visual_style = {"vertex_size": 0.05, "edge_width": 0.3, "layout": graphs.layout("auto")}
             safe_graph_name = "".join(e for e in graph_name if e.isalnum() or e == "_")
-            output_filename = self.output_dir / f"{safe_graph_name}.pdf"
+            output_filename = self.output_dir / f"{safe_graph_name}.png"
             ig.plot(graphs, output_filename, **visual_style, bbox=(2000, 2000))
             print(f"Saved plot to {output_filename}")
 
@@ -112,13 +119,25 @@ class PlotGraph:
             p.starmap(self.save_graph, self.graph_dict.items())
 
 
-for graph_names, graph in gi.imr90_chr18().items():
-    print(graph_names, graph)
-    ig.plot(graph)
-
-
 # plotter = PlotGraph(gi.imr90_chr18(), OutputDirectory.get_output_dir())
+# plotter.show_graph()
 # plotter.save_graph(gi.imr90_chr18())
+
+class plot_components:
+
+    def __init__(self, graph_dict):
+        self.graph_dict = graph_dict
+
+    def plot_components(self):
+        for graph_name, graphs in self.graph_dict.items():
+            components = gg.ConnectedComponents(graphs)
+            ig.plot(components, bbox=(2000, 2000))
+
+# comps = plot_components(gi.imr90_chr18())
+# comps.plot_components()
+
+# print(gg.ConnectedComponents(gi.imr90_chr18()))
+# ig.plot(comps)
 
 
 # class plot_graph:

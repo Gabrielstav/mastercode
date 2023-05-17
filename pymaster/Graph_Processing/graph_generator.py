@@ -6,64 +6,165 @@ import pandas as pd
 import os as os
 import re
 import itertools as it
+import sqlite3 as sql
+import pickle as pkl
 
+class GraphDatabaseManager:
+
+    @classmethod
+    def from_default_path(cls: type = Path):
+        database_path = Path("/Users/GBS/Master/HiC-Data/network_db/graphs.db")
+        return cls(database_path)
+
+    def __init__(self, db_name=Path("graphs.db")):
+        self.conn = sql.connect(db_name.as_posix())
+        self.c = self.conn.cursor()
+        self.c.execute('''
+            CREATE TABLE IF NOT EXISTS graphs (
+                name TEXT PRIMARY KEY,
+                graph BLOB
+            )
+        ''')
+
+    def save_graph(self, name, graph):
+        graph_blob = pkl.dumps(graph)
+        try:
+            self.c.execute('INSERT INTO graphs VALUES (?, ?)', (name, graph_blob))
+            self.conn.commit()
+        except sql.IntegrityError:
+            print(f"A graph with the name {name} already exists in the database.")
+        print(f"Saving graph {name} with attributes {graph.attributes()}")
+
+
+    def load_graph(self, name):
+        self.c.execute('SELECT graph FROM graphs WHERE name = ?', (name,))
+        result = self.c.fetchone()
+        if result is not None:
+            graph = pkl.loads(result[0])
+            print(f"Loaded graph {name} with attributes {graph.attributes()}")
+            return graph
+        else:
+            return None
+
+    def get_graph_names(self):
+        self.c.execute("SELECT name FROM graphs")
+        result = self.c.fetchall()
+        graphnames = [row[0] for row in result]
+        print("Fetching all graph names.")  # Debug
+        for name in graphnames:
+            print(name)
+        return graphnames
+
+    def graph_exists(self, name):
+        self.c.execute('SELECT name FROM graphs WHERE name = ?', (name,))
+        result = self.c.fetchone()
+        print(f"Checking if graph {name} exists.")  # Debug
+        return result is not None
+
+    def delete_graph(self, graph_name):
+        self.c.execute('DELETE FROM graphs WHERE name = ?', (graph_name,))
+        self.conn.commit()
+        print(f"Graph {graph_name} has been deleted.")
+
+    def get_all_graphs(self):
+        graph_dict = {}
+        graph_names = self.get_graph_names()
+        for graph_name in graph_names:
+            graph = self.load_graph(graph_name)
+            graph_dict[graph_name] = graph
+        return graph_dict
 
 class CreateGraphsFromDirectory:
     """
     Class to create igraph objects from edgelists in a directory.
     """
 
-    def __init__(self, input_directory):
+    def __init__(self, input_directory, database):
         self.input_directory = Path(input_directory).absolute()
         self.graph_dict = {}
+        self.db = database
 
     def get_files(self, pattern):
         files = [file_path for file_path in self.input_directory.rglob(pattern) if file_path.is_file() and not file_path.name.startswith('.')]
         return [str(file_path.resolve()) for file_path in files]
 
-    def from_edgelists(self):
-        all_files = self.get_files("*")
+    def from_edgelists(self, file_path):
 
-        for file_path in all_files:
-            file_name = os.path.basename(file_path)
-            graph_name = re.sub(r"_edgelist\.txt$", "", file_name)
-            cell_line = graph_name.split("_")[0]
-            graph_name_resolution_match = re.search(r"(\d+)(?=\D*$)", graph_name)
-            graph_name_resolution = int(graph_name_resolution_match.group(1)) if graph_name_resolution_match else None
+        file_path = Path(file_path)
+        parent_folder = file_path.parent.name
+        parent_folder_components = parent_folder.split("-")
 
-            edges = []
-            with open(file_path, "r") as f:
-                for line_number, line in enumerate(f, start=1):
-                    try:
-                        edge = list(filter(None, line.strip().split()))
-                        source_chromosome, target_chromosome = edge[0].split(":")[0], edge[1].split(":")[0]
-                        interaction_type = "inter" if source_chromosome != target_chromosome else "intra"
-                        edges.append((*edge, interaction_type))
-                    except Exception as e:
-                        print(f"Error processing line {line_number} in file {file_path}: {e}")
+        file_name = os.path.basename(file_path)
+        graph_name = re.sub(r"_edgelist\.txt$", "", file_name)
 
-            df = pd.DataFrame(edges, columns=['source', 'target', 'interaction_type'])
-            df['source_chromosome'] = df['source'].str.split(":").str[0]
-            df['target_chromosome'] = df['target'].str.split(":").str[0]
+        # Extract metadata from the folder name (this should be done in a more robust way, using metadata from pipeline)
+        # pipeline_interaction_type = parent_folder_components[0]
+        split_status = parent_folder_components[1]
+        norm_status = parent_folder_components[2].split("_")[0]
 
-            graph = ig.Graph.TupleList(df.itertuples(index=False), directed=False, edge_attrs=['interaction_type', 'source_chromosome', 'target_chromosome'])
+        # Add the parent directory name as a prefix to the graph name
+        graph_name = f"{parent_folder}_{graph_name}" if parent_folder else graph_name
 
-            # Check for isolated nodes
-            for node in graph.vs:
-                if graph.degree(node) == 0:
-                    print(f"Node: {node['name']}, Degree: {graph.degree(node)} has degree 0.")
+        cell_line = graph_name.split("_")[1]
+        print(f"Cell line: {cell_line}")  # Debug
+        graph_name_resolution_match = re.search(r"(\d+)(?=\D*$)", graph_name)
+        graph_name_resolution = int(graph_name_resolution_match.group(1)) if graph_name_resolution_match else None
 
-            # Assign attributes to nodes
-            graph.vs['location'] = [name.split(":")[1] for name in graph.vs['name']]
-            graph.vs['chromosome'] = [name.split(":")[0] for name in graph.vs['name']]
+        edges = []
+        with open(file_path, "r") as f:
+            for line_number, line in enumerate(f, start=1):
+                try:
+                    edge = list(filter(None, line.strip().split()))
+                    source_chromosome, target_chromosome = edge[0].split(":")[0], edge[1].split(":")[0]
+                    interaction_type = "inter" if source_chromosome != target_chromosome else "intra"
+                    edges.append((*edge, interaction_type))
+                except Exception as e:
+                    print(f"Error processing line {line_number} in file {file_path}: {e}")
 
-            # Assign graph-level attributes
-            graph["cell_line"] = cell_line
-            graph["resolution"] = graph_name_resolution
+        df = pd.DataFrame(edges, columns=['source', 'target', 'interaction_type'])
+        df['source_chromosome'] = df['source'].str.split(":").str[0]
+        df['target_chromosome'] = df['target'].str.split(":").str[0]
 
-            self.graph_dict[graph_name] = graph
+        graph = ig.Graph.TupleList(df.itertuples(index=False), directed=False, edge_attrs=['interaction_type', 'source_chromosome', 'target_chromosome'])
+
+        # Check for isolated nodes
+        for node in graph.vs:
+            if graph.degree(node) == 0:
+                print(f"Node: {node['name']}, Degree: {graph.degree(node)} has degree 0.")
+
+        # Assign attributes to nodes
+        graph.vs['location'] = [name.split(":")[1] for name in graph.vs['name']]
+        graph.vs['chromosome'] = [name.split(":")[0] for name in graph.vs['name']]
+
+        # Assign graph-level attributes
+        graph["cell_line"] = cell_line
+        graph["resolution"] = graph_name_resolution
+        graph["split_status"] = split_status
+        graph["norm_status"] = norm_status
+        # graph["pipeline_interaction_type"] = pipeline_interaction_type
+
+        self.graph_dict[graph_name] = graph
+
+        print(f"Graph created: {graph_name}, Nodes: {graph.vcount()}, Edges: {graph.ecount()}")
+
+        if graph["cell_line"] != cell_line:
+            raise ValueError(f"Expected graph['cell_line'] to be {cell_line}, but got {graph['cell_line']}")
+
+        if graph["resolution"] != graph_name_resolution:
+            raise ValueError(f"Expected graph['resolution'] to be {graph_name_resolution}, but got {graph['resolution']}")
 
         return self.graph_dict
+
+    def generate_and_store_graphs(self):
+        for graph_file in self.input_directory.rglob("*_edgelist.txt"):
+            print(f"Processing file: {graph_file}")
+            graph_dir = graph_file.parent
+            graph_name = f"{graph_dir.name.lstrip('_')}_{graph_file.stem}"
+            graph_name = re.sub(r"_edgelist$", "", graph_name)
+            print(f"Graph name: {graph_name}")
+            if not self.db.graph_exists(graph_name):
+                self.from_edgelists(graph_file)
+                self.db.save_graph(graph_name, self.graph_dict[graph_name])
 
     def print_edgelist(self):
         for graph_name, graph in self.graph_dict.items():
@@ -72,6 +173,22 @@ class CreateGraphsFromDirectory:
                 source = graph.vs[edge.source]['name']
                 target = graph.vs[edge.target]['name']
                 print(f"{source} -- {target}")
+
+def make_graphs():
+    graph_db_manager = GraphDatabaseManager.from_default_path()
+    graph_creator = CreateGraphsFromDirectory("/Users/GBS/Master/HiC-Data/edgelists", graph_db_manager)
+    graph_creator.generate_and_store_graphs()
+    graph_names = graph_db_manager.get_graph_names()
+    print(graph_names)
+    return graph_names
+
+make_graphs()
+
+def get_graphs():
+    graph_db_manager = GraphDatabaseManager.from_default_path()
+    graph_dict = graph_db_manager.get_all_graphs()
+    return graph_dict
+
 
 
 class ConnectedComponents:
@@ -145,12 +262,16 @@ class FilterGraphs:
     def __init__(self, graph_dict):
         self.graph_dict = graph_dict
 
-    def filter_graphs(self, cell_lines=None, chromosomes=None, resolutions=None, interaction_type=None):
+    def filter_graphs(self, cell_lines=None, chromosomes=None, resolutions=None, interaction_type=None, split_statuses=None, norm_statuses=None):
         filtered_graph_dict = {}
 
         for graph_name, graph in self.graph_dict.items():
+            if "cell_line" not in graph.attributes():
+                raise KeyError(f"Graph '{graph_name}' does not have a 'cell_line' attribute")
             cell_line = graph["cell_line"]
             resolution = graph["resolution"]
+            split_status = graph["split_status"]
+            norm_status = graph["norm_status"]
 
             if cell_lines is not None and cell_line not in cell_lines:
                 continue
@@ -160,8 +281,13 @@ class FilterGraphs:
                     print(f"Warning: Graph '{graph_name}' does not have a resolution attribute.")
                     continue
                 if resolution not in resolutions:
-                    # print(f"No graph with resolution(s) {resolutions} found. The resolution for '{graph_name}' is {resolution}.")
                     continue
+
+            if split_statuses is not None and split_status not in split_statuses:
+                continue
+
+            if norm_statuses is not None and norm_status not in norm_statuses:
+                continue
 
             if chromosomes is not None:
                 selected_edges = [edge for edge in graph.es if any(graph.vs[node_index]['chromosome'] in chromosomes for node_index in edge.tuple)]
@@ -203,6 +329,17 @@ class FilterGraphs:
                 target = graph.vs[edge.target]['name']
                 print(f"{source} -- {target}")
 
+def mcf10_1Mb_intra_split():
+    graph_db_manager = GraphDatabaseManager.from_default_path()
+    graph_dict = graph_db_manager.get_all_graphs()
+    graph_filter = FilterGraphs(graph_dict)  # Instantiate the FilterGraphs class
+    filtered_graph = graph_filter.filter_graphs(chromosomes=["chr1"], resolutions=[1000000], cell_lines=["mcf10"], interaction_type="intra", split_statuses="split", norm_statuses="raw")
+    graph_filter.print_filtered_edges()
+    return filtered_graph
+
+
+
+mcf10_1Mb_intra_split()
 
 class GraphCombiner:
 
@@ -261,15 +398,16 @@ class GraphCombiner:
     @staticmethod
     def matching_graphs():
         return True
-        # return graph1["cell_line"] == graph2["cell_line"] and graph1["resolution"] != graph2["resolution"] # make different combinators later based on attributes
+        # return graph1["cell_line"] == graph2["cell_line"] and graph1["resolution"] != graph2["resolution"]
+        # make different combinators later based on attributes, like nested nodes using position etc
 
     def combine_matching_graphs(self):
         combined_graph_dict = {}
 
-        # Flatten the list of dicts into a list of tuples with graph name and graph
+        # Flatten the list of dicts into list of tuples with graph name + graph
         graph_list = [(graph_name, graph) for graph_dict in self.graph_dicts for graph_name, graph in graph_dict.items()]
 
-        # Create a set to store pairs of graph indices that have been combined
+        # Create set to store pairs of combined graph indices
         combined_pairs = set()
 
         # Compare each graph with every other graph only once
@@ -310,6 +448,52 @@ class GraphCombiner:
                         target = graph.vs[edge.target]['name']
                         print(f"{source} -- {target}")
 
+class GraphAttributeInspector:
+    def __init__(self, *graph_dicts):
+        # Merge dirs into one
+        self.graph_dict = {k: v for d in graph_dicts for k, v in d.items()}
+
+    def print_graph_attributes(self):
+        for graph_name, graph in self.graph_dict.items():
+            print(f"\nGraph: {graph_name}")
+            print("Graph attributes:", graph.attributes())
+
+    def print_node_attributes(self):
+        for graph_name, graph in self.graph_dict.items():
+            print(f"\nGraph: {graph_name}")
+            print("Node attributes:", graph.vs.attributes())
+
+    def print_edge_attributes(self):
+        for graph_name, graph in self.graph_dict.items():
+            print(f"\nGraph: {graph_name}")
+            print("Edge attributes:", graph.es.attributes())
+
+    def print_edge_list_with_attributes(self):
+        for graph_name, graph in self.graph_dict.items():
+            print(f"\nGraph: {graph_name}")
+            for edge in graph.es:
+                source = graph.vs[edge.source]
+                target = graph.vs[edge.target]
+                print(f"Edge: {source['name']} -- {target['name']}", end='. ')
+                print("Source node attributes -->", end=' ')
+                for index, attribute in enumerate(graph.vs.attributes()):
+                    if index != len(graph.vs.attributes()) - 1:
+                        print(f"{attribute}: {source[attribute]}", end=', ')
+                    else:
+                        print(f"{attribute}: {source[attribute]}", end='. ')
+                print("Target node attributes -->", end=' ')
+                for index, attribute in enumerate(graph.vs.attributes()):
+                    if index != len(graph.vs.attributes()) - 1:
+                        print(f"{attribute}: {target[attribute]}", end=', ')
+                    else:
+                        print(f"{attribute}: {target[attribute]}", end='. ')
+                print("Edge attributes -->", end=' ')
+                for index, attribute in enumerate(edge.attributes()):
+                    if index != len(edge.attributes()) - 1:
+                        print(f"{attribute}: {edge[attribute]}", end=', ')
+                    else:
+                        print(f"{attribute}: {edge[attribute]}", end='. ')
+                print()
 
 
 class ExportGraphToEdgelist:
