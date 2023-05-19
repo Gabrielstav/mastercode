@@ -144,14 +144,19 @@ def degree():
 
 class PlotDegreeNetwork(DegreeCentrality):
 
-    def plot_graph(self):
+    def plot_graph(self, save_as=None):
         for graph_name, graph in self.graph_dict.items():
             graph_name = '_'.join(graph_name.split('_')[1:3])
-            graph = graph.simplify()
-            visual_style = {"vertex_size": 0.7, "bbox": (1000, 1000), "margin": 20, "vertex_color": [DegreeCentrality.normalize_degree(graph)]}  # [degree / max(graph.degree()) for degree in graph.degree()]}
+            visual_style = {"vertex_size": 0.7, "bbox": (1000, 1000), "margin": 20, "vertex_color": [degree / max(graph.degree()) for degree in graph.degree()]}  # [DegreeCentrality.normalize_degree(graph)]}
             ig.plot(graph, **visual_style, target=f"Degree Network of {graph_name}.png")
             fig, ax = plt.subplots()
             ig.plot(graph, bbox=(0, 0, 300, 300), target=ax, vertex_size=0.1, edge_width=0.5)  # node_color=filtered_graph.vs["chromosome"])
+            ax.set_title(f"Degree Network of {graph_name}")
+
+            # Save the plot conditionally
+            if save_as:
+                plt.savefig(save_as, dpi=300, format='png')
+
             plt.show()
 
 def plot_degree_network():
