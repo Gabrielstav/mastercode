@@ -1,9 +1,12 @@
 # Import modules
+from igraph import plot
+
 from Graph_Processing import graph_instances as gi
 from Graph_Processing import graph_metrics as gm
 from Graph_Processing import graph_generator as gg
 import igraph as ig
 import matplotlib.pyplot as plt
+from matplotlib.ticker import AutoMinorLocator, MultipleLocator
 import numpy as np
 import pandas as pd
 import pathlib as path
@@ -23,11 +26,16 @@ import pathlib as path
 #   - Needs to write out as node/edge attributes for plotting in graphs, and as pandas df with title as network for Jaccard index.
 
 
-def root_directory():
-    root_dir = path.Path("/Users/GBS/Master/Network_Analysis")
-    return root_dir
+class Directories:
+    base_path = path.Path("/Users/GBS/Master/Figures")
+    degree_path = base_path / "Degree"
 
-class Degree:
+    if not degree_path.exists():
+        degree_path.mkdir(parents=True)
+
+
+class DegreeCentrality:
+
     def __init__(self, graph_dict):
         self.graph_dict = graph_dict
 
@@ -42,13 +50,23 @@ class Degree:
             graph.vs["normalized_degree"] = [(d - min_degree) / (max_degree - min_degree) for d in graph.vs["degree"]]
 
 
-    def plot_degree_distribution(self, plot_type='scatter', save_as=None):
+class PlotDegreeDistribution(DegreeCentrality):
+
+    def plot_degree_distribution(self, plot_type='scatter', save_as=None, normalize=False):
         # Define colors
         colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
+        max_frequency = -np.inf
+        max_log_frequency = -np.inf
+        min_log_frequency = np.inf
+        maximum_x = -np.inf
+        minimum_y = np.inf
 
         for idx, (graph_name, graph) in enumerate(self.graph_dict.items()):
-            # Degree sequence
-            degree_sequence = graph.degree()
+            # Decide whether to normalize
+            if normalize:
+                degree_sequence = graph.vs["normalized_degree"]
+            else:
+                degree_sequence = graph.degree()
 
             # Unique degrees and their counts
             degrees, counts = np.unique(degree_sequence, return_counts=True)
@@ -56,8 +74,8 @@ class Degree:
             # Convert counts to frequencies
             frequencies = counts / counts.sum()
 
-            # Convert frequencies to negative log scale
-            log_freq = -np.log10(frequencies)
+            # Log transform frequencies
+            log_freq = np.log10(frequencies)
 
             # Split graph_name for legend
             legend_name = '_'.join(graph_name.split('_')[1:3])
@@ -68,51 +86,87 @@ class Degree:
             elif plot_type == 'line':
                 plt.plot(degrees, log_freq, color=colors[idx % len(colors)], label=legend_name)
 
+            # Update max frequency and max log-frequency
+            max_frequency = max(max_frequency, np.max(frequencies))
+            max_log_frequency = max(max_log_frequency, np.max(log_freq))
+            min_log_frequency = min(min_log_frequency, np.min(log_freq))
+            maximum_x = max(maximum_x, np.max(degrees))
+            minimum_y = min(minimum_y, np.min(log_freq))
+
+        # Apply locator to y-axis
+        majorlocator = MultipleLocator(1)
+        minorlocator = AutoMinorLocator(10)
+        # TODO: Why does my minor ticks not show up? wtf.. (Are they outside the plot?)
+        plt.gca().yaxis.set_major_locator(majorlocator)
+        plt.gca().yaxis.set_minor_locator(minorlocator)
+        plt.gca().tick_params(axis='y', which='minor', bottom=True)
+
+        # Set y ticks to represent frequency in a 10^n format with more granularity
+        plt.yticks(ticks=np.arange(max_log_frequency, min_log_frequency - 1, -1),
+                   labels=[f'$10^{{{int(tick)}}}$' for tick in np.arange(max_log_frequency, min_log_frequency - 1, -1)])
+
         # Set log scale on x-axis
         plt.xscale('log')
 
-        # Set y ticks to represent frequency in a 10^n format with more granularity
-        plt.yticks(ticks=-np.arange(0, np.ceil(np.max(log_freq)) + 0.1, 0.1),
-                   labels=[f'$10^{{-{i:.1f}}}$' for i in np.arange(0, np.ceil(np.max(log_freq)) + 0.1, 0.1)])
-
         plt.title("Degree Distribution")
-        plt.xlabel("Degree (log scale)")
-        plt.ylabel("Frequency (negative log10 scale)")
+        plt.xlabel("Degree")
+        plt.ylabel("Frequency")
 
         # Add a legend
         plt.legend(loc='upper right')
 
         # Add max value text below figure
-        max_x = np.max(degrees)
-        max_y = -np.min(log_freq)
-        plt.text(0.05, 0.05, f'Max Degree: {max_x}\nMax Frequency: $10^{{-{max_y:.1f}}}$', transform=plt.gca().transAxes)
+        max_x = maximum_x
+        min_y = minimum_y
+        max_y = max_log_frequency
+        plt.text(0.03, 0.03, f'Max Degree: {max_x}'
+                             f'\nMax frequency: $10^{{{max_y:.1f}}}$'
+                             f'\nMin Frequency: $10^{{{min_y:.1f}}}$',
+                 transform=plt.gca().transAxes)
+
+        # Save the plot conditionally
+        if save_as:
+            plt.savefig(save_as, dpi=300, format='png')
 
         # Show the plot
         plt.show()
 
-        # Save the plot conditionally
-        if save_as:
-            if not os.path.exists(save_dir):
-                os.makedirs(save_dir)
-            plt.savefig(os.path.join(save_dir, f'{save_as}.png'))
+
+def degree():
+    graph_dict = gi.intra_1mb_graphs()
+    degree_instance = PlotDegreeDistribution(graph_dict)
+    degree_instance.calculate_degree()
+    degree_instance.normalize_degree()
+    degree_instance.plot_degree_distribution(save_as=Directories.degree_path / "degree_distribution.png", normalize=False)
+
+# degree()
+
+
+class PlotDegreeNetwork(DegreeCentrality):
 
     def plot_graph(self):
         for graph_name, graph in self.graph_dict.items():
+            graph_name = '_'.join(graph_name.split('_')[1:3])
+            graph = graph.simplify()
+            visual_style = {"vertex_size": 0.7, "bbox": (1000, 1000), "margin": 20, "vertex_color": [DegreeCentrality.normalize_degree(graph)]}  # [degree / max(graph.degree()) for degree in graph.degree()]}
+            ig.plot(graph, **visual_style, target=f"Degree Network of {graph_name}.png")
             fig, ax = plt.subplots()
-            visual_style = {"vertex_color": [plt.cm.Reds(deg) for deg in graph.vs["normalized_degree"]], "vertex_size": 20}
-            ig.plot(graph, **visual_style, target=ax)
+            ig.plot(graph, bbox=(0, 0, 300, 300), target=ax, vertex_size=0.1, edge_width=0.5)  # node_color=filtered_graph.vs["chromosome"])
+            plt.show()
 
-
-def degree():
-    graph_dict = gi.norm_mcf7_graphs()
-    degree_instance = Degree(graph_dict)
+def plot_degree_network():
+    graphs = gi.intra_1mb_graphs()
+    filter_instance = gm.FilterGraphs(graphs)
+    filter_instance.filter_graphs(cell_lines=["MCF10"], interaction_type="intra")
+    graph_dict = filter_instance.graph_dict
+    lcc_instance = gm.LargestComponent(graph_dict)
+    lcc_instance.find_lcc()
+    graph_dict = lcc_instance.graph_dict
+    degree_instance = PlotDegreeNetwork(graph_dict)
     degree_instance.calculate_degree()
     degree_instance.normalize_degree()
-    degree_instance.logplot_degree_distribution()
-
-
-degree()
-
+    degree_instance.plot_graph()
+plot_degree_network()
 
 class ClosenessCentrality:
 

@@ -58,12 +58,6 @@ def intra_50kb_graphs():
     graphs = graph_filter.filter_graphs(cell_lines=["mcf10", "mcf7", "imr90", "gsm2824367", "huvec"], resolutions=[50000], interaction_type="intra", condition="intra-split-raw")
     return graphs
 
-def intra_50kb_graphs():
-    graph_db_manager = gg.GraphDatabaseManager.from_default_path()
-    graph_filter = gm.FilterGraphs(graph_db_manager.get_all_graphs())
-    graphs = graph_filter.filter_graphs(cell_lines=["mcf10", "mcf7", "imr90", "gsm2824367", "huvec"], resolutions=[50000], interaction_type="intra", condition="intra-split-raw")
-    return graphs
-
 def norm_mcf10_graphs():
     graph_db_manager = gg.GraphDatabaseManager.from_default_path()
     graph_filter = gm.FilterGraphs(graph_db_manager.get_all_graphs())
@@ -102,13 +96,13 @@ def mcf7_mcf10_intra_1Mb():
     return graphs
 
 
-# Or use facade to filter graphs
+# Or use facade to filter graphs (bad)
 def get_mcf10_intra_graphs_facade():
-    mcf10_graph = gm.GetGraph("inter-nosplit-raw_mcf10_1000000").Filtered_on(chromosomes=["chr4"], interaction_type="inter")()
+    mcf10_graph = gm.GetGraph("inter-nosplit-raw_mcf10_1000000").Filtered_on(cell_line="mcf10", interaction_type="intra")()
     printer = gm.GraphEdgelistPrint(mcf10_graph)
     printer.print_as_edgelist()
     return mcf10_graph
-
+# mcf7_mcf10_intra_1Mb().degree_distribution()
 
 # Combine graphs
 def combined():
