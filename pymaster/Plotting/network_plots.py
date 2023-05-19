@@ -64,6 +64,7 @@ def combined():
     # graph_combiner.print_edges(combined_graphs)
     return combined_graphs
 
+
 filtered_graph_dict = combined()
 graph_name, filtered_graph = list(filtered_graph_dict.items())[0]
 

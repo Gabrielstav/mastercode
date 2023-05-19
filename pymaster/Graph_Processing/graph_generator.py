@@ -48,9 +48,16 @@ class GraphDatabaseManager:
         self.c.execute("SELECT name FROM graphs")
         result = self.c.fetchall()
         graphnames = [row[0] for row in result]
-        for name in graphnames:
-            print(name)
         return graphnames
+
+    def get_graph_by_name(self, name):
+        self.c.execute("SELECT graph FROM graphs WHERE name = ?", (name,))
+        result = self.c.fetchone()
+        if result is not None:
+            graph = pkl.loads(result[0])
+            return graph
+        else:
+            return None
 
     def graph_exists(self, name):
         self.c.execute('SELECT name FROM graphs WHERE name = ?', (name,))
@@ -94,9 +101,12 @@ class CreateGraphsFromDirectory:
         graph_name = re.sub(r"_edgelist\.txt$", "", file_name)
 
         # Extract metadata from the folder name (this should be done in a more robust way, using metadata from pipeline)
-        # pipeline_interaction_type = parent_folder_components[0]
+        pipeline_condition = parent_folder_components[0].strip(")")
         split_status = parent_folder_components[1]
         norm_status = parent_folder_components[2].split("_")[0]
+        condition_slice = parent_folder_components[:3]
+        condition = "-".join(condition_slice)
+        print(f"Pipeline condition: {pipeline_condition} \nSplit status: {split_status} \nNormalization status: {norm_status} \nCondition: {condition}")
 
         # Add the parent directory name as a prefix to the graph name
         graph_name = f"{parent_folder}_{graph_name}" if parent_folder else graph_name
@@ -136,8 +146,8 @@ class CreateGraphsFromDirectory:
         graph["resolution"] = graph_name_resolution
         graph["split_status"] = split_status
         graph["norm_status"] = norm_status
-        # graph["pipeline_interaction_type"] = pipeline_interaction_type
-
+        graph["pipeline_condition"] = pipeline_condition
+        graph["condition"] = condition
         self.graph_dict[graph_name] = graph
 
         print(f"Graph created: {graph_name}, Nodes: {graph.vcount()}, Edges: {graph.ecount()}")
@@ -186,8 +196,11 @@ def get_graphs():
 
 class GraphAttributeInspector:
     def __init__(self, *graph_dicts):
-        # Merge dirs into one
-        self.graph_dict = {k: v for d in graph_dicts for k, v in d.items()}
+        # Merge dicts into one
+        if len(graph_dicts) == 1:
+            self.graph_dict = graph_dicts[0]
+        else:
+            self.graph_dict = {k: v for d in graph_dicts for k, v in d.items()}
 
     def print_graph_attributes(self):
         for graph_name, graph in self.graph_dict.items():

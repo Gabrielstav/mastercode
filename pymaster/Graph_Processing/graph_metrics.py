@@ -2,6 +2,7 @@
 from collections import defaultdict
 from typing import Union
 import itertools as it
+from Graph_Processing import graph_generator as gg
 
 
 class ConnectedComponents:
@@ -66,6 +67,14 @@ class LargestComponent:
         for graph_name, graph in self.largest_component_dict.items():
             print(f"LCC for: {graph_name}\nsize: {graph.vcount()}\nedges: {graph.ecount()}")
 
+    def print_edges(self):
+        for graph_name, graph in self.graph_dict.items():
+            print(f"Edges in filtered graph {graph_name}:")
+            for edge in graph.es:
+                source = graph.vs[edge.source]['name']
+                target = graph.vs[edge.target]['name']
+                print(f"{source} -- {target}")
+
 
 class FilterGraphs:
     """
@@ -75,7 +84,7 @@ class FilterGraphs:
     def __init__(self, graph_dict):
         self.graph_dict = graph_dict
 
-    def filter_graphs(self, cell_lines=None, chromosomes=None, resolutions=None, interaction_type=None, split_statuses=None, norm_statuses=None):
+    def filter_graphs(self, cell_lines=None, chromosomes=None, resolutions=None, interaction_type=None, split_statuses=None, norm_statuses=None, pipeline_conds=None, condition=None):
         filtered_graph_dict = {}
 
         for graph_name, graph in self.graph_dict.items():
@@ -85,6 +94,8 @@ class FilterGraphs:
             resolution = graph["resolution"]
             split_status = graph["split_status"]
             norm_status = graph["norm_status"]
+            pipeline_cond = graph["pipeline_condition"]
+            conditions = graph["condition"]
 
             if cell_lines is not None and cell_line not in cell_lines:
                 continue
@@ -102,11 +113,19 @@ class FilterGraphs:
             if norm_statuses is not None and norm_status not in norm_statuses:
                 continue
 
+            if pipeline_conds is not None and pipeline_cond not in pipeline_conds:
+                continue
+
+            if condition is not None and conditions is not None and condition not in conditions:
+                continue
+
             if chromosomes is not None:
                 selected_edges = [edge for edge in graph.es if any(graph.vs[node_index]['chromosome'] in chromosomes for node_index in edge.tuple)]
 
                 if interaction_type is not None and 'interaction_type' in graph.es.attributes():
                     selected_edges = [edge for edge in selected_edges if edge['interaction_type'] == interaction_type]
+                    if not selected_edges:
+                        print(f"No edges with interaction type '{interaction_type}' found in graph '{graph_name}'.")
 
                 if not selected_edges:
                     print(f"No edges fulfilling the filtering criteria found in graph '{graph_name}'.")
@@ -121,6 +140,8 @@ class FilterGraphs:
                         graph = graph.subgraph_edges(selected_edges, delete_vertices=True)
                     else:
                         print(f"No edges with interaction type '{interaction_type}' found in graph '{graph_name}'.")
+                else:
+                    print(f"Warning: Graph '{graph_name}' does not have an 'interaction_type' attribute.")
 
             filtered_graph_dict[graph_name] = graph
 
@@ -263,11 +284,14 @@ class NetworkMetrics:
         "edges": lambda g: g.ecount(),
         "density": lambda g: g.density(),
         "fg_communities": lambda g: g.community_fastgreedy(),
+        "infomap_communities": lambda g: g.community_infomap(),
+        "loouvain_communities": lambda g: g.community_leading_eigenvector(),
         "community": lambda g: g.community_multilevel(),
         "assortativity": lambda g: g.assortativity_degree(),
         "betweenness": lambda g: g.betweenness(),
-        "degree": lambda g: g.degree(),
+        "edge_betweenness": lambda g: g.edge_betweenness(),
         "closeness": lambda g: g.closeness(),
+        "degree": lambda g: g.degree(),
         "eigen_centrality": lambda g: g.eigenvector_centrality(),
         "shortest_path_length": lambda g: g.distances(),
         "radius": lambda g: g.radius(),
@@ -341,6 +365,9 @@ class NetworkMetrics:
             print()
 
 
+
+
+
 class LCC_Ratio:
 
     def __init__(self, graph_dict):
@@ -407,9 +434,56 @@ class Filter_Graphs_on_Metrics:
                 filtered_graph_dict[graph_name] = subgraph
         return filtered_graph_dict
 
+class GraphEdgelistPrint:
+    def __init__(self, graph):
+        self.graph = graph
 
-# Just for quick testing:
-if __name__ == "__main__":
-    pass
+    def print_as_edgelist(self):
+        print(f"Edge list for graph:")
+        for edge in self.graph.es:
+            source = self.graph.vs[edge.source]['name']
+            target = self.graph.vs[edge.target]['name']
+            print(f"{source} -- {target}")
+class GetGraph:
+    def __init__(self, graph_name):
+        self.graph_name = graph_name
+        self.filter_conditions = {}
 
-# yo
+    def Filtered_on(self, **filter_conditions):
+        self.filter_conditions = filter_conditions
+        return self
+
+    def __call__(self):
+        graph_db_manager = gg.GraphDatabaseManager.from_default_path()
+        graph_names = graph_db_manager.get_graph_names()
+
+        if self.graph_name not in graph_names:
+            raise ValueError(f"Graph with name '{self.graph_name}' does not exist.")
+
+        graph = graph_db_manager.get_graph_by_name(self.graph_name)
+
+        graph_filter = FilterGraphs({self.graph_name: graph})
+        filtered_graph_dict = graph_filter.filter_graphs(**self.filter_conditions)
+        filtered_graph = filtered_graph_dict.get(self.graph_name)
+
+        if filtered_graph is None:
+            print(f"No edges fulfilling the filtering criteria found in graph '{self.graph_name}'.")
+
+        return filtered_graph
+
+    @staticmethod
+    def combine_graphs(graphs, graph_names):
+        graph_combiner = GraphCombiner()
+        combined_graph = graph_combiner.combine_graphs(graphs, graph_names)
+        return combined_graph
+
+    def print_as_edgelist(self):
+        graph_db_manager = gg.GraphDatabaseManager.from_default_path()
+        graph_names = graph_db_manager.get_graph_names()
+
+        if self.graph_name not in graph_names:
+            raise ValueError(f"Graph with name '{self.graph_name}' does not exist.")
+
+        graph_filter = FilterGraphs({self.graph_name: None})
+        graph_filter.print_filtered_edges()
+
