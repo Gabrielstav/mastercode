@@ -14,7 +14,6 @@ import matplotlib.cm as cm
 import numpy as np
 import pandas as pd
 import pathlib as path
-from collections import Counter as count
 
 
 # TODO: Degree class
@@ -53,100 +52,6 @@ class DegreeCentrality:
             max_degree = max(graph.vs["degree"])
             min_degree = min(graph.vs["degree"])
             graph.vs["normalized_degree"] = [(d - min_degree) / (max_degree - min_degree) for d in graph.vs["degree"]]
-
-
-class PlotDegreeDistribution(DegreeCentrality):
-
-    def plot_degree_distribution(self, plot_type='scatter', save_as=None, normalize=False):
-        # Define colors
-        colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
-        max_frequency = -np.inf
-        max_log_frequency = -np.inf
-        min_log_frequency = np.inf
-        maximum_x = -np.inf
-        minimum_y = np.inf
-
-        for idx, (graph_name, graph) in enumerate(self.graph_dict.items()):
-            # Decide whether to normalize
-            if normalize:
-                degree_sequence = graph.vs["normalized_degree"]
-            else:
-                degree_sequence = graph.degree()
-
-            # Unique degrees and their counts
-            degrees, counts = np.unique(degree_sequence, return_counts=True)
-
-            # Convert counts to frequencies
-            frequencies = counts / counts.sum()
-
-            # Log transform frequencies
-            log_freq = np.log10(frequencies)
-
-            # Split graph_name for legend
-            legend_name = '_'.join(graph_name.split('_')[1:3])
-
-            # Check plot type and plot accordingly
-            if plot_type == 'scatter':
-                plt.scatter(degrees, log_freq, color=colors[idx % len(colors)], alpha=0.5, label=legend_name)
-            elif plot_type == 'line':
-                plt.plot(degrees, log_freq, color=colors[idx % len(colors)], label=legend_name)
-
-            # TODO: If normalized, use normalized min and max degree as x- and y-limits
-            # Update max frequency and max log-frequency
-            max_frequency = max(max_frequency, np.max(frequencies))
-            max_log_frequency = max(max_log_frequency, np.max(log_freq))
-            min_log_frequency = min(min_log_frequency, np.min(log_freq))
-            maximum_x = max(maximum_x, np.max(degrees))
-            minimum_y = min(minimum_y, np.min(log_freq))
-
-        # Apply locator to y-axis
-        majorlocator = MultipleLocator(1)
-        minorlocator = AutoMinorLocator(10)
-        # TODO: Why does my minor ticks not show up? wtf.. (Are they outside the plot?)
-        plt.gca().yaxis.set_major_locator(majorlocator)
-        plt.gca().yaxis.set_minor_locator(minorlocator)
-        plt.gca().tick_params(axis='y', which='minor', bottom=True)
-
-        # Set y ticks to represent frequency in a 10^n format with more granularity
-        plt.yticks(ticks=np.arange(max_log_frequency, min_log_frequency - 1, -1),
-                   labels=[f'$10^{{{int(tick)}}}$' for tick in np.arange(max_log_frequency, min_log_frequency - 1, -1)])
-
-        # Set log scale on x-axis
-        plt.xscale('log')
-
-        plt.title("Degree Distribution")
-        plt.xlabel("Degree")
-        plt.ylabel("Frequency")
-
-        # Add a legend
-        plt.legend(loc='upper right')
-
-        # Add max value text below figure
-        max_x = maximum_x
-        min_y = minimum_y
-        max_y = max_log_frequency
-        plt.text(0.03, 0.03, f'Max Degree: {max_x}'
-                             f'\nMax frequency: $10^{{{max_y:.1f}}}$'
-                             f'\nMin Frequency: $10^{{{min_y:.1f}}}$',
-                 transform=plt.gca().transAxes)
-
-        # Save the plot conditionally
-        if save_as:
-            plt.savefig(save_as, dpi=300, format='png')
-
-        # Show the plot
-        plt.show()
-
-
-def degree():
-    graph_dict = gi.intra_1mb_graphs()
-    degree_instance = PlotDegreeDistribution(graph_dict)
-    degree_instance.calculate_degree()
-    degree_instance.normalize_degree()
-    degree_instance.plot_degree_distribution(save_as=Directories.degree_path / "degree_distribution.png", normalize=False)
-
-# degree()
-
 
 class PlotDegreeNetwork(DegreeCentrality):
 
@@ -428,72 +333,97 @@ def plot_betweenness_network():
 # plot_betweenness_network()
 
 
+class PlotDegreeDistribution(DegreeCentrality):
 
+    def plot_degree_distribution(self, plot_type='scatter', save_as=None, normalize=False):
+        # Define colors
+        colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
+        max_frequency = -np.inf
+        max_log_frequency = -np.inf
+        min_log_frequency = np.inf
+        maximum_x = -np.inf
+        minimum_y = np.inf
 
+        for idx, (graph_name, graph) in enumerate(self.graph_dict.items()):
+            # Decide whether to normalize
+            if normalize:
+                degree_sequence = graph.vs["normalized_degree"]
+            else:
+                degree_sequence = graph.degree()
 
+            # Unique degrees and their counts
+            degrees, counts = np.unique(degree_sequence, return_counts=True)
 
-# class ClosenessDistribution(ClosenessCentrality):
-#
-#     # Define colors
-#     colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
-#     max_frequency = -np.inf
-#     max_log_frequency = -np.inf
-#     min_log_frequency = np.inf
-#     maximum_x = -np.inf
-#     minimum_y = np.inf
-#
-#     def calculate_closeness_distribution(self):
-#         for graph_name, graph in self.graph_dict.items():
-#             closeness = graph.closeness()
-#             closeness = sorted(closeness)
-#             frequency = count(closeness)
-#             frequency = sorted(frequency.items())
-#             frequency = np.array(frequency)
-#             frequency[:, 1] = frequency[:, 1] / sum(frequency[:, 1])
-#             frequency = frequency[frequency[:, 0].argsort()]
-#             self.graph_dict[graph_name] = frequency
-#
-#             # Update maximum frequency
-#             if max(frequency[:, 1]) > self.max_frequency:
-#                 self.max_frequency = max(frequency[:, 1])
-#
-#             # Update maximum x
-#             if max(frequency[:, 0]) > self.maximum_x:
-#                 self.maximum_x = max(frequency[:, 0])
-#
-#             # Update minimum y
-#             if min(frequency[:, 1]) < self.minimum_y:
-#                 self.minimum_y = min(frequency[:, 1])
-#
-#             # Update maximum log frequency
-#             if max(np.log(frequency[:, 1])) > self.max_log_frequency:
-#                 self.max_log_frequency = max(np.log(frequency[:, 1]))
-#
-#             # Update minimum log frequency
-#             if min(np.log(frequency[:, 1])) < self.min_log_frequency:
-#                 self.min_log_frequency = min(np.log(frequency[:, 1]))
-#
-#     def plot_closeness_distribution(self, save_as=None):
-#         for graph_name, graph in self.graph_dict.items():
-#             plt.plot(graph[:, 0], graph[:, 1], label=graph_name)
-#         plt.xlabel('Closeness')
-#         plt.ylabel('Frequency')
-#         plt.legend()
-#         plt.title('Closeness distribution')
-#         if save_as:
-#             plt.savefig(save_as, dpi=300, format='png')
-#         plt.show()
-#
-#     def plot_log_closeness_distribution(self, save_as=None):
-#         for graph_name, graph in self.graph_dict.items():
-#             plt.plot(graph[:, 0], np.log(graph[:, 1]), label=graph_name)
-#         plt.xlabel('Closeness')
-#         plt.ylabel('Frequency')
-#         plt.legend()
-#         plt.title('Log closeness distribution')
-#         if save_as:
-#             plt.savefig(save_as, dpi=300, format='png')
-#         plt.show()
+            # Convert counts to frequencies
+            frequencies = counts / counts.sum()
+
+            # Log transform frequencies
+            log_freq = np.log10(frequencies)
+
+            # Split graph_name for legend
+            legend_name = '_'.join(graph_name.split('_')[1:3])
+
+            # Check plot type and plot accordingly
+            if plot_type == 'scatter':
+                plt.scatter(degrees, log_freq, color=colors[idx % len(colors)], alpha=0.5, label=legend_name)
+            elif plot_type == 'line':
+                plt.plot(degrees, log_freq, color=colors[idx % len(colors)], label=legend_name)
+
+            # TODO: If normalized, use normalized min and max degree as x- and y-limits
+            # Update max frequency and max log-frequency
+            max_frequency = max(max_frequency, np.max(frequencies))
+            max_log_frequency = max(max_log_frequency, np.max(log_freq))
+            min_log_frequency = min(min_log_frequency, np.min(log_freq))
+            maximum_x = max(maximum_x, np.max(degrees))
+            minimum_y = min(minimum_y, np.min(log_freq))
+
+        # Apply locator to y-axis
+        majorlocator = MultipleLocator(1)
+        minorlocator = AutoMinorLocator(10)
+        # TODO: Fix - Why do minor ticks not show up?
+        plt.gca().yaxis.set_major_locator(majorlocator)
+        plt.gca().yaxis.set_minor_locator(minorlocator)
+        plt.gca().tick_params(axis='y', which='minor', bottom=True)
+
+        # Set y ticks to represent frequency in a 10^n format with more granularity
+        plt.yticks(ticks=np.arange(max_log_frequency, min_log_frequency - 1, -1),
+                   labels=[f'$10^{{{int(tick)}}}$' for tick in np.arange(max_log_frequency, min_log_frequency - 1, -1)])
+
+        # Set log scale on x-axis
+        plt.xscale('log')
+
+        plt.title("Degree Distribution")
+        plt.xlabel("Degree")
+        plt.ylabel("Frequency")
+
+        # Add a legend
+        plt.legend(loc='upper right')
+
+        # Add max value text below figure
+        max_x = maximum_x
+        min_y = minimum_y
+        max_y = max_log_frequency
+        plt.text(0.03, 0.03, f'Max Degree: {max_x}'
+                             f'\nMax frequency: $10^{{{max_y:.1f}}}$'
+                             f'\nMin Frequency: $10^{{{min_y:.1f}}}$',
+                 transform=plt.gca().transAxes)
+
+        # Save the plot conditionally
+        if save_as:
+            plt.savefig(save_as, dpi=300, format='png')
+
+        # Show the plot
+        plt.show()
+
+def plot_degree():
+    graph_dict = gi.intra_1mb_graphs()
+    degree_instance = PlotDegreeDistribution(graph_dict)
+    degree_instance.calculate_degree()
+    degree_instance.normalize_degree()
+    degree_instance.plot_degree_distribution(save_as=Directories.degree_path / "degree_distribution.png", normalize=False)
+
+# plot_degree()
+
 
 class ClosenessDistribution(ClosenessCentrality):
 
@@ -501,48 +431,165 @@ class ClosenessDistribution(ClosenessCentrality):
         super().__init__(graph_dict)
         self.closeness_distribution_dict = {}
 
-    def calculate_closeness_distribution(self, num_bins=10):
+    def calculate_closeness_distribution(self, num_bins=20):
         for graph_name, graph in self.graph_dict.items():
             closeness_scores = graph.closeness()
             frequencies, bin_edges = np.histogram(closeness_scores, bins=num_bins)
             bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
             self.closeness_distribution_dict[graph_name] = (bin_centers, frequencies)
 
-    def plot_closeness_distribution(self, save_as=None):
-        for graph_name, (bin_centers, frequencies) in self.closeness_distribution_dict.items():
-            plt.plot(bin_centers, frequencies, label=graph_name)
-        plt.xlabel('Closeness')
-        plt.ylabel('Frequency')
-        plt.legend()
-        plt.title('Closeness distribution')
-        if save_as:
-            plt.savefig(save_as, dpi=300, format='png')
-        plt.show()
+    def plot_closeness_distribution(self, plot_type='scatter', save_as=None):
 
-    def plot_log_closeness_distribution(self, save_as=None):
-        for graph_name, (bin_centers, frequencies) in self.closeness_distribution_dict.items():
-            log_frequencies = np.log(frequencies + 1e-10)  # Add a small constant to avoid -inf values
-            plt.plot(bin_centers, log_frequencies, label=graph_name)
+        colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
+
+        for idx, (graph_name, (bin_centers, frequencies)) in enumerate(self.closeness_distribution_dict.items()):
+
+            frequencies = frequencies / frequencies.sum()  # Convert counts to frequencies
+            log_frequencies = np.log10(frequencies + 1e-10)  # Add a small constant to avoid -inf values from log(0)
+            legend_name = '_'.join(graph_name.split('_')[1:3])
+
+            # Exclude zero-frequency bins
+            nonzero_indices = np.where(frequencies > 0)
+            bin_centers = bin_centers[nonzero_indices]
+            log_frequencies = log_frequencies[nonzero_indices]  # Exclude zero-frequency bins
+
+            if plot_type == 'scatter':
+                plt.scatter(bin_centers, log_frequencies, color=colors[idx % len(colors)], alpha=0.5, label=legend_name)
+            elif plot_type == 'line':
+                plt.plot(bin_centers, log_frequencies, color=colors[idx % len(colors)], label=legend_name)
+
+            max_log_freq = np.max(log_frequencies)
+            min_log_freq = np.min(log_frequencies)
+            plt.yticks(ticks=np.arange(max_log_freq, min_log_freq - 1, -1),
+                       labels=[f'$10^{{{int(tick)}}}$' for tick in np.arange(max_log_freq, min_log_freq - 1, -1)])
+
         plt.xlabel('Closeness')
         plt.ylabel('Log Frequency')
         plt.legend()
         plt.title('Log closeness distribution')
+
         if save_as:
             plt.savefig(save_as, dpi=300, format='png')
         plt.show()
 
-
 def closeness_plot():
-    graph_dict = gi.inter_1mb_graphs()
+    graph_dict = gi.intra_1mb_graphs()
     closeness_instance = ClosenessDistribution(graph_dict)
     closeness_instance.calculate_closeness()
     closeness_instance.calculate_closeness_distribution()
     closeness_instance.normalize_closeness()
+    # closeness_instance.plot_closeness_distribution(save_as=None)
     closeness_instance.plot_closeness_distribution(save_as=None)
-    # closeness_instance.plot_log_closeness_distribution(save_as=None)
-closeness_plot()
+# closeness_plot()
+
+class BetweennessDistribution(BetweennessCentrality):
+
+    def __init__(self, graph_dict):
+        super().__init__(graph_dict)
+        self.betweenness_distribution_dict = {}
+
+    def calculate_betweenness_distribution(self, num_bins=100):
+        for graph_name, graph in self.graph_dict.items():
+            betweenness_scores = graph.betweenness()
+            frequencies, bin_edges = np.histogram(betweenness_scores, bins=num_bins)
+            bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+            self.betweenness_distribution_dict[graph_name] = (bin_centers, frequencies)
+
+    def plot_betweenness_distribution(self, plot_type='scatter', save_as=None):
+
+        colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
+
+        for idx, (graph_name, (bin_centers, frequencies)) in enumerate(self.betweenness_distribution_dict.items()):
+
+            frequencies = frequencies / frequencies.sum()  # Convert counts to frequencies
+            log_frequencies = np.log10(frequencies + 1e-10)  # Add a small constant to avoid -inf values from log(0)
+            legend_name = '_'.join(graph_name.split('_')[1:3])
+
+            # Exclude zero-frequency bins
+            nonzero_indices = np.where(frequencies > 0)
+            bin_centers = bin_centers[nonzero_indices]
+            log_frequencies = log_frequencies[nonzero_indices]  # Exclude zero-frequency bins
+
+            if plot_type == 'scatter':
+                plt.scatter(bin_centers, log_frequencies, color=colors[idx % len(colors)], alpha=0.5, label=legend_name)
+            elif plot_type == 'line':
+                plt.plot(bin_centers, log_frequencies, color=colors[idx % len(colors)], label=legend_name)
+
+            max_log_freq = np.max(log_frequencies)
+            min_log_freq = np.min(log_frequencies)
+            plt.yticks(ticks=np.arange(max_log_freq, min_log_freq - 1, -1),
+                       labels=[f'$10^{{{int(tick)}}}$' for tick in np.arange(max_log_freq, min_log_freq - 1, -1)])
+
+        plt.xscale("log")
+        plt.xlabel('Betweenness')
+        plt.ylabel('Log Frequency')
+        plt.legend()
+        plt.title('Log betweenness distribution')
+
+        if save_as:
+            plt.savefig(save_as, dpi=300, format='png')
+        plt.show()
+
+def betweenness_plot():
+    graph_dict = gi.intra_1mb_graphs()
+    betweenness_instance = BetweennessDistribution(graph_dict)
+    betweenness_instance.calculate_betweenness()
+    betweenness_instance.calculate_betweenness_distribution()
+    betweenness_instance.normalize_betweenness()
+    betweenness_instance.plot_betweenness_distribution(save_as=None)
+
+# betweenness_plot()
 
 
+class CentralityCorrelation(BetweennessCentrality, ClosenessCentrality, DegreeCentrality):
+
+    def __init__(self, graph_dict):
+        super().__init__(graph_dict)
+        self.centrality_correlation_dict = {}
+
+    def calculate_centrality_correlation(self):
+        for graph_name, graph in self.graph_dict.items():
+            betweenness_scores = graph.betweenness()
+            closeness_scores = graph.closeness()
+            degree_scores = graph.degree()
+            self.centrality_correlation_dict[graph_name] = {
+                'betweenness': betweenness_scores,
+                'closeness': closeness_scores,
+                'degree': degree_scores
+            }
+
+    def plot_centrality_correlation(self, metric1, metric2, save_as=None):
+        colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
+        for idx, (graph_name, metrics) in enumerate(self.centrality_correlation_dict.items()):
+            scores1 = metrics[metric1]
+            scores2 = metrics[metric2]
+
+            # Calculate the correlation coefficient
+            correlation = np.corrcoef(scores1, scores2)[0, 1]
+
+            legend_name = '_'.join(graph_name.split('_')[1:3])
+            plt.scatter(scores1, scores2, color=colors[idx % len(colors)], alpha=0.5, label=f'{legend_name} (corr={correlation:.2f})')
+
+            # Fit a line to the data
+            m, b = np.polyfit(scores1, scores2, 1)
+
+            # Plot the line
+            plt.plot(scores1, m * np.array(scores1) + b, color=colors[idx % len(colors)])
+
+        plt.xlabel(metric1.capitalize())
+        plt.ylabel(metric2.capitalize())
+        plt.legend()
+        plt.title(f'{metric1.capitalize()} vs. {metric2.capitalize()}')
+        if save_as:
+            plt.savefig(save_as, dpi=300, format='png')
+        plt.show()
+
+def centrality_correlation_plot():
+    graph_dict = gi.intra_1mb_graphs()
+    centrality_instance = CentralityCorrelation(graph_dict)
+    centrality_instance.calculate_centrality_correlation()
+    centrality_instance.plot_centrality_correlation(save_as=None, metric1="closeness", metric2="betweenness")
+centrality_correlation_plot()
 
 
 
