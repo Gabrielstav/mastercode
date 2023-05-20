@@ -7,9 +7,14 @@ from Graph_Processing import graph_generator as gg
 import igraph as ig
 import matplotlib.pyplot as plt
 from matplotlib.ticker import AutoMinorLocator, MultipleLocator
+import matplotlib.patches as mpatches
+import matplotlib.colors as clrs
+from matplotlib.colors import Normalize
+import matplotlib.cm as cm
 import numpy as np
 import pandas as pd
 import pathlib as path
+from collections import Counter as count
 
 
 # TODO: Degree class
@@ -86,6 +91,7 @@ class PlotDegreeDistribution(DegreeCentrality):
             elif plot_type == 'line':
                 plt.plot(degrees, log_freq, color=colors[idx % len(colors)], label=legend_name)
 
+            # TODO: If normalized, use normalized min and max degree as x- and y-limits
             # Update max frequency and max log-frequency
             max_frequency = max(max_frequency, np.max(frequencies))
             max_log_frequency = max(max_log_frequency, np.max(log_freq))
@@ -144,14 +150,67 @@ def degree():
 
 class PlotDegreeNetwork(DegreeCentrality):
 
-    def plot_graph(self, save_as=None):
+    def calculate_color(self, edge):
         for graph_name, graph in self.graph_dict.items():
-            graph_name = '_'.join(graph_name.split('_')[1:3])
-            visual_style = {"vertex_size": 0.7, "bbox": (1000, 1000), "margin": 20, "vertex_color": [degree / max(graph.degree()) for degree in graph.degree()]}  # [DegreeCentrality.normalize_degree(graph)]}
-            ig.plot(graph, **visual_style, target=f"Degree Network of {graph_name}.png")
+            source_degree = graph.degree(edge.source)
+            target_degree = graph.degree(edge.target)
+
+            # Use the largest of the source and target degrees
+            if source_degree > target_degree:
+                degrees = source_degree
+            else:
+                degrees = target_degree
+
+            # Use this instead to keep source and target degrees separate:
+            # degrees = graph.degree(edge.source)
+
+            # Map degree to a color
+            color = plt.cm.viridis(degrees / max(graph.degree()))
+            return color
+
+    def plot_graph(self, normalize=False, color_edges=False, save_as=None, layout=None):
+        for graph_name, graph in self.graph_dict.items():
             fig, ax = plt.subplots()
-            ig.plot(graph, bbox=(0, 0, 300, 300), target=ax, vertex_size=0.1, edge_width=0.5)  # node_color=filtered_graph.vs["chromosome"])
-            ax.set_title(f"Degree Network of {graph_name}")
+            graph_name = '_'.join(graph_name.split('_')[1:3])
+            if normalize:
+                degrees = [deg / max(graph.degree()) for deg in graph.degree()]  # Normalize degrees
+            else:
+                max_degree = max(graph.degree())
+                degrees = [deg / max_degree for deg in graph.degree()]  # Normalize degrees for color mapping
+
+            colors = [list(color) for color in plt.cm.viridis(degrees)]  # Convert numpy.ndarray to list of lists
+
+            # node_size = 0.8
+            # edge_width = 1
+            node_size = 80 / graph.vcount()
+            edge_width = 500 / graph.ecount()
+            edge_colors = [self.calculate_color(edge) for edge in graph.es] if color_edges else 'gray'
+            visual_style = {
+                "layout": layout,
+                "vertex_size": node_size,
+                "edge_width": edge_width,
+                "bbox": (1000, 1000),
+                "margin": 20,
+                "vertex_color": colors,
+                "edge_color": edge_colors,
+                "vertex_label_size": 2,
+                "vertex_label_dist": 10,
+                "vertex_label_angle": 100,
+                "vertex_label_color": "black",
+                "vertex_frame_color": colors,  # Remove black outline, use in circle layout
+                # "vertex_label": graph.vs["location"],  # Add location as label, can be used in small graphs
+            }
+            ig.plot(graph, **visual_style, target=ax)
+            plt.title(graph_name)  # Add a title
+
+            # Create a colorbar
+            if normalize:
+                norm = Normalize(vmin=min(degrees), vmax=max(degrees))
+            else:
+                norm = Normalize(vmin=min(graph.degree()), vmax=max(graph.degree()))
+            sm = plt.cm.ScalarMappable(cmap=plt.cm.viridis, norm=norm)
+            sm.set_array([])
+            plt.colorbar(sm, ax=ax, orientation='vertical', label='Degree')
 
             # Save the plot conditionally
             if save_as:
@@ -160,18 +219,20 @@ class PlotDegreeNetwork(DegreeCentrality):
             plt.show()
 
 def plot_degree_network():
-    graphs = gi.intra_1mb_graphs()
+    graphs = gi.intra_50kb_graphs()
     filter_instance = gm.FilterGraphs(graphs)
-    filter_instance.filter_graphs(cell_lines=["MCF10"], interaction_type="intra")
+    filter_instance.filter_graphs(cell_lines=["mcf10"], interaction_type="intra")  # , chromosomes=["chr1"])
     graph_dict = filter_instance.graph_dict
+    print(graph_dict)
     lcc_instance = gm.LargestComponent(graph_dict)
-    lcc_instance.find_lcc()
-    graph_dict = lcc_instance.graph_dict
-    degree_instance = PlotDegreeNetwork(graph_dict)
+    lcc = lcc_instance.find_lcc()
+    print(lcc)
+    degree_instance = PlotDegreeNetwork(graph_dict) # Use LCC for withtin-chromosome plots
     degree_instance.calculate_degree()
     degree_instance.normalize_degree()
-    degree_instance.plot_graph()
-plot_degree_network()
+    degree_instance.plot_graph(save_as=None, normalize=False, color_edges=True, layout="fr")
+# plot_degree_network()
+
 
 class ClosenessCentrality:
 
@@ -179,15 +240,94 @@ class ClosenessCentrality:
         self.graph_dict = graph_dict
 
     def calculate_closeness(self):
-        # Store closeness centrality as node attributes?
-        pass
+        for graph_name, graph in self.graph_dict.items():
+            graph.vs["closeness"] = graph.closeness()
 
     def normalize_closeness(self):
-        # Normalize metrics for plotting in network to color nodes and edges?
-        pass
+        for graph_name, graph in self.graph_dict.items():
+            max_closeness = max(graph.closeness())
+            graph.vs["closeness"] = [closeness / max_closeness for closeness in graph.closeness()]
 
-    def plot_closeness(self):
-        pass
+class PlotClosenessNetwork(ClosenessCentrality):
+
+    def calculate_color(self, edge):
+        for graph_name, graph in self.graph_dict.items():
+            source_closeness = graph.closeness(edge.source)
+            target_closeness = graph.closeness(edge.target)
+
+            # Use the largest of the source and target degrees
+            if source_closeness > target_closeness:
+                closeness = source_closeness
+            else:
+                closeness = target_closeness
+
+            # Use this instead to keep source and target degrees separate:
+            # degrees = graph.degree(edge.source)
+
+            # Map degree to a color
+            color = plt.cm.viridis(closeness / max(graph.closeness()))
+            return color
+
+    def plot_closeness(self, normalize=False, color_edges=False, save_as=None, layout=None):
+        for graph_name, graph in self.graph_dict.items():
+            fig, ax = plt.subplots()
+            graph_name = '_'.join(graph_name.split('_')[1:3])
+            if normalize:
+                closeness = [closeness / max(graph.closeness()) for closeness in graph.closeness()]
+            else:
+                closeness = graph.closeness()
+
+            colors = [list(color) for color in plt.cm.viridis(closeness)]  # Convert numpy.ndarray to list of lists
+
+            node_size = 50 / graph.vcount()
+            edge_width = 350 / graph.ecount()
+            edge_colors = [self.calculate_color(edge) for edge in graph.es] if color_edges else 'gray'
+            visual_style = {
+                "layout": layout,
+                "vertex_size": node_size,
+                "edge_width": edge_width,
+                "bbox": (1000, 1000),
+                "margin": 20,
+                "vertex_color": colors,
+                "edge_color": edge_colors,
+                "vertex_label_size": 2,
+                "vertex_label_dist": 10,
+                "vertex_label_angle": 100,
+                "vertex_label_color": "black",
+                "vertex_frame_color": colors,  # Remove black outline, use in circle layout
+                # "vertex_label": graph.vs["location"],  # Add location as label, can be used in small graphs
+            }
+            ig.plot(graph, **visual_style, target=ax)
+            plt.title(graph_name)  # Add a title
+
+            # Create a colorbar
+            if normalize:
+                norm = Normalize(vmin=min(closeness), vmax=max(closeness))
+            else:
+                norm = Normalize(vmin=min(graph.closeness()), vmax=max(graph.closeness()))
+            sm = plt.cm.ScalarMappable(cmap=plt.cm.viridis, norm=norm)
+            sm.set_array([])
+            plt.colorbar(sm, ax=ax, orientation='vertical', label='Closeness')
+
+            # Save the plot conditionally
+            if save_as:
+                plt.savefig(save_as, dpi=300, format='png')
+
+            plt.show()
+
+
+def plot_closeness_network():
+    graphs = gi.intra_1mb_graphs()
+    filter_instance = gm.FilterGraphs(graphs)
+    filter_instance.filter_graphs(cell_lines=["mcf7"], interaction_type="intra", chromosomes=["chr1"])
+    graph_dict = filter_instance.graph_dict
+    print(graph_dict)
+    lcc_instance = gm.LargestComponent(graph_dict)
+    lcc = lcc_instance.find_lcc()
+    print(lcc)
+    closeness_instance = PlotClosenessNetwork(lcc) # Use LCC for withtin-chromosome plots
+    closeness_instance.plot_closeness(save_as=None, normalize=False, color_edges=True, layout="fr")
+# plot_closeness_network()
 
 
 class BetweennessCentrality:
@@ -196,35 +336,214 @@ class BetweennessCentrality:
         self.graph_dict = graph_dict
 
     def calculate_betweenness(self):
-        # store betweenness centrality as node attributes?
-        pass
+        for graph_name, graph in self.graph_dict.items():
+            graph.vs["betweenness"] = graph.betweenness()
 
     def normalize_betweenness(self):
-        # Normalize metrics for plotting in network to color nodes and edges?
-        pass
+        for graph_name, graph in self.graph_dict.items():
+            max_betweenness = max(graph.betweenness())
+            graph.vs["betweenness"] = [betweenness / max_betweenness for betweenness in graph.betweenness()]
 
-    def plot_betweenness(self):
-        pass
+class PlotBetweennessNetwork(BetweennessCentrality):
+
+    def calculate_color(self, edge):
+        for graph_name, graph in self.graph_dict.items():
+            source_betweenness = graph.betweenness(edge.source)
+            target_betweenness = graph.betweenness(edge.target)
+
+            # Use the largest of the source and target degrees
+            if source_betweenness > target_betweenness:
+                betweenness = source_betweenness
+            else:
+                betweenness = target_betweenness
+
+            # Use this instead to keep source and target degrees separate:
+            # degrees = graph.degree(edge.source)
+
+            # Map degree to a color
+            color = plt.cm.viridis(betweenness / max(graph.betweenness()))
+            return color
+
+    def plot_betweenness(self, normalize=False, color_edges=False, save_as=None, layout=None):
+        for graph_name, graph in self.graph_dict.items():
+            fig, ax = plt.subplots()
+            graph_name = '_'.join(graph_name.split('_')[1:3])
+            if normalize:
+                betweenness = [betweenness / max(graph.betweenness()) for betweenness in graph.betweenness()]
+            else:
+                betweenness = graph.betweenness()
+
+            colors = [list(color) for color in plt.cm.viridis(betweenness)]
+
+            node_size = 50 / graph.vcount()
+            edge_width = 225 / graph.ecount()
+            edge_colors = [self.calculate_color(edge) for edge in graph.es] if color_edges else 'gray'
+            visual_style = {
+                "layout": layout,
+                "vertex_size": node_size,
+                "edge_width": edge_width,
+                "bbox": (1000, 1000),
+                "margin": 20,
+                "vertex_color": colors,
+                "edge_color": edge_colors,
+                "vertex_label_size": 2,
+                "vertex_label_dist": 10,
+                "vertex_label_angle": 100,
+                "vertex_label_color": "black",
+                "vertex_frame_color": colors,  # Remove black outline, use in circle layout
+                # "vertex_label": graph.vs["location"],  # Add location as label, can be used in small graphs
+            }
+
+            ig.plot(graph, **visual_style, target=ax)
+            plt.title(graph_name)  # Add a title
+
+            # Create a colorbar
+            if normalize:
+                norm = Normalize(vmin=min(betweenness), vmax=max(betweenness))
+            else:
+                norm = Normalize(vmin=min(graph.betweenness()), vmax=max(graph.betweenness()))
+
+            sm = plt.cm.ScalarMappable(cmap=plt.cm.viridis, norm=norm)
+            sm.set_array([])
+            plt.colorbar(sm, ax=ax, orientation='vertical', label='Betweenness')
+
+            # Save the plot conditionally
+            if save_as:
+                plt.savefig(save_as, dpi=300, format='png')
+
+            plt.show()
 
 
-class GraphCentralityMetrics(gm.NetworkMetrics):
+def plot_betweenness_network():
+    graphs = gi.intra_1mb_graphs()
+    filter_instance = gm.FilterGraphs(graphs)
+    filter_instance.filter_graphs(cell_lines=["gsm2824367"], interaction_type="intra", chromosomes=["chr1"])
+    graph_dict = filter_instance.graph_dict
+    print(graph_dict)
+    lcc_instance = gm.LargestComponent(graph_dict)
+    lcc = lcc_instance.find_lcc()
+    print(lcc)
+    betweenness_instance = PlotBetweennessNetwork(lcc) # Use LCC for withtin-chromosome plots
+    betweenness_instance.plot_betweenness(save_as=None, normalize=True, color_edges=False, layout="fr")
+# plot_betweenness_network()
+
+
+
+
+
+
+# class ClosenessDistribution(ClosenessCentrality):
+#
+#     # Define colors
+#     colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
+#     max_frequency = -np.inf
+#     max_log_frequency = -np.inf
+#     min_log_frequency = np.inf
+#     maximum_x = -np.inf
+#     minimum_y = np.inf
+#
+#     def calculate_closeness_distribution(self):
+#         for graph_name, graph in self.graph_dict.items():
+#             closeness = graph.closeness()
+#             closeness = sorted(closeness)
+#             frequency = count(closeness)
+#             frequency = sorted(frequency.items())
+#             frequency = np.array(frequency)
+#             frequency[:, 1] = frequency[:, 1] / sum(frequency[:, 1])
+#             frequency = frequency[frequency[:, 0].argsort()]
+#             self.graph_dict[graph_name] = frequency
+#
+#             # Update maximum frequency
+#             if max(frequency[:, 1]) > self.max_frequency:
+#                 self.max_frequency = max(frequency[:, 1])
+#
+#             # Update maximum x
+#             if max(frequency[:, 0]) > self.maximum_x:
+#                 self.maximum_x = max(frequency[:, 0])
+#
+#             # Update minimum y
+#             if min(frequency[:, 1]) < self.minimum_y:
+#                 self.minimum_y = min(frequency[:, 1])
+#
+#             # Update maximum log frequency
+#             if max(np.log(frequency[:, 1])) > self.max_log_frequency:
+#                 self.max_log_frequency = max(np.log(frequency[:, 1]))
+#
+#             # Update minimum log frequency
+#             if min(np.log(frequency[:, 1])) < self.min_log_frequency:
+#                 self.min_log_frequency = min(np.log(frequency[:, 1]))
+#
+#     def plot_closeness_distribution(self, save_as=None):
+#         for graph_name, graph in self.graph_dict.items():
+#             plt.plot(graph[:, 0], graph[:, 1], label=graph_name)
+#         plt.xlabel('Closeness')
+#         plt.ylabel('Frequency')
+#         plt.legend()
+#         plt.title('Closeness distribution')
+#         if save_as:
+#             plt.savefig(save_as, dpi=300, format='png')
+#         plt.show()
+#
+#     def plot_log_closeness_distribution(self, save_as=None):
+#         for graph_name, graph in self.graph_dict.items():
+#             plt.plot(graph[:, 0], np.log(graph[:, 1]), label=graph_name)
+#         plt.xlabel('Closeness')
+#         plt.ylabel('Frequency')
+#         plt.legend()
+#         plt.title('Log closeness distribution')
+#         if save_as:
+#             plt.savefig(save_as, dpi=300, format='png')
+#         plt.show()
+
+class ClosenessDistribution(ClosenessCentrality):
 
     def __init__(self, graph_dict):
-        self.graph_dict = graph_dict
+        super().__init__(graph_dict)
+        self.closeness_distribution_dict = {}
 
-    def calculate_degree(self):
+    def calculate_closeness_distribution(self, num_bins=10):
         for graph_name, graph in self.graph_dict.items():
-            graph.vs["degree"] = graph.degree()
-            graph.es["degree"] = graph.degree()
+            closeness_scores = graph.closeness()
+            frequencies, bin_edges = np.histogram(closeness_scores, bins=num_bins)
+            bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+            self.closeness_distribution_dict[graph_name] = (bin_centers, frequencies)
 
-    def calculate_betweenness(self):
-        pass
+    def plot_closeness_distribution(self, save_as=None):
+        for graph_name, (bin_centers, frequencies) in self.closeness_distribution_dict.items():
+            plt.plot(bin_centers, frequencies, label=graph_name)
+        plt.xlabel('Closeness')
+        plt.ylabel('Frequency')
+        plt.legend()
+        plt.title('Closeness distribution')
+        if save_as:
+            plt.savefig(save_as, dpi=300, format='png')
+        plt.show()
 
-    def calculate_closeness(self):
-        pass
+    def plot_log_closeness_distribution(self, save_as=None):
+        for graph_name, (bin_centers, frequencies) in self.closeness_distribution_dict.items():
+            log_frequencies = np.log(frequencies + 1e-10)  # Add a small constant to avoid -inf values
+            plt.plot(bin_centers, log_frequencies, label=graph_name)
+        plt.xlabel('Closeness')
+        plt.ylabel('Log Frequency')
+        plt.legend()
+        plt.title('Log closeness distribution')
+        if save_as:
+            plt.savefig(save_as, dpi=300, format='png')
+        plt.show()
 
-    def as_dataframe(self):
-        pass
+
+def closeness_plot():
+    graph_dict = gi.inter_1mb_graphs()
+    closeness_instance = ClosenessDistribution(graph_dict)
+    closeness_instance.calculate_closeness()
+    closeness_instance.calculate_closeness_distribution()
+    closeness_instance.normalize_closeness()
+    closeness_instance.plot_closeness_distribution(save_as=None)
+    # closeness_instance.plot_log_closeness_distribution(save_as=None)
+closeness_plot()
+
+
+
 
 
 class CompareDegree:
@@ -254,46 +573,7 @@ class CompareCloseness:
         pass
 
 
-class BetweennessCentrality:
 
-    def __init__(self, graph_dict):
-        self.graph_dict = graph_dict
-
-    def calculate_betweenness_centrality(self):
-        betweenness_centrality_dict = {}
-        for graph_name, graph in self.graph_dict.items():
-            betweenness_centrality_dict[graph_name] = graph.betweenness()
-        return betweenness_centrality_dict
-
-    def calculate_betweenness_centrality_lcc(self):
-        betweenness_centrality_dict = {}
-        for graph_name, graph in self.graph_dict.items():
-            betweenness_centrality_dict[graph_name] = graph.betweenness()
-        return betweenness_centrality_dict
-
-    def print_betweenness_centrality(self):
-        for graph_name, graph in self.calculate_betweenness_centrality().items():
-            print(f"Betweenness centrality for: {graph_name} \n {graph}")
-
-
-class ClosenessCentrality:
-
-    def __init__(self, graph_dict):
-        self.graph_dict = graph_dict
-
-    def calculate_closeness_centrality(self):
-        closeness_centrality_dict = {}
-        for graph_name, graph in self.graph_dict.items():
-            closeness_centrality_dict[graph_name] = graph.closeness()
-        return closeness_centrality_dict
-
-    def print_closeness_centrality(self):
-        for graph_name, graph in self.calculate_closeness_centrality().items():
-            print(f"Closeness centrality for: {graph_name} \n {graph}")
-
-
-class Degree:
-    pass
 
 
 class FindUniqueNodes:

@@ -67,7 +67,6 @@ def combined():
 
 filtered_graph_dict = combined()
 graph_name, filtered_graph = list(filtered_graph_dict.items())[0]
-
 fig, ax = plt.subplots()
 ig.plot(filtered_graph, bbox=(0, 0, 300, 300), target=ax, vertex_size=0.1, edge_width=0.5)  # node_color=filtered_graph.vs["chromosome"])
 plt.show()
