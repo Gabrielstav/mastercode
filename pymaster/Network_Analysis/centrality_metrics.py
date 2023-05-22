@@ -1,14 +1,10 @@
 # Import modules
-from igraph import plot
-
 from Graph_Processing import graph_instances as gi
 from Graph_Processing import graph_metrics as gm
 from Graph_Processing import graph_generator as gg
 import igraph as ig
 import matplotlib.pyplot as plt
 from matplotlib.ticker import AutoMinorLocator, MultipleLocator
-import matplotlib.patches as mpatches
-import matplotlib.colors as clrs
 from matplotlib.colors import Normalize
 import matplotlib.cm as cm
 import numpy as np
@@ -21,23 +17,12 @@ from collections import defaultdict
 from scipy.spatial.distance import jensenshannon
 
 
-# TODO: Degree class
-
-# TODO: Betweenness class
-
-# TODO: Closeness class
-
-# TODO: Comparison class (for metrics between two graphs, KS, Jaccard?)
-
-# Move betweenness and closeness to graph analysis? Since this is not necessarily comparative. "But it is comparative in the sense that it is comparing the same graph to itself" -copilot 24/4 23
-# TODO: How to compare across cell lines? I mean one thing is to plot the betweenness centrality for each cell line, by coloring nodes and edges.
-#   But the next thing is then to compare centrality metrics, so maybe distribution plots? Or boxplot of each metric for each cell line? (and compare resolution?)
-#   - Needs to write out as node/edge attributes for plotting in graphs, and as pandas df with title as network for Jaccard index.
-
 
 class Directories:
     base_path = path.Path("/Users/GBS/Master/Figures")
     degree_path = base_path / "Degree"
+    closeness_path = base_path / "Closeness"
+    betweenness_path = base_path / "Betweenness"
 
     if not degree_path.exists():
         degree_path.mkdir(parents=True)
@@ -294,7 +279,7 @@ class PlotBetweennessNetwork(BetweennessCentrality):
             colors = [list(color) for color in plt.cm.viridis(betweenness)]
 
             node_size = 50 / graph.vcount()
-            edge_width = 225 / graph.ecount()
+            edge_width = 400 / graph.ecount()
             edge_colors = [self.calculate_color(edge) for edge in graph.es] if color_edges else 'gray'
             visual_style = {
                 "layout": layout,
@@ -335,17 +320,38 @@ class PlotBetweennessNetwork(BetweennessCentrality):
 def plot_betweenness_network():
     graphs = gi.intra_1mb_graphs()
     filter_instance = gm.FilterGraphs(graphs)
-    filter_instance.filter_graphs(cell_lines=["gsm2824367"], interaction_type="intra", chromosomes=["chr1"])
+    filter_instance.filter_graphs(cell_lines=["gsm2824367"], interaction_type="intra", condition="intra-split-raw")  # , chromosomes=["chr1"])
     graph_dict = filter_instance.graph_dict
     print(graph_dict)
-    lcc_instance = gm.LargestComponent(graph_dict)
-    lcc = lcc_instance.find_lcc()
-    print(lcc)
-    betweenness_instance = PlotBetweennessNetwork(lcc)  # Use LCC for withtin-chromosome plots
+    # lcc_instance = gm.LargestComponent(graph_dict)
+    # lcc = lcc_instance.find_lcc()
+    # print(lcc)
+    betweenness_instance = PlotBetweennessNetwork(graph_dict)  # Use LCC for withtin-chromosome plots
     betweenness_instance.plot_betweenness(save_as=None, normalize=True, color_edges=False, layout="fr")
 
 
 # plot_betweenness_network()
+
+def combined_betweenness():
+    # Instantiate the FilterGraphs class
+    all_graphs = gg.GraphDatabaseManager.from_default_path().get_all_graphs()
+    graph_filter_intra = gm.FilterGraphs(all_graphs)
+    graph_filter_inter = gm.FilterGraphs(all_graphs)
+
+    # Filter the intra_graphs and inter_graphs
+    filtered_intra_graphs = graph_filter_intra.filter_graphs(cell_lines=["mcf10"], resolutions=[1000000], chromosomes=["chr1"], condition="inter-nosplit-raw")
+    filtered_inter_graphs = graph_filter_inter.filter_graphs(cell_lines=["mcf10"], resolutions=[1000000], chromosomes=["chr1"], condition="intra-nosplit-raw")
+
+    # Combine the filtered graphs
+    graph_combiner = gm.GraphCombiner([filtered_intra_graphs, filtered_inter_graphs])
+    combined_graphs = graph_combiner.combine_matching_graphs()
+    graph_combiner.print_edges(combined_graphs)
+
+    # Plot betweenness
+    betweenness_instance = PlotBetweennessNetwork(combined_graphs)
+    betweenness_instance.plot_betweenness(save_as=None, normalize=True, color_edges=False, layout="fr")
+
+combined_betweenness()
 
 
 class PlotDegreeDistribution(DegreeCentrality):
@@ -590,18 +596,18 @@ class CentralityCorrelation(BetweennessCentrality, ClosenessCentrality, DegreeCe
             correlation = np.corrcoef(scores1, scores2)[0, 1]
 
             legend_name = '_'.join(graph_name.split('_')[1:3])
-            plt.scatter(scores1, scores2, color=colors[idx % len(colors)], alpha=0.5, label=f'{legend_name} (corr={correlation:.2f})')
+            plt.scatter(scores1, scores2, color=colors[idx % len(colors)], alpha=0.35, label=f'{legend_name} (corr={correlation:.2f})')
 
             # Fit a line to the data
             m, b = np.polyfit(scores1, scores2, 1)
 
             # Plot the line
-            plt.plot(scores1, m * np.array(scores1) + b, color=colors[idx % len(colors)])
+            plt.plot(scores1, m * np.array(scores1) + b, color=colors[idx % len(colors)], alpha=0.8, linewidth=2, zorder=10)
 
         plt.xlabel(metric1.capitalize())
         plt.ylabel(metric2.capitalize())
         plt.legend()
-        plt.title(f'{metric1.capitalize()} vs. {metric2.capitalize()}')
+        plt.title(f"{metric1.capitalize()} vs. {metric2.capitalize()}")
         if save_as:
             plt.savefig(save_as, dpi=300, format='png')
         plt.show()
@@ -609,9 +615,11 @@ class CentralityCorrelation(BetweennessCentrality, ClosenessCentrality, DegreeCe
 
 def centrality_correlation_plot():
     graph_dict = gi.intra_1mb_graphs()
-    centrality_instance = CentralityCorrelation(graph_dict)
+    filter_instance = gm.FilterGraphs(graph_dict)
+    filtered = filter_instance.filter_graphs(cell_lines=["mcf10", "mcf7", "imr90", "gsm2824367", "huvec"], resolutions=[1000000], condition="intra-split-raw")
+    centrality_instance = CentralityCorrelation(filtered)
     centrality_instance.calculate_centrality_correlation()
-    centrality_instance.plot_centrality_correlation(save_as=None, metric1="closeness", metric2="betweenness")
+    centrality_instance.plot_centrality_correlation(save_as=None, metric1="betweenness", metric2="degree")
 
 
 # centrality_correlation_plot()
