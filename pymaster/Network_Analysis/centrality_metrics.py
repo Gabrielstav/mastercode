@@ -15,6 +15,9 @@ import seaborn as sns
 from itertools import combinations
 from collections import defaultdict
 from scipy.spatial.distance import jensenshannon
+from collections import Counter
+import random as rd
+rd.seed = 42
 
 
 
@@ -115,24 +118,6 @@ class PlotDegreeNetwork(DegreeCentrality):
             plt.show()
 
 
-def plot_degree_network():
-    graphs = gi.intra_50kb_graphs()
-    filter_instance = gm.FilterGraphs(graphs)
-    filter_instance.filter_graphs(cell_lines=["mcf10"], interaction_type="intra")  # , chromosomes=["chr1"])
-    graph_dict = filter_instance.graph_dict
-    print(graph_dict)
-    lcc_instance = gm.LargestComponent(graph_dict)
-    lcc = lcc_instance.find_lcc()
-    print(lcc)
-    degree_instance = PlotDegreeNetwork(graph_dict)  # Use LCC for withtin-chromosome plots
-    degree_instance.calculate_degree()
-    degree_instance.normalize_degree()
-    degree_instance.plot_graph(save_as=None, normalize=False, color_edges=True, layout="fr")
-
-
-# plot_degree_network()
-
-
 class ClosenessCentrality:
 
     def __init__(self, graph_dict):
@@ -214,22 +199,6 @@ class PlotClosenessNetwork(ClosenessCentrality):
                 plt.savefig(save_as, dpi=300, format='png')
 
             plt.show()
-
-
-def plot_closeness_network():
-    graphs = gi.intra_1mb_graphs()
-    filter_instance = gm.FilterGraphs(graphs)
-    filter_instance.filter_graphs(cell_lines=["mcf7"], interaction_type="intra", chromosomes=["chr1"])
-    graph_dict = filter_instance.graph_dict
-    print(graph_dict)
-    lcc_instance = gm.LargestComponent(graph_dict)
-    lcc = lcc_instance.find_lcc()
-    print(lcc)
-    closeness_instance = PlotClosenessNetwork(lcc)  # Use LCC for withtin-chromosome plots
-    closeness_instance.plot_closeness(save_as=None, normalize=False, color_edges=True, layout="fr")
-
-
-# plot_closeness_network()
 
 
 class BetweennessCentrality:
@@ -317,43 +286,6 @@ class PlotBetweennessNetwork(BetweennessCentrality):
             plt.show()
 
 
-def plot_betweenness_network():
-    graphs = gi.intra_1mb_graphs()
-    filter_instance = gm.FilterGraphs(graphs)
-    filter_instance.filter_graphs(cell_lines=["gsm2824367"], interaction_type="intra", condition="intra-split-raw")  # , chromosomes=["chr1"])
-    graph_dict = filter_instance.graph_dict
-    print(graph_dict)
-    # lcc_instance = gm.LargestComponent(graph_dict)
-    # lcc = lcc_instance.find_lcc()
-    # print(lcc)
-    betweenness_instance = PlotBetweennessNetwork(graph_dict)  # Use LCC for withtin-chromosome plots
-    betweenness_instance.plot_betweenness(save_as=None, normalize=True, color_edges=False, layout="fr")
-
-
-# plot_betweenness_network()
-
-def combined_betweenness():
-    # Instantiate the FilterGraphs class
-    all_graphs = gg.GraphDatabaseManager.from_default_path().get_all_graphs()
-    graph_filter_intra = gm.FilterGraphs(all_graphs)
-    graph_filter_inter = gm.FilterGraphs(all_graphs)
-
-    # Filter the intra_graphs and inter_graphs
-    filtered_intra_graphs = graph_filter_intra.filter_graphs(cell_lines=["mcf10"], resolutions=[1000000], chromosomes=["chr1"], condition="inter-nosplit-raw")
-    filtered_inter_graphs = graph_filter_inter.filter_graphs(cell_lines=["mcf10"], resolutions=[1000000], chromosomes=["chr1"], condition="intra-nosplit-raw")
-
-    # Combine the filtered graphs
-    graph_combiner = gm.GraphCombiner([filtered_intra_graphs, filtered_inter_graphs])
-    combined_graphs = graph_combiner.combine_matching_graphs()
-    graph_combiner.print_edges(combined_graphs)
-
-    # Plot betweenness
-    betweenness_instance = PlotBetweennessNetwork(combined_graphs)
-    betweenness_instance.plot_betweenness(save_as=None, normalize=True, color_edges=False, layout="fr")
-
-combined_betweenness()
-
-
 class PlotDegreeDistribution(DegreeCentrality):
 
     def plot_degree_distribution(self, plot_type='scatter', save_as=None, normalize=False):
@@ -437,17 +369,6 @@ class PlotDegreeDistribution(DegreeCentrality):
         plt.show()
 
 
-def plot_degree():
-    graph_dict = gi.intra_1mb_graphs()
-    degree_instance = PlotDegreeDistribution(graph_dict)
-    degree_instance.calculate_degree()
-    degree_instance.normalize_degree()
-    degree_instance.plot_degree_distribution(save_as=Directories.degree_path / "degree_distribution.png", normalize=False)
-
-
-# plot_degree()
-
-
 class ClosenessDistribution(ClosenessCentrality):
 
     def __init__(self, graph_dict):
@@ -495,18 +416,6 @@ class ClosenessDistribution(ClosenessCentrality):
             plt.savefig(save_as, dpi=300, format='png')
         plt.show()
 
-
-def closeness_plot():
-    graph_dict = gi.intra_1mb_graphs()
-    closeness_instance = ClosenessDistribution(graph_dict)
-    closeness_instance.calculate_closeness()
-    closeness_instance.calculate_closeness_distribution()
-    closeness_instance.normalize_closeness()
-    # closeness_instance.plot_closeness_distribution(save_as=None)
-    closeness_instance.plot_closeness_distribution(save_as=None)
-
-
-# closeness_plot()
 
 class BetweennessDistribution(BetweennessCentrality):
 
@@ -557,18 +466,6 @@ class BetweennessDistribution(BetweennessCentrality):
         plt.show()
 
 
-def betweenness_plot():
-    graph_dict = gi.intra_1mb_graphs()
-    betweenness_instance = BetweennessDistribution(graph_dict)
-    betweenness_instance.calculate_betweenness()
-    betweenness_instance.calculate_betweenness_distribution()
-    betweenness_instance.normalize_betweenness()
-    betweenness_instance.plot_betweenness_distribution(save_as=None)
-
-
-# betweenness_plot()
-
-
 class CentralityCorrelation(BetweennessCentrality, ClosenessCentrality, DegreeCentrality):
 
     def __init__(self, graph_dict):
@@ -611,18 +508,6 @@ class CentralityCorrelation(BetweennessCentrality, ClosenessCentrality, DegreeCe
         if save_as:
             plt.savefig(save_as, dpi=300, format='png')
         plt.show()
-
-
-def centrality_correlation_plot():
-    graph_dict = gi.intra_1mb_graphs()
-    filter_instance = gm.FilterGraphs(graph_dict)
-    filtered = filter_instance.filter_graphs(cell_lines=["mcf10", "mcf7", "imr90", "gsm2824367", "huvec"], resolutions=[1000000], condition="intra-split-raw")
-    centrality_instance = CentralityCorrelation(filtered)
-    centrality_instance.calculate_centrality_correlation()
-    centrality_instance.plot_centrality_correlation(save_as=None, metric1="betweenness", metric2="degree")
-
-
-# centrality_correlation_plot()
 
 
 class JaccardSimilarity:
@@ -674,10 +559,77 @@ class JaccardSimilarity:
         return self.jaccard_similarities
 
 
+class JensenShannonSimilarity:
+
+    def __init__(self, graph_dict):
+        self.graph_dict = graph_dict
+        self.jensen_shannon_similarities = {}
+
+    def calculate_similarity(self, inter_similarity=None):
+        node_positions_dict = defaultdict(lambda: defaultdict(list))
+
+        for graph_name, graph in self.graph_dict.items():
+            # Extract node location and add it to the list
+            for node in graph.vs:
+                location = node["name"]
+                chromosome = location.split(':')[0]
+                node_positions_dict[graph_name][chromosome].append(location)
+
+        if not inter_similarity:
+            # Calculate Jensen-Shannon similarity between every pair of graphs
+            for graph_name1, graph_name2 in combinations(node_positions_dict.keys(), 2):
+                for chromosome in node_positions_dict[graph_name1].keys():
+                    positions1 = node_positions_dict[graph_name1][chromosome]
+                    positions2 = node_positions_dict[graph_name2][chromosome]
+                    js_sim = self._jensen_shannon_similarity(positions1, positions2)
+                    self.jensen_shannon_similarities[(graph_name1, graph_name2, chromosome)] = js_sim
+
+        if inter_similarity:
+            # Calculate Jaccard similarity between every pair of graphs
+            for graph_name1, graph_name2 in combinations(node_positions_dict.keys(), 2):
+                for chromosome1 in node_positions_dict[graph_name1].keys():
+                    for chromosome2 in node_positions_dict[graph_name2].keys():
+                        positions1 = node_positions_dict[graph_name1][chromosome1]
+                        positions2 = node_positions_dict[graph_name2][chromosome2]
+                        js_sim = self._jensen_shannon_similarity(positions1, positions2)
+                        self.jensen_shannon_similarities[(graph_name1, graph_name2, chromosome1, chromosome2)] = js_sim
+
+    def average_jensen_shannon_node_similarity(self):
+        total_similarity = sum(self.jensen_shannon_similarities.values())
+        average_similarity = total_similarity / len(self.jensen_shannon_similarities)
+        return average_similarity
+
+    @staticmethod
+    def _jensen_shannon_similarity(list1, list2):
+        # Make universal set of all possible node locations to avoid scipy complaining about unequal vector lengths
+        universal_set = set(list1).union(set(list2))
+
+        # Count the occurrences of each element in the universal set
+        counter1 = Counter(list1)
+        counter2 = Counter(list2)
+
+        # Create probability distributions
+        prob_dist1 = [counter1[loc] / len(list1) if loc in counter1 else 0 for loc in universal_set]
+        prob_dist2 = [counter2[loc] / len(list2) if loc in counter2 else 0 for loc in universal_set]
+
+        # Calculate Jensen-Shannon divergence
+        js_divergence = jensenshannon(prob_dist1, prob_dist2)
+
+        # Convert divergence to similarity?
+        # js_similarity = 1 - np.sqrt(js_divergence)
+
+        return js_divergence
+
+    def get_jensen_shannon_similarity(self):
+        return self.jensen_shannon_similarities
+
+
 class JaccardHeatmap:
 
     def __init__(self, jaccard_similarities):
         self.jaccard_similarities = jaccard_similarities
+        print(f"Type of self: {type(self)}")
+        print(f"Type of self.jaccard_similarities: {type(self.jaccard_similarities)}")
 
     def jaccard_heatmap(self):
         # Convert to DataFrame
@@ -696,7 +648,6 @@ class JaccardHeatmap:
 
         # Merge the DataFrames
         df_final = pd.concat(dfs, axis=1)
-        print(df_final)
 
         # Create heatmap
         plt.figure(figsize=(10, 8))
@@ -738,25 +689,65 @@ class JaccardHeatmap:
         plt.show()
 
 
-def plot_jaccard():
-    # Find graphs and filter on them
-    graphs = gi.intra_1mb_graphs()
-    filter_instance = gm.FilterGraphs(graphs)
-    filter_instance.filter_graphs(cell_lines=["mcf10", "mcf7"], interaction_type="intra", resolutions=[1000000], condition="intra-split-raw")
-    graph_dict = filter_instance.graph_dict
+class JensenShannonHeatmap:
 
-    # Calculate Jaccard similarity and plot heatmap
-    jaccard_instance = JaccardSimilarity(graph_dict)
-    jaccard_instance.calculate_similarity(inter_similarity=False)
-    jaccard_similarities = jaccard_instance.get_jaccard_similarity()
-    print(jaccard_similarities)
+    def __init__(self, jensen_shannon_similarities):
+        self.jensen_shannon_similarities = jensen_shannon_similarities
+        print(f"Type of self: {type(self)}")
+        print(f"Type of self.jensen_shannon_similarities: {type(self.jensen_shannon_similarities)}")
 
-    # Create heatmap
-    heatmap_instance = JaccardHeatmap(jaccard_similarities)
-    heatmap_instance.jaccard_barplot()
+    def jensen_shannon_heatmap(self):
+        # Convert to DataFrame
+        df = pd.DataFrame.from_dict(self.jensen_shannon_similarities, orient='index', columns=['Jensen-Shannon Similarity'])
+        df.reset_index(inplace=True)
+        df[['Graph1', 'Graph2', 'Chromosome']] = pd.DataFrame(df['index'].tolist(), index=df.index)
+        df.drop(columns=['index'], inplace=True)
 
+        # Create a DataFrame for each pair of graphs
+        dfs = []
+        for (graph1, graph2), group_df in df.groupby(['Graph1', 'Graph2']):
+            group_df = group_df[['Chromosome', 'Jensen-Shannon Similarity']]
+            group_df.set_index('Chromosome', inplace=True)
+            group_df.columns = [f'{graph1}_{graph2}']
+            dfs.append(group_df)
 
-# plot_jaccard()
+        # Merge the DataFrames
+        df_final = pd.concat(dfs, axis=1)
+
+        # Create heatmap
+        plt.figure(figsize=(10, 8))
+        sns.heatmap(df_final, annot=True, fmt=".2f", cmap='YlGnBu')
+        plt.title('Jensen-Shannon Similarity between Chromosomes')
+        plt.show()
+
+    def inter_jensen_shannon_heatmap(self):
+        # Pivot the DataFrame to create a matrix suitable for a heatmap
+        df = pd.DataFrame.from_dict(self.jensen_shannon_similarities, orient='index', columns=['Jensen-Shannon Similarity'])
+        df.reset_index(inplace=True)
+        df[['Graph1', 'Graph2', 'Chromosome1', 'Chromosome2']] = pd.DataFrame(df['index'].tolist(), index=df.index)
+        df.drop(columns=['index'], inplace=True)
+        df_pivot = df.pivot(index='Chromosome1', columns='Chromosome2', values='Jensen-Shannon Similarity')
+
+        # Create heatmap
+        plt.figure(figsize=(10, 8))
+        sns.heatmap(df_pivot, annot=True, fmt=".2f", cmap='GnBu')
+        plt.title('Jensen-Shannon Similarity between Chromosomes')
+        plt.show()
+
+    def jensen_shannon_barplot(self):
+        # Create color map
+        df = pd.DataFrame.from_dict(self.jensen_shannon_similarities, orient='index', columns=['Jensen-Shannon Similarity'])
+        df.reset_index(inplace=True)
+        df[['Graph1', 'Graph2', 'Chromosome']] = pd.DataFrame(df['index'].tolist(), index=df.index)
+        df.drop(columns=['index'], inplace=True)
+        color_map = cm.get_cmap('GnBu')
+        colors = color_map(df['Jensen-Shannon Similarity'])
+
+        # Create bar plot
+        plt.figure(figsize=(10, 8))
+        sns.barplot(x='Chromosome', y='Jensen-Shannon Similarity', palette=colors, data=df)
+        plt.title('Jensen-Shannon Similarity between Chromosomes')
+        plt.show()
 
 
 class CalculateCentralitySimilarity:
@@ -787,7 +778,6 @@ class CalculateCentralitySimilarity:
         self.kolmogorov_smirnov = ks_2samp(metric1, metric2)[0]
 
     # Other metrics need to have the same number of nodes, can randomly sample or downscale the larger dataset
-
     def calculate_pearson_correlation(self):
         # calculate Pearson correlation
         cell_line1, cell_line2 = self.graph_dict.keys()
@@ -820,36 +810,6 @@ class CalculateCentralitySimilarity:
 
     def get_spearman_correlation(self):
         return self.spearman_correlation
-
-
-def compare_cents():
-    # Find graphs and filter on them
-    graphs = gi.intra_1mb_graphs()
-    filter_instance = gm.FilterGraphs(graphs)
-    filter_instance.filter_graphs(cell_lines=["mcf10", "mcf7"], interaction_type="intra", resolutions=[1000000], condition="intra-split-raw")
-    graph_dict = filter_instance.graph_dict
-
-    # Calculate centrality metrics
-    degree_instance = DegreeCentrality(graph_dict)
-    degree_instance.calculate_degree()
-    degree_instance.normalize_degree()
-
-    closeness_instance = ClosenessCentrality(graph_dict)
-    closeness_instance.calculate_closeness()
-    closeness_instance.normalize_closeness()
-
-    betweenness_instance = BetweennessCentrality(graph_dict)
-    betweenness_instance.calculate_betweenness()
-    betweenness_instance.normalize_betweenness()
-
-    # Calculate similarity between degree in two cell lines
-    similarity_instance = CalculateCentralitySimilarity(graph_dict, "betweenness")
-
-    similarity_instance.calculate_kolmogorov_smirnov()
-    similarity_instance.get_kolmogorov_smirnov()
-    print(similarity_instance.get_kolmogorov_smirnov())
-
-# compare_cents()
 
 
 class FindUniqueNodes:
@@ -895,3 +855,201 @@ class FindUniqueNodes:
             print(f"Graph: {graph_name}")
             for node in unique_nodes:
                 print(node)
+
+
+### Centrality metrics
+
+def plot_degree_network():
+    graphs = gi.intra_50kb_graphs()
+    filter_instance = gm.FilterGraphs(graphs)
+    filter_instance.filter_graphs(cell_lines=["mcf10"], interaction_type="intra")  # , chromosomes=["chr1"])
+    graph_dict = filter_instance.graph_dict
+    print(graph_dict)
+    lcc_instance = gm.LargestComponent(graph_dict)
+    lcc = lcc_instance.find_lcc()
+    print(lcc)
+    degree_instance = cm.PlotDegreeNetwork(graph_dict)  # Use LCC for withtin-chromosome plots
+    degree_instance.calculate_degree()
+    degree_instance.normalize_degree()
+    degree_instance.plot_graph(save_as=None, normalize=False, color_edges=True, layout="fr")
+
+
+# plot_degree_network()
+
+def plot_closeness_network():
+    graphs = gi.intra_1mb_graphs()
+    filter_instance = gm.FilterGraphs(graphs)
+    filter_instance.filter_graphs(cell_lines=["mcf7"], interaction_type="intra", chromosomes=["chr1"])
+    graph_dict = filter_instance.graph_dict
+    print(graph_dict)
+    lcc_instance = gm.LargestComponent(graph_dict)
+    lcc = lcc_instance.find_lcc()
+    print(lcc)
+    closeness_instance = cm.PlotClosenessNetwork(lcc)  # Use LCC for withtin-chromosome plots
+    closeness_instance.plot_closeness(save_as=None, normalize=False, color_edges=True, layout="fr")
+
+
+# plot_closeness_network()
+
+def plot_betweenness_network():
+    graphs = gi.intra_1mb_graphs()
+    filter_instance = gm.FilterGraphs(graphs)
+    filter_instance.filter_graphs(cell_lines=["gsm2824367"], interaction_type="intra", condition="intra-split-raw")  # , chromosomes=["chr1"])
+    graph_dict = filter_instance.graph_dict
+    print(graph_dict)
+    # lcc_instance = gm.LargestComponent(graph_dict)
+    # lcc = lcc_instance.find_lcc()
+    # print(lcc)
+    betweenness_instance = cm.PlotBetweennessNetwork(graph_dict)  # Use LCC for withtin-chromosome plots
+    betweenness_instance.plot_betweenness(save_as=None, normalize=True, color_edges=False, layout="fr")
+
+
+# plot_betweenness_network()
+
+def combined_betweenness():
+    # Instantiate the FilterGraphs class
+    all_graphs = gg.GraphDatabaseManager.from_default_path().get_all_graphs()
+    graph_filter_intra = gm.FilterGraphs(all_graphs)
+    graph_filter_inter = gm.FilterGraphs(all_graphs)
+
+    # Filter the intra_graphs and inter_graphs
+    filtered_intra_graphs = graph_filter_intra.filter_graphs(cell_lines=["mcf10"], resolutions=[1000000], chromosomes=["chr1"], condition="inter-nosplit-raw")
+    filtered_inter_graphs = graph_filter_inter.filter_graphs(cell_lines=["mcf10"], resolutions=[1000000], chromosomes=["chr1"], condition="intra-nosplit-raw")
+
+    # Combine the filtered graphs
+    graph_combiner = gm.GraphCombiner([filtered_intra_graphs, filtered_inter_graphs])
+    combined_graphs = graph_combiner.combine_matching_graphs()
+    # graph_combiner.print_edges(combined_graphs)
+
+    # Plot betweenness
+    betweenness_instance = cm.PlotBetweennessNetwork(combined_graphs)
+    betweenness_instance.plot_betweenness(save_as=None, normalize=True, color_edges=False, layout="fr")
+
+
+# combined_betweenness()
+
+def plot_degree():
+    graph_dict = gi.intra_1mb_graphs()
+    degree_instance = cm.PlotDegreeDistribution(graph_dict)
+    degree_instance.calculate_degree()
+    degree_instance.normalize_degree()
+    degree_instance.plot_degree_distribution(save_as=cm.Directories.degree_path / "degree_distribution.png", normalize=False)
+
+
+# plot_degree()
+
+def closeness_plot():
+    graph_dict = gi.intra_1mb_graphs()
+    closeness_instance = cm.ClosenessDistribution(graph_dict)
+    closeness_instance.calculate_closeness()
+    closeness_instance.calculate_closeness_distribution()
+    closeness_instance.normalize_closeness()
+    # closeness_instance.plot_closeness_distribution(save_as=None)
+    closeness_instance.plot_closeness_distribution(save_as=None)
+
+
+# closeness_plot()
+
+def betweenness_plot():
+    graph_dict = gi.intra_1mb_graphs()
+    betweenness_instance = cm.BetweennessDistribution(graph_dict)
+    betweenness_instance.calculate_betweenness()
+    betweenness_instance.calculate_betweenness_distribution()
+    betweenness_instance.normalize_betweenness()
+    betweenness_instance.plot_betweenness_distribution(save_as=None)
+
+
+# betweenness_plot()
+
+def centrality_correlation_plot():
+    graph_dict = gi.intra_1mb_graphs()
+    filter_instance = gm.FilterGraphs(graph_dict)
+    filtered = filter_instance.filter_graphs(cell_lines=["mcf10", "mcf7", "imr90", "gsm2824367", "huvec"], resolutions=[1000000], condition="intra-split-raw")
+    centrality_instance = cm.CentralityCorrelation(filtered)
+    centrality_instance.calculate_centrality_correlation()
+    centrality_instance.plot_centrality_correlation(save_as=None, metric1="betweenness", metric2="degree")
+
+
+# centrality_correlation_plot()
+
+def jaccard_plot():
+    # Find graphs and filter on them
+    graphs = gi.intra_1mb_graphs()
+    filter_instance = gm.FilterGraphs(graphs)
+    filter_instance.filter_graphs(cell_lines=["mcf10", "mcf7"], interaction_type="intra", resolutions=[1000000], condition="intra-split-raw")
+    graph_dict = filter_instance.graph_dict
+
+    # Calculate Jaccard similarity and plot heatmap
+    jaccard_instance = JaccardSimilarity(graph_dict)
+    jaccard_instance.calculate_similarity(inter_similarity=False)
+    jaccard_similarities = jaccard_instance.get_jaccard_similarity()
+    print(jaccard_similarities)
+
+    # Create heatmap
+    heatmap_instance = JaccardHeatmap(jaccard_similarities)
+    heatmap_instance.jaccard_barplot()
+
+
+# jaccard_plot()
+
+
+def plot_js():
+    # Find graphs and filter on them
+    graphs = gi.all_graphs()
+    filter_instance = gm.FilterGraphs(graphs)
+    filter_instance.filter_graphs(cell_lines=["mcf10", "mcf7"], interaction_type="intra", resolutions=[1000000], condition="intra-split-raw")
+    graph_dict = filter_instance.graph_dict
+
+    # Calculate JS similarity and plot heatmap
+    js_inst = JensenShannonSimilarity(graph_dict)
+    js_inst.calculate_similarity(inter_similarity=False)
+    js_sim = js_inst.get_jensen_shannon_similarity()
+    print(js_sim)
+
+    # Create heatmap
+    heatmap_instance = JensenShannonHeatmap(js_sim)
+    heatmap_instance.jensen_shannon_barplot()
+
+
+# plot_js()
+
+
+def compare_cents():
+    # Find graphs and filter on them
+    graphs = gi.intra_1mb_graphs()
+    filter_instance = gm.FilterGraphs(graphs)
+    filter_instance.filter_graphs(cell_lines=["mcf10", "mcf7"], interaction_type="intra", resolutions=[1000000], condition="intra-split-raw")
+    graph_dict = filter_instance.graph_dict
+
+    # Calculate centrality metrics
+    degree_instance = cm.DegreeCentrality(graph_dict)
+    degree_instance.calculate_degree()
+    degree_instance.normalize_degree()
+
+    closeness_instance = cm.ClosenessCentrality(graph_dict)
+    closeness_instance.calculate_closeness()
+    closeness_instance.normalize_closeness()
+
+    betweenness_instance = cm.BetweennessCentrality(graph_dict)
+    betweenness_instance.calculate_betweenness()
+    betweenness_instance.normalize_betweenness()
+
+    # Calculate similarity between degree in two cell lines
+    similarity_instance = cm.CalculateCentralitySimilarity(graph_dict, "degree")
+
+    similarity_instance.calculate_kolmogorov_smirnov()
+    similarity_instance.get_kolmogorov_smirnov()
+    print(similarity_instance.get_kolmogorov_smirnov())
+
+
+# compare_cents()
+
+if __name__ == "__main__":
+    print("main running")
+    # plot_betweenness_network()
+    # plot_degree()
+    # closeness_plot()
+    # betweenness_plot()
+    # centrality_correlation_plot()
+    # plot_jaccard()
+    # compare_cents()

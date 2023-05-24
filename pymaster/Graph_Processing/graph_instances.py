@@ -1,8 +1,7 @@
 # Import modules
 from Graph_Processing import graph_generator as gg
 from Graph_Processing import graph_metrics as gm
-from pathlib import Path
-import igraph as ig
+
 
 def all_graphs():
     graph_db_manager = gg.GraphDatabaseManager.from_default_path()
@@ -120,7 +119,7 @@ def combined():
     # Combine the filtered graphs
     graph_combiner = gm.GraphCombiner([filtered_intra_graphs, filtered_inter_graphs])
     combined_graphs = graph_combiner.combine_matching_graphs()
-    graph_combiner.print_edges(combined_graphs)
+    # graph_combiner.print_edges(combined_graphs)
     return combined_graphs
 
 

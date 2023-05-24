@@ -1,10 +1,10 @@
 # Import modules
-import os as os
 import igraph as ig
 import rpy2.robjects as robjects
 import rpy2.robjects.packages as rpackages
 from rpy2.robjects import pandas2ri
 from rpy2.robjects.conversion import localconverter
+import pandas as pd
 
 # TODO:
 #    1. Make alpaca class
@@ -26,6 +26,9 @@ from rpy2.robjects.conversion import localconverter
 # Then integrate the alpaca package into Python or reverse engineer it to make it work in python
 # Then call the alpaca algo on the graphs
 
+# TODO:
+#   Can we write a function that takes in a graph_dictionary, containing igraph graph objects as values, and the graph names as keys, and does the necessary conversions and runs alpaca?
+
 # So step-by-step:
 # 1. Find community structure for each graph
 # 2. Pre-process the community structure into the correct format, convertign to R objects (1 weighted for connection)
@@ -40,21 +43,35 @@ baseline_graph = ig.Graph.GRG(50, 0.2)
 perturbed_graph = ig.Graph.GRG(50, 0.3)
 
 # Do comm detecton
-baseline_communities = baseline_graph.community_fastgreedy().as_clustering() # Baseline graph has changed in docs, find new way to get it
+baseline_communities = baseline_graph.community_fastgreedy().as_clustering()  # Baseline graph has changed in docs, find new way to get it
 perturbed_communities = perturbed_graph.community_fastgreedy().as_clustering()
+
+# Convert the igraph objects to adjacency matrix format
+baseline_adj = pd.DataFrame(baseline_graph.get_adjacency().data)
+perturbed_adj = pd.DataFrame(perturbed_graph.get_adjacency().data)
 
 # Convert to R objects
 with localconverter(robjects.default_converter + pandas2ri.converter):
-    r_baseline_graph = robjects.conversion.py2rpy(baseline_graph)
-    r_perturbed_graph = robjects.conversion.py2rpy(perturbed_graph)
+    r_baseline_adj = robjects.conversion.py2rpy(baseline_adj)
+    r_perturbed_adj = robjects.conversion.py2rpy(perturbed_adj)
+
+# Convert basline graph to pandas df
+baseline_graph_df = pd.DataFrame(baseline_graph.get_edgelist(), columns=["from", "to"])
+perturbed_graph_df = pd.DataFrame(perturbed_graph.get_edgelist(), columns=["from", "to"])
+
+# Convert baseline graphs to R objects
+with localconverter(robjects.default_converter + pandas2ri.converter):
+    r_baseline_graph = robjects.conversion.py2rpy(baseline_graph_df)
+    r_perturbed_graph = robjects.conversion.py2rpy(perturbed_graph_df)
 
 # Convert comm struct to R objects
 r_baseline_communities = robjects.IntVector(baseline_communities.membership)
 r_perturbed_communities = robjects.IntVector(perturbed_communities.membership)
 
 # Run Alpaca
-alpaca = rpackages.importr("alpaca")
-alpaca_results = alpaca.alpaca(r_baseline_graph, r_perturbed_graph, r_baseline_communities, r_perturbed_communities)
+NetZooR = rpackages.importr("netZooR")
+print(robjects.r.help("alpaca", package="netZooR"))
+alpaca_results = NetZooR.alpaca(r_baseline_graph, r_perturbed_graph, r_baseline_communities, r_perturbed_communities)
 
 # Process results
 differential_modularity_matrix = alpaca_results.rx2("D")
@@ -70,9 +87,3 @@ differential_modularity_matrix = ig.Graph.Adjacency(differential_modularity_matr
 differential_communities = ig.Graph.Adjacency(differential_communities.tolist())
 
 # Make grap dict from results ?
-
-
-
-
-
-
