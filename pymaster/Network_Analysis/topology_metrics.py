@@ -121,7 +121,7 @@ class PlotTopology:
 
             # Set visual style
             fig, ax = plt.subplots()
-            node_size = 30 / graph.vcount()
+            node_size = 10 / graph.vcount()
             edge_width = 250 / graph.ecount()
             visual_style = {
                 "layout": "kk",
@@ -158,7 +158,7 @@ def fg1_comm_mcf10():
     # Filter on graphs
     graph_dict = gi.all_graphs()
     filter_instance = gm.FilterGraphs(graph_dict)
-    filtered = filter_instance.filter_graphs(resolutions=[1000000], cell_lines=["mcf7"], condition="intra-nosplit-raw", interaction_type="intra", chromosomes=["chr18", "chr19", "chr20"])
+    filtered = filter_instance.filter_graphs(resolutions=[1000000], cell_lines=["imr90"], condition="intra-nosplit-raw", interaction_type="intra", chromosomes=["chr18"])
 
     # Detect communities
     cd = CommunityDetection(filtered)
@@ -166,10 +166,10 @@ def fg1_comm_mcf10():
 
     # Plot communities
     pt = PlotTopology(filtered, cd)  # pass the CommunityDetection instance to PlotTopology
-    pt.plot_community(method="fg", save_as=True)
+    pt.plot_community(method="fg", save_as=False)
     return print(filtered)  # print the updated graph_dict
 
-fg1_comm_mcf10()
+# fg1_comm_mcf10()
 
 
 class DendrogramPlot:
@@ -188,8 +188,6 @@ class DendrogramPlot:
             dendrogram.plot(axes=ax)
             ax.set_title(f"{graph_name} - {method}")
             plt.show()
-
-
 
 class CommunityMetrics:
 
@@ -280,6 +278,14 @@ class CommunityMetrics:
             intra_edges.append(inner_edges)
             inter_edges.append(outer_edges)
         return intra_edges, inter_edges
+
+class Ideaogram:
+
+    def __init__(self):
+        graph_dict = self.graph_dict
+
+
+
 
 
 

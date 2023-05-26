@@ -244,16 +244,133 @@ class GraphAttributeInspector:
                         print(f"{attribute}: {edge[attribute]}", end='. ')
                 print()
 
+class Sorter:
 
-class ExportGraphToEdgelist:
+    def __init__(self, *graph_dicts):
+        # Merge dicts into one
+        if len(graph_dicts) == 1:
+            self.graph_dict = graph_dicts[0]
+        else:
+            self.graph_dict = {k: v for d in graph_dicts for k, v in d.items()}
+
+    @staticmethod
+    def sort_key(node):
+        chr_id, pos = node.split(':')
+        chr_id = chr_id[3:]
+        start, end = map(int, pos.split('-'))
+        try:
+            chr_num = int(chr_id)
+        except ValueError:
+            if chr_id == 'X':
+                chr_num = 1e4
+            elif chr_id == 'Y':
+                chr_num = 1e4 + 1
+            else:
+                chr_num = 1e4 + 2
+        return chr_num, start, end
+
+    def sort_graph(self):
+        sorted_graph_dict = {}
+        for graph_name, graph in self.graph_dict.items():
+            edges = [(graph.vs[edge.source]['name'], graph.vs[edge.target]['name']) for edge in graph.es]
+            # Ensure that the node with the smaller coordinate is always the source node
+            edges = [(min(edge, key=Sorter.sort_key), max(edge, key=Sorter.sort_key)) for edge in edges]
+            # Sort the edges again after the swapping
+            edges.sort(key=lambda edge: (Sorter.sort_key(edge[0]), Sorter.sort_key(edge[1])))
+            sorted_graph = graph.TupleList(edges, directed=False)
+
+            # Copy node attributes
+            for attr in graph.vs.attributes():
+                sorted_graph.vs[attr] = graph.vs[attr]
+
+            # Copy edge attributes
+            for attr in graph.es.attributes():
+                sorted_graph.es[attr] = graph.es[attr]
+
+            # Copy graph attributes
+            for attr in graph.attributes():
+                sorted_graph[attr] = graph[attr]
+
+            sorted_graph_dict[graph_name + '_sorted'] = sorted_graph
+        return sorted_graph_dict
+
+    def print_sorted_edgelist(self):
+        for graph_name, graph in self.graph_dict.items():
+            print(f"Graph: {graph_name}")
+            for edge in graph.es:
+                source = graph.vs[edge.source]['name']
+                target = graph.vs[edge.target]['name']
+                if Sorter.sort_key(source) < Sorter.sort_key(target):
+                    print(f"{source} {target}")
+                else:
+                    print(f"{target} {source}")
+
+
+class GraphExporter:
 
     def __init__(self, graph_dict, output_dir):
         self.graph_dict = graph_dict
         self.output_dir = Path(output_dir)
 
-    def export(self):
+    def export_bed(self, attributes):
         for graph_name, graph in self.graph_dict.items():
-            self._export_edgelist(graph, self.output_dir / f"{graph_name}_edgelist.txt")
+            lines = []
+            for node in graph.vs:
+                chrom, start_end = node["name"].split(":")
+                start, end = start_end.split("-")
+                attr_values = [str(node[attr]) for attr in attributes]
+                lines.append([chrom, int(start), int(end), graph_name] + attr_values)
+            lines.sort(key=lambda x: Sorter.sort_key(x[0] + ':' + str(x[1]) + '-' + str(x[2])))
+            with open(self.output_dir / f"{graph_name}.bed", 'w') as f:
+                for line in lines:
+                    f.write("\t".join(map(str, line)) + "\n")
+
+    def export_bed6(self, attributes):
+        for graph_name, graph in self.graph_dict.items():
+            lines = []
+            for i, node in enumerate(graph.vs):
+                chrom, start_end = node["name"].split(":")
+                start, end = start_end.split("-")
+                attr_values = [str(node[attr]) for attr in attributes]
+                # 1 is added to score field as an unique identifier for each node
+                # "." is added as strand
+                # Remaining 3 fields (thickStart, thickEnd, itemRgb) are duplicates of start, end and a fixed RGB color value
+                # attr_values are added as additional columns
+                lines.append([chrom, int(start), int(end), node["name"], i + 1, ".", int(start), int(end), "255,0,0"] + attr_values)
+            lines.sort(key=lambda x: Sorter.sort_key(x[0] + ':' + str(x[1]) + '-' + str(x[2])))
+            with open(self.output_dir / f"{graph_name}.bed", 'w') as f:
+                f.write('track name="' + graph_name + '" description="Description" itemRgb="On"' + "\n")
+                for line in lines:
+                    f.write("\t".join(map(str, line)) + "\n")
+
+    def export_gff3(self, attributes):
+        for graph_name, graph in self.graph_dict.items():
+            lines = []
+            for idx, node in enumerate(graph.vs):
+                chrom, start_end = node["name"].split(":")
+                start, end = start_end.split("-")
+                start = int(start)
+                if start == 0:
+                    start += 1
+                attr_values = ";".join([f"{attr}={node[attr]}" for attr in attributes])
+                lines.append([chrom, ".", "graph_node", start, end, ".", ".", ".", f"ID={graph_name}_{idx};{attr_values}"])
+            lines.sort(key=lambda x: Sorter.sort_key(x[0] + ':' + str(x[3]) + '-' + str(x[4])))
+            with open(self.output_dir / f"{graph_name}.gff3", 'w') as f:
+                f.write("##gff-version 3\n")
+                for line in lines:
+                    f.write("\t".join(map(str, line)) + "\n")
+
+    @staticmethod
+    def _export_bed(graph, file_path, node_metrics):
+        try:
+            with open(file_path, 'w') as f:
+                for node in graph.vs:
+                    chrom, pos = node['name'].split(':')
+                    start, end = pos.split('-')
+                    metrics = ' '.join(str(node[metric]) for metric in node_metrics)
+                    f.write(f"{chrom}\t{start}\t{end}\t{metrics}\n")
+        except IOError as e:
+            print(f"Failed to write to file: {file_path}. Error: {e}")
 
     @staticmethod
     def _export_edgelist(graph, file_path):

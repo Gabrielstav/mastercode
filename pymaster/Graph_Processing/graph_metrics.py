@@ -233,7 +233,7 @@ class GraphCombiner:
         # Create set to store pairs of combined graph indices
         combined_pairs = set()
 
-        # Compare each graph with every other graph only once
+        # Compare each graph with every other graph
         for i, (graph_name1, graph1) in enumerate(graph_list):
             for j, (graph_name2, graph2) in enumerate(graph_list[i + 1:], start=i + 1):  # start parameter adjusts the index
                 # Check if the pair has already been combined
@@ -381,10 +381,10 @@ class LCC_Ratio:
             lcc_ratio_dict[graph_name] = parent_graph_size, lcc_graph_size
         return lcc_ratio_dict
 
+
     def calculate_lcc_ratio_per_chromosome(self, chromosomes=None):
         lcc_ratio_dict = defaultdict(list)
 
-        # Filter on chromosome and store unique chromosomes in set
         if chromosomes is None:
             # Filter the graphs by chromosome and store the unique chromosome names in a set
             chromosomes = set()
@@ -398,10 +398,17 @@ class LCC_Ratio:
         for chromosome in chromosomes:
             filtered_graphs = FilterGraphs(self.graph_dict).filter_graphs(chromosomes=chromosome)
             for graph_name, graph in filtered_graphs.items():
-                lcc_graph_size = graph.connected_components().giant().vcount()
+                lcc_graph = graph.connected_components().giant()
+                lcc_graph_size = lcc_graph.vcount()
                 parent_graph_size = graph.vcount()
                 lcc_ratio = lcc_graph_size / parent_graph_size
                 lcc_ratio_dict[chromosome].append(lcc_ratio)
+
+        # Normalize the ratios to sum up to 1
+        for chromosome in lcc_ratio_dict:
+            ratios = lcc_ratio_dict[chromosome]
+            total_ratio = sum(ratios)
+            lcc_ratio_dict[chromosome] = [ratio / total_ratio for ratio in ratios]
 
         return lcc_ratio_dict
 

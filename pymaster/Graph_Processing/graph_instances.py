@@ -8,6 +8,8 @@ def all_graphs():
     return graph_db_manager.get_all_graphs()
 
 
+
+
 # Intra graphs 1 MB
 def intra_1mb_graphs():
     graph_db_manager = gg.GraphDatabaseManager.from_default_path()
@@ -115,12 +117,12 @@ def combined():
     filtered_inter_graphs = graph_filter_inter.filter_graphs(cell_lines=["mcf7"], resolutions=[1000000], chromosomes=["chr1"], condition="inter-nosplit-raw")
     print(filtered_intra_graphs)
     print(filtered_inter_graphs)
+    graph_filter_inter.print_filtered_edges()
 
     # Combine the filtered graphs
     graph_combiner = gm.GraphCombiner([filtered_intra_graphs, filtered_inter_graphs])
     combined_graphs = graph_combiner.combine_matching_graphs()
-    # graph_combiner.print_edges(combined_graphs)
     return combined_graphs
-
+# combined()
 
 

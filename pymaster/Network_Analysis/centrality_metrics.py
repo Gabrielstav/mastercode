@@ -19,16 +19,32 @@ from collections import Counter
 import random as rd
 rd.seed = 42
 
-
+# TODO: Combine graphs (inter + intra, and mcf7 + mcf10) and visualize shared nodes and edges, and inter vs intra edges ?
+# TODO: Make Jaccard edge similarity visualizaiton (Heatmap or barplot?)
 
 class Directories:
-    base_path = path.Path("/Users/GBS/Master/Figures")
-    degree_path = base_path / "Degree"
-    closeness_path = base_path / "Closeness"
-    betweenness_path = base_path / "Betweenness"
+
+    root_path = path.Path("/Users/GBS/Master")
+    base_path_figures = path.Path("/Users/GBS/Master/Figures")
+
+    degree_path = base_path_figures / "Degree"
+    closeness_path = base_path_figures / "Closeness"
+    betweenness_path = base_path_figures / "Betweenness"
+    comms_path = base_path_figures / "Communities"
+    bed_path = root_path / "HiC-Data/bed"
+
 
     if not degree_path.exists():
         degree_path.mkdir(parents=True)
+
+    if not closeness_path.exists():
+        closeness_path.mkdir(parents=True)
+
+    if not betweenness_path.exists():
+        betweenness_path.mkdir(parents=True)
+
+    if not bed_path.exists():
+        bed_path.mkdir(parents=True)
 
 
 class DegreeCentrality:
@@ -922,7 +938,7 @@ def combined_betweenness():
     # graph_combiner.print_edges(combined_graphs)
 
     # Plot betweenness
-    betweenness_instance = cm.PlotBetweennessNetwork(combined_graphs)
+    betweenness_instance = PlotBetweennessNetwork(combined_graphs)
     betweenness_instance.plot_betweenness(save_as=None, normalize=True, color_edges=False, layout="fr")
 
 
@@ -940,7 +956,7 @@ def plot_degree():
 
 def closeness_plot():
     graph_dict = gi.intra_1mb_graphs()
-    closeness_instance = cm.ClosenessDistribution(graph_dict)
+    closeness_instance = ClosenessDistribution(graph_dict)
     closeness_instance.calculate_closeness()
     closeness_instance.calculate_closeness_distribution()
     closeness_instance.normalize_closeness()
@@ -952,7 +968,7 @@ def closeness_plot():
 
 def betweenness_plot():
     graph_dict = gi.intra_1mb_graphs()
-    betweenness_instance = cm.BetweennessDistribution(graph_dict)
+    betweenness_instance = BetweennessDistribution(graph_dict)
     betweenness_instance.calculate_betweenness()
     betweenness_instance.calculate_betweenness_distribution()
     betweenness_instance.normalize_betweenness()
@@ -964,8 +980,8 @@ def betweenness_plot():
 def centrality_correlation_plot():
     graph_dict = gi.intra_1mb_graphs()
     filter_instance = gm.FilterGraphs(graph_dict)
-    filtered = filter_instance.filter_graphs(cell_lines=["mcf10", "mcf7", "imr90", "gsm2824367", "huvec"], resolutions=[1000000], condition="intra-split-raw")
-    centrality_instance = cm.CentralityCorrelation(filtered)
+    filtered = filter_instance.filter_graphs(cell_lines=["mcf10"], resolutions=[1000000], condition="intra-split-raw")
+    centrality_instance = CentralityCorrelation(filtered)
     centrality_instance.calculate_centrality_correlation()
     centrality_instance.plot_centrality_correlation(save_as=None, metric1="betweenness", metric2="degree")
 
@@ -1022,20 +1038,20 @@ def compare_cents():
     graph_dict = filter_instance.graph_dict
 
     # Calculate centrality metrics
-    degree_instance = cm.DegreeCentrality(graph_dict)
+    degree_instance = DegreeCentrality(graph_dict)
     degree_instance.calculate_degree()
     degree_instance.normalize_degree()
 
-    closeness_instance = cm.ClosenessCentrality(graph_dict)
+    closeness_instance = ClosenessCentrality(graph_dict)
     closeness_instance.calculate_closeness()
     closeness_instance.normalize_closeness()
 
-    betweenness_instance = cm.BetweennessCentrality(graph_dict)
+    betweenness_instance = BetweennessCentrality(graph_dict)
     betweenness_instance.calculate_betweenness()
     betweenness_instance.normalize_betweenness()
 
     # Calculate similarity between degree in two cell lines
-    similarity_instance = cm.CalculateCentralitySimilarity(graph_dict, "degree")
+    similarity_instance = CalculateCentralitySimilarity(graph_dict, "degree")
 
     similarity_instance.calculate_kolmogorov_smirnov()
     similarity_instance.get_kolmogorov_smirnov()
@@ -1043,6 +1059,39 @@ def compare_cents():
 
 
 # compare_cents()
+
+def sorter_sort():
+    graphs = gi.all_graphs()
+    filter_instance = gm.FilterGraphs(graphs)
+    filter_instance.filter_graphs(cell_lines=["mcf10"], resolutions=[1000000], interaction_type="intra", condition="intra-split-raw", chromosomes=["chr18"])
+    graph_dict = filter_instance.graph_dict
+
+    sorter_instance = gg.Sorter(graph_dict)
+    sorted_graph_dict = sorter_instance.sort_graph()
+    sorter_instance.print_sorted_edgelist()
+    return sorted_graph_dict
+
+# sorted_graph = sorter_sort()
+
+def exporter():
+    graphs = gi.all_graphs()
+    filter_instance = gm.FilterGraphs(graphs)
+    filter_instance.filter_graphs(cell_lines=["mcf10"], resolutions=[50000], interaction_type="intra", condition="intra-split-raw")
+    graph_dict = filter_instance.graph_dict
+
+    degree_instance = DegreeCentrality(graph_dict)
+    degree_instance.calculate_degree()
+
+    closeness_instance = ClosenessCentrality(graph_dict)
+    closeness_instance.calculate_closeness()
+
+    betweenness_instance = BetweennessCentrality(graph_dict)
+    betweenness_instance.calculate_betweenness()
+
+    exporter_instance = gg.GraphExporter(graph_dict, path.Path(Directories.bed_path))
+    exporter_instance.export_gff3(["degree", "betweenness", "closeness"])
+
+exporter()
 
 if __name__ == "__main__":
     print("main running")
