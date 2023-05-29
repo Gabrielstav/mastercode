@@ -6,6 +6,9 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import pathlib as path
 import re
+from Network_Analysis import centrality_metrics as cm
+from Graph_Processing import graph_generator as gg
+
 
 
 def cytoband_path():
@@ -16,7 +19,7 @@ def natural_sort_key(s):
     return [int(text) if text.isdigit() else text for text in re.split(r'(\d+)', s)]
 
 
-class ChromosomePlot:
+class ChromosomePlotHelper:
     def __init__(self, graph_dict, chromosomes):
         self.graph_dict = graph_dict
         self.chromosomes = self.get_chromosomes(chromosomes)
@@ -75,6 +78,11 @@ class ChromosomePlot:
 
         return node_data
 
+class LinearChromosomePlot:
+    def __init__(self, plot_helper):
+        self.plot_helper = plot_helper
+        self.chromosomes = plot_helper.chromosomes
+
     @staticmethod
     def chromosome_collections(df, y_positions, height, alpha=1.0, linewidths=1.0, edgecolor='black'):
         if 'width' not in df.columns:
@@ -88,8 +96,8 @@ class ChromosomePlot:
                 xranges, yrange, facecolors=group['colors'], alpha=alpha, linewidths=linewidths, edgecolor=edgecolor)
 
     def plot(self):
-        ideo_df = pd.DataFrame.from_dict(self.ideogram_data)
-        nodes_df = pd.DataFrame.from_dict(self.node_data)
+        ideo_df = pd.DataFrame.from_dict(self.plot_helper.ideogram_data)
+        nodes_df = pd.DataFrame.from_dict(self.plot_helper.node_data)
 
         chrom_height = 1
         chrom_spacing = 1
@@ -128,12 +136,30 @@ class ChromosomePlot:
         plt.show()
 
 
-def ideogram():
+def linear_plot():
     graphs = gi.all_graphs()
     filter_instance = gm.FilterGraphs(graphs)
-    filter_instance.filter_graphs(cell_lines=["gsm2824367"], resolutions=[1000000], interaction_type="intra", condition="intra-split-raw")
+    filter_instance.filter_graphs(cell_lines=["mcf10"], resolutions=[1000000], interaction_type="intra", condition="intra-split-raw", chromosomes=["chr1", "chr2"])
     graph_dict = filter_instance.graph_dict
-    ideogram_instance = ChromosomePlot(graph_dict, "all")
-    ideogram_instance.plot()
+    plot_helper = ChromosomePlotHelper(graph_dict, ["chr1", "chr2"])
+    lin_plot = LinearChromosomePlot(plot_helper)
+    lin_plot.plot()
 
-ideogram()
+# linear_plot()
+
+# circ plot with sorted chromosomes (just need to somehow add the ideogram data for the circ plot):
+def plot_degree_network_circ():
+    graphs = gi.all_graphs()
+    filter_instance = gm.FilterGraphs(graphs)
+    filter_instance.filter_graphs(cell_lines=["mcf10"], resolutions=[1000000], interaction_type="inter", condition="inter-nosplit-raw")  # , chromosomes=["chr1"])
+    graph_dict = filter_instance.graph_dict
+    sorter_instance = gg.Sorter(graph_dict)
+    sorted_graph = sorter_instance.sort_graph()
+    degree_instance = cm.PlotDegreeNetwork(sorted_graph)  # Use LCC for withtin-chromosome plots
+    degree_instance.calculate_degree()
+    degree_instance.normalize_degree()
+    degree_instance.plot_graph(save_as=None, normalize=False, color_edges=True, layout="circle")
+
+# plot_degree_network_circ()
+
+

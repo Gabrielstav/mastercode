@@ -20,21 +20,40 @@ class LCC_ratio_plot:
         ratios = self.get_lcc_ratio()
 
         chromosomes = list(ratios.keys())
-        chromosomes.sort(
-            key=lambda x: (int(x[3:]) if x.startswith('chr') and x[3:].isdigit() else float('inf'), x)
-        )  # Sort chromosomes numerically with special cases
-        lcc_ratios = np.array(list(ratios.values()))
+        chromosomes.sort(key=lambda x: int(x[3:]) if x.startswith('chr') and x[3:].isdigit() else float('inf'))
 
-        # Create stacked bar plot
-        plt.figure()
-        plt.bar(chromosomes, lcc_ratios[:, 0], label='Parent Graph Size')
-        for i in range(1, lcc_ratios.shape[1]):
-            plt.bar(chromosomes, lcc_ratios[:, i], bottom=np.sum(lcc_ratios[:, :i], axis=1),
-                    label=f'LCC Ratio {i}')
-        plt.xlabel('Chromosome')
-        plt.ylabel('LCC Ratio')
-        plt.title('LCC Ratios per Chromosome')
-        plt.legend()
+        lcc_ratios = []
+        remaining_ratios = []
+
+        for chromosome in chromosomes:
+            ratio = ratios[chromosome]
+            lcc_ratios.append(ratio[0])
+            remaining_ratios.append(1 - ratio[0])
+
+        x = np.arange(len(chromosomes))
+        width = 0.35
+
+        fig, ax = plt.subplots()
+        lcc_bars = ax.bar(x, lcc_ratios, width, label='LCC Ratio')
+        remaining_bars = ax.bar(x, remaining_ratios, width, bottom=lcc_ratios, label='Remaining Ratio')
+
+        ax.set_xlabel('Chromosome')
+        ax.set_ylabel('Proportion')
+        ax.set_title('Proportion of Nodes in LCC per Chromosome')
+        ax.set_xticks(x)
+        ax.set_xticklabels(chromosomes)
+        ax.legend()
+
+        def autolabel(bars):
+            for bar in bars:
+                height = bar.get_height()
+                ax.annotate(f'{height:.2f}', xy=(bar.get_x() + bar.get_width() / 2, height),
+                            xytext=(0, 3), textcoords='offset points',
+                            ha='center', va='bottom')
+
+        autolabel(lcc_bars)
+        autolabel(remaining_bars)
+
         plt.show()
 
 def plot_lcc():

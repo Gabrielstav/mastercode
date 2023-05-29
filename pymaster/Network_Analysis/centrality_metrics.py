@@ -97,7 +97,7 @@ class PlotDegreeNetwork(DegreeCentrality):
 
             # node_size = 0.8
             # edge_width = 1
-            node_size = 80 / graph.vcount()
+            node_size = 20 / graph.vcount()
             edge_width = 500 / graph.ecount()
             edge_colors = [self.calculate_color(edge) for edge in graph.es] if color_edges else 'gray'
             visual_style = {
@@ -876,21 +876,20 @@ class FindUniqueNodes:
 ### Centrality metrics
 
 def plot_degree_network():
-    graphs = gi.intra_50kb_graphs()
+    graphs = gi.all_graphs()
     filter_instance = gm.FilterGraphs(graphs)
-    filter_instance.filter_graphs(cell_lines=["mcf10"], interaction_type="intra")  # , chromosomes=["chr1"])
+    filter_instance.filter_graphs(cell_lines=["mcf10"], interaction_type="intra", condition="intra-split-raw", resolutions=[1000000])  # , chromosomes=["chr1"])
     graph_dict = filter_instance.graph_dict
     print(graph_dict)
     lcc_instance = gm.LargestComponent(graph_dict)
     lcc = lcc_instance.find_lcc()
     print(lcc)
-    degree_instance = cm.PlotDegreeNetwork(graph_dict)  # Use LCC for withtin-chromosome plots
+    degree_instance = PlotDegreeNetwork(graph_dict)  # Use LCC for withtin-chromosome plots
     degree_instance.calculate_degree()
     degree_instance.normalize_degree()
-    degree_instance.plot_graph(save_as=None, normalize=False, color_edges=True, layout="fr")
+    degree_instance.plot_graph(save_as=None, normalize=True, color_edges=True, layout="circle")
 
-
-# plot_degree_network()
+plot_degree_network()
 
 def plot_closeness_network():
     graphs = gi.intra_1mb_graphs()
