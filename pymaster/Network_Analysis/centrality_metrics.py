@@ -889,7 +889,7 @@ def plot_degree_network():
     degree_instance.normalize_degree()
     degree_instance.plot_graph(save_as=None, normalize=True, color_edges=True, layout="circle")
 
-plot_degree_network()
+# plot_degree_network()
 
 def plot_closeness_network():
     graphs = gi.intra_1mb_graphs()

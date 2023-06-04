@@ -151,7 +151,7 @@ def linear_plot():
 def plot_degree_network_circ():
     graphs = gi.all_graphs()
     filter_instance = gm.FilterGraphs(graphs)
-    filter_instance.filter_graphs(cell_lines=["mcf10"], resolutions=[1000000], interaction_type="inter", condition="inter-nosplit-raw")  # , chromosomes=["chr1"])
+    filter_instance.filter_graphs(cell_lines=["mcf7"], resolutions=[1000000], interaction_type="inter", condition="inter-nosplit-raw")  # , chromosomes=["chr1"])
     graph_dict = filter_instance.graph_dict
     sorter_instance = gg.Sorter(graph_dict)
     sorted_graph = sorter_instance.sort_graph()
@@ -161,5 +161,6 @@ def plot_degree_network_circ():
     degree_instance.plot_graph(save_as=None, normalize=False, color_edges=True, layout="circle")
 
 # plot_degree_network_circ()
+
 
 
