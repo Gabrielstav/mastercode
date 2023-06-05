@@ -11,7 +11,7 @@ import pathlib as path
 from sklearn.decomposition import PCA
 import h5py
 import time
-from sklearn.decomposition import TruncatedSVD
+from scipy.stats import pearsonr
 
 
 
@@ -27,9 +27,11 @@ class Dirs:
     root_path = path.Path("/Users/GBS/Master/HiC-Data")
     base_path_figures = path.Path("/Users/GBS/Master/Figures")
 
+    chrom_sizes_file = "/Users/GBS/Master/Reference/hg19/chrom_hg19.sizes"
+
     compartments_path = root_path / "compartments"
-    bedpe_path_intra = root_path / "bedpe_files/bedpe/intra"
-    bedpe_path_inter = root_path / "bedpe_files/bedpe/inter"
+    bedpe_path_intra = root_path / "bedpe_files/bedpe_intra"
+    bedpe_path_inter = root_path / "bedpe_files/bedpe_inter"
     cool_path_intra = root_path / "coolfiles/intra"
     cool_path_inter = root_path / "coolfiles/inter"
 
@@ -65,11 +67,13 @@ def bedpe_to_cool(bedpe_file, chrom_sizes_file, bin_size, cool_file):
         "count=7:dtype=int",
         "--zero-based",
         f"{chrom_sizes_file}:{bin_size}",
-        bedpe_file,
-        cool_file
+        str(bedpe_file),
+        str(cool_file)
     ]
 
     sp.run(command, check=True)
+
+
 
 # bedpe_to_cool("/Users/GBS/Master/HiC-Data/bedpe_files/bedpe_intra/imr90_1000000.bedpe", "/Users/GBS/Master/Reference/hg19/chrom_hg19.sizes", 1000000, "/Users/GBS/Master/HiC-Data/coolfiles/intra/imr90_1000000.cool")
 
@@ -184,176 +188,163 @@ def plot_contact_decay(cool_path, log_bins=True, bin_num=100):
 # plot_contact_decay("/Users/GBS/matrix_mcf10.cool", log_bins=True, bin_num=100)
 
 
-# Compartment calling ??
-
-# def balance_cooler_file(cool_file):
-#     # Load the .cool file
-#     c = cooler.Cooler(cool_file)
-#
-#     # Check if the cooler file is already balanced
-#     if "weight" in c.bins().columns:
-#         print(f"The cooler file {cool_file} is already balanced.")
-#     else:
-#         # Balance the cool file
-#         cooler.balance.balance_cooler(c)
-#
-#     return c
-
-def balance_cooler_file(cool_file, balanced_file):
-    # Load the .cool file
-    c = cooler.Cooler(cool_file)
-
-    # Check if the cooler file is already balanced
+def balance_cooler_file(cool_file):
+    """Load and balance a cooler file."""
+    c = cooler.Cooler(str(cool_file))
     if "weight" in c.bins().columns:
         print(f"The cooler file {cool_file} is already balanced.")
         return c
     else:
-        # Balance the cool file
-        weights, balanced_c = cooler.balance.balance_cooler(c)
-
-        # Create a copy of bins dataframe with new weights
+        weights, _ = cooler.balance.balance_cooler(c)
         bins = c.bins()[:]
         bins['weight'] = weights
-
-        # Fetch the necessary columns explicitly from PixelTable
         pixels = c.pixels()[:]
-        print(f"(Pixels head: {pixels.head()}")
         pixels = pixels[['bin1_id', 'bin2_id', 'count']]
-
-        # Map the weights from bins to pixels
-        pixels = pixels.join(bins['weight'], on='bin1_id', how='left')
-        pixels.rename(columns={'weight': 'weight1'}, inplace=True)
-        pixels = pixels.join(bins['weight'], on='bin2_id', how='left')
-        pixels.rename(columns={'weight': 'weight2'}, inplace=True)
+        pixels = pixels.join(bins['weight'], on='bin1_id', how='left').rename(columns={'weight': 'weight1'})
+        pixels = pixels.join(bins['weight'], on='bin2_id', how='left').rename(columns={'weight': 'weight2'})
         pixels['weight'] = pixels['weight1'] * pixels['weight2']
+        return c, bins, pixels
 
-        print(pixels.head())
-        print(bins.head())
-
-        # Ensure the correect cols are present
-        assert "bin1_id" in pixels.columns
-        assert "bin2_id" in pixels.columns
-        assert "count" in pixels.columns
-        assert "weight" in pixels.columns
-
-        # pixels_copy = pixels.copy()
-        # print(pixels_copy.head())
-
-        # save the pixels DataFrame to a temporary CSV file
-        pixels.to_csv('temp_pixels.csv', sep='\t', index=False)
-
-        # read back the temporary CSV file and check its contents
-        temp_pixels = pd.read_csv('temp_pixels.csv', sep='\t')
-        print(temp_pixels.head())
-
-        cooler.create_cooler(cool_uri=str(balanced_file), bins=bins, pixels=pixels)
-
-        time.sleep(5)
-
-        # Check if the file exists and is valid
-        if os.path.exists(balanced_file):
-            if h5py.is_hdf5(str(balanced_file)):
-                print("Balanced cooler file was successfully created and is a valid HDF5 file.")
-            else:
-                print("File exists but is not a valid HDF5 file.")
+def validate_and_save_cooler(bins, pixels, balanced_file):
+    """Save a balanced cooler file and validate it."""
+    cooler.create_cooler(cool_uri=str(balanced_file), bins=bins, pixels=pixels)
+    time.sleep(5)
+    if os.path.exists(balanced_file):
+        if h5py.is_hdf5(str(balanced_file)):
+            print("Balanced cooler file was successfully created and is a valid HDF5 file.")
         else:
-            print("File does not exist.")
+            print("File exists but is not a valid HDF5 file.")
+    else:
+        print("File does not exist.")
+    print(f"The cooler file is now balanced and saved to {balanced_file}.")
 
-        # with h5py.File(balanced_file, 'w') as h5:
-        #     cooler.create_cooler(h5, "/", bins, 'temp_pixels.csv', dtypes={'count': np.float64}, assembly="hg19", ordered=False)
+def process_chromosome(chrom, cooler_obj, bins_df):
+    """
+    Process a single chromosome: compute its correlation matrix,
+    perform PCA, and assign compartments
+    """
 
-        print(f"The cooler file {cool_file} is now balanced and saved to {balanced_file}.")
+    # Fetch the contact matrix for the chromosome
+    chrom_matrix = cooler_obj.matrix(balance=True).fetch(chrom)
 
-        # after usage, delete the temporary CSV file
-        os.remove('temp_pixels.csv')
+    # Skip chromosome if it only contains one bin
+    if chrom_matrix.size == 1:
+        print(f"Skipping chromosome {chrom} because it only contains one bin.")
+        return None
 
-    # Load the balanced cooler file
-    return cooler.Cooler(str(balanced_file))
+    # Compute the correlation matrix and replace NaN/infinite values
+    correlation_matrix = np.corrcoef(chrom_matrix)
+    correlation_matrix = np.nan_to_num(correlation_matrix)
+
+    # Compute the first principal component
+    pca = PCA(n_components=1)
+    principal_components = pca.fit_transform(correlation_matrix)
+
+    # Assign compartments based on the sign of PC1
+    compartments = np.sign(principal_components)
+
+    # Create and return a DataFrame for this chromosome
+    chrom_bins = bins_df.fetch(chrom)
+    chrom_df = pd.DataFrame({
+        "chrom": chrom,
+        "start": chrom_bins["start"],
+        "end": chrom_bins["end"],
+        "compartment": ['A' if x > 0 else 'B' for x in compartments.flatten()],
+        "eigenvector": principal_components.flatten()  # save the eigenvectors
+    })
+
+    return chrom_df
+
 
 def call_compartments(cool_file, balanced_file, output_file):
+    """
+    Call chromatin compartments using Hi-C data in a cooler file
+    """
+
     # Convert Path objects to string
     cool_file = str(cool_file)
     output_file = str(output_file)
 
     # Balance the cooler file
-    c = balance_cooler_file(cool_file, balanced_file)
+    c, bins, pixels = balance_cooler_file(cool_file)
+    validate_and_save_cooler(bins, pixels, balanced_file)
+
+    # Load the balanced cooler file
+    c_balanced = cooler.Cooler(str(balanced_file))
 
     # Create a DataFrame to hold the results
     result = pd.DataFrame(columns=["chrom", "start", "end", "compartment", "eigenvector"])
 
     # Loop over each chromosome
-    for chrom in c.chromnames:
+    for chrom in c_balanced.chromnames:
         if chrom == 'chrM':
             print("Skipping mitochondrial chromosome (chrM).")
             continue
-
-        # Fetch the contact matrix for the chromosome
-        matrix = c.matrix(balance=True).fetch(chrom)
-
-        if matrix.size == 1:
-            print(f"Skipping chromosome {chrom} because it only contains one bin.")
-            print(matrix)
-            continue
-
-        # Compute the correlation matrix
-        correlation_matrix = np.corrcoef(matrix)
-
-        # Replace NaN values with zero and infinite values with large finite numbers
-        correlation_matrix = np.nan_to_num(correlation_matrix)
-
-        unique_values, counts = np.unique(matrix, return_counts=True)
-        print("Matrix unique values:", unique_values)
-        print("Matrix counts:", counts)
-
-        correlation_matrix = np.corrcoef(matrix)
-        unique_values, counts = np.unique(correlation_matrix, return_counts=True)
-        print("Correlation matrix unique values:", unique_values)
-        print("Correlation matrix counts:", counts)
-
-        correlation_matrix = np.nan_to_num(correlation_matrix)
-        unique_values, counts = np.unique(correlation_matrix, return_counts=True)
-        print("After nan_to_num, correlation matrix unique values:", unique_values)
-        print("After nan_to_num, correlation matrix counts:", counts)
-
-        num_zeros = np.count_nonzero(matrix == 0)
-        total_elements = matrix.size
-
-        print("Number of zeros:", num_zeros)
-        print("Total elements:", total_elements)
-        print("Percentage of zeros: {:.2f}%".format((num_zeros / total_elements) * 100))
-
-        # Initialize the TruncatedSVD model
-        svd = TruncatedSVD(n_components=2)
-
-        # Fit the model and transform the data
-        principalcomps = svd.fit_transform(correlation_matrix)
-
-
-        # Check if the correlation_matrix has become a scalar
-        if np.isscalar(correlation_matrix):
-            # Create a dummy matrix of the appropriate size
-            correlation_matrix = np.zeros((matrix.shape[0], matrix.shape[0]))
-
-        # Compute the first principal component
-        pca = PCA(n_components=1)
-        principalcomponents = pca.fit_transform(correlation_matrix)
-
-        # Assign compartments based on the sign of PC1
-        compartments = np.sign(principalcomponents)
-
-        # Create a DataFrame for this chromosome
-        df = pd.DataFrame({
-            "chrom": chrom,
-            "start": c.bins().fetch(chrom)["start"],
-            "end": c.bins().fetch(chrom)["end"],
-            "compartment": ['A' if x > 0 else 'B' for x in compartments.flatten()],
-            "eigenvector": principalcomponents.flatten()  # save the eigenvectors
-        })
-
-        # Append the results to the main DataFrame
-        result = result.append(df)
+        chrom_df = process_chromosome(chrom, c_balanced, c_balanced.bins())
+        if chrom_df is not None:
+            result = result.append(chrom_df)
 
     # Save the results to a BED file
     result.to_csv(output_file, sep='\t', header=False, index=False)
 
-call_compartments(Dirs.cool_path_intra / "imr90_1000000.cool", Dirs.cool_path_intra / "imr90_1000000_balanced.cool", Dirs.compartments_path / "imr90_1mb_compartments.bed")
+def create_cooler_file():
+    bedpe_file = Dirs.bedpe_path_intra / "gsm2824367_1000000.bedpe"
+    chrom_file = Dirs.chrom_sizes_file
+    resolution = 1000000
+    output_file = Dirs.cool_path_intra / "gsm2824367_1000000.cool"
+
+    bedpe_to_cool(bedpe_file, chrom_file, resolution, output_file)
+
+# create_cooler_file()
+
+def compartment_calling():
+    input_cool_file = Dirs.cool_path_intra / "gsm_1000000.cool"
+    balanced_cool_file = Dirs.cool_path_intra / "gsm_1000000_balanced.cool"
+    output_file = Dirs.compartments_path / "gsm_1mb_compartments.bed"
+
+    cooler_obj, bins, pixels = balance_cooler_file(input_cool_file)
+    validate_and_save_cooler(bins, pixels, balanced_cool_file)
+
+    call_compartments(input_cool_file, balanced_cool_file, output_file)
+
+# compartment_calling()
+
+def compute_pearson_and_plot(bed_file1, bed_file2, cell_line1, cell_line2):
+    # Load BED files into pandas DataFrames
+    df1 = pd.read_csv(bed_file1, sep='\t', header=None)
+    df2 = pd.read_csv(bed_file2, sep='\t', header=None)
+
+    # Extract the eigenvector values and compartment calls
+    eigenvector1 = df1.iloc[:, 4]
+    eigenvector2 = df2.iloc[:, 4]
+    compartments1 = df1.iloc[:, 3]
+    compartments2 = df2.iloc[:, 3]
+
+    # Compute the Pearson correlation coefficient
+    correlation = pearsonr(eigenvector1, eigenvector2)[0]
+
+    # Create a new column in the DataFrame indicating whether the compartment call changed
+    compartment_change = compartments1 != compartments2
+
+    # Create a scatter plot with points colored based on the compartment call
+    plt.figure(figsize=(8, 6))
+    plt.scatter(eigenvector1[compartment_change], eigenvector2[compartment_change], color='red', alpha=0.5, label='Compartment change')
+    plt.scatter(eigenvector1[~compartment_change], eigenvector2[~compartment_change], color='blue', alpha=0.5, label='No compartment change')
+    plt.xlabel(f'Eigenvector - {cell_line1}')
+    plt.ylabel(f'Eigenvector - {cell_line2}')
+    plt.title(f'Correlation between {cell_line1} and {cell_line2}: r = {correlation:.2f}')
+    plt.legend()
+    plt.show()
+
+    # Return the correlation
+    return correlation
+
+def compare_compartments():
+    # Load the BED files
+    bed_file1 = Dirs.compartments_path / "mcf7_1mb_compartments.bed"
+    bed_file2 = Dirs.compartments_path / "mcf10_1mb_compartments.bed"
+
+    # Compute the Pearson correlation coefficient
+    correlation = compute_pearson_and_plot(bed_file1, bed_file2, 'MCF7', 'MCF10')
+
+compare_compartments()
