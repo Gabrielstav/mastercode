@@ -1,6 +1,5 @@
 # Import modules
 import os as os
-
 import cooler
 import pandas as pd
 import matplotlib as mpl
@@ -11,6 +10,9 @@ import subprocess as sp
 import pathlib as path
 from sklearn.decomposition import PCA
 import h5py
+import time
+from sklearn.decomposition import TruncatedSVD
+
 
 
 
@@ -215,6 +217,7 @@ def balance_cooler_file(cool_file, balanced_file):
 
         # Fetch the necessary columns explicitly from PixelTable
         pixels = c.pixels()[:]
+        print(f"(Pixels head: {pixels.head()}")
         pixels = pixels[['bin1_id', 'bin2_id', 'count']]
 
         # Map the weights from bins to pixels
@@ -233,18 +236,39 @@ def balance_cooler_file(cool_file, balanced_file):
         assert "count" in pixels.columns
         assert "weight" in pixels.columns
 
-        pixels_copy = pixels.copy()
-        print(pixels_copy.head())
+        # pixels_copy = pixels.copy()
+        # print(pixels_copy.head())
 
+        # save the pixels DataFrame to a temporary CSV file
+        pixels.to_csv('temp_pixels.csv', sep='\t', index=False)
 
-        # Create a new cooler file with balanced weights
-        with h5py.File(balanced_file, 'w') as h5:
-            cooler.create_cooler(h5, "/", bins, pixels)
+        # read back the temporary CSV file and check its contents
+        temp_pixels = pd.read_csv('temp_pixels.csv', sep='\t')
+        print(temp_pixels.head())
+
+        cooler.create_cooler(cool_uri=str(balanced_file), bins=bins, pixels=pixels)
+
+        time.sleep(5)
+
+        # Check if the file exists and is valid
+        if os.path.exists(balanced_file):
+            if h5py.is_hdf5(str(balanced_file)):
+                print("Balanced cooler file was successfully created and is a valid HDF5 file.")
+            else:
+                print("File exists but is not a valid HDF5 file.")
+        else:
+            print("File does not exist.")
+
+        # with h5py.File(balanced_file, 'w') as h5:
+        #     cooler.create_cooler(h5, "/", bins, 'temp_pixels.csv', dtypes={'count': np.float64}, assembly="hg19", ordered=False)
 
         print(f"The cooler file {cool_file} is now balanced and saved to {balanced_file}.")
 
+        # after usage, delete the temporary CSV file
+        os.remove('temp_pixels.csv')
+
     # Load the balanced cooler file
-    return cooler.Cooler(balanced_file)
+    return cooler.Cooler(str(balanced_file))
 
 def call_compartments(cool_file, balanced_file, output_file):
     # Convert Path objects to string
@@ -259,18 +283,63 @@ def call_compartments(cool_file, balanced_file, output_file):
 
     # Loop over each chromosome
     for chrom in c.chromnames:
+        if chrom == 'chrM':
+            print("Skipping mitochondrial chromosome (chrM).")
+            continue
+
         # Fetch the contact matrix for the chromosome
         matrix = c.matrix(balance=True).fetch(chrom)
+
+        if matrix.size == 1:
+            print(f"Skipping chromosome {chrom} because it only contains one bin.")
+            print(matrix)
+            continue
 
         # Compute the correlation matrix
         correlation_matrix = np.corrcoef(matrix)
 
+        # Replace NaN values with zero and infinite values with large finite numbers
+        correlation_matrix = np.nan_to_num(correlation_matrix)
+
+        unique_values, counts = np.unique(matrix, return_counts=True)
+        print("Matrix unique values:", unique_values)
+        print("Matrix counts:", counts)
+
+        correlation_matrix = np.corrcoef(matrix)
+        unique_values, counts = np.unique(correlation_matrix, return_counts=True)
+        print("Correlation matrix unique values:", unique_values)
+        print("Correlation matrix counts:", counts)
+
+        correlation_matrix = np.nan_to_num(correlation_matrix)
+        unique_values, counts = np.unique(correlation_matrix, return_counts=True)
+        print("After nan_to_num, correlation matrix unique values:", unique_values)
+        print("After nan_to_num, correlation matrix counts:", counts)
+
+        num_zeros = np.count_nonzero(matrix == 0)
+        total_elements = matrix.size
+
+        print("Number of zeros:", num_zeros)
+        print("Total elements:", total_elements)
+        print("Percentage of zeros: {:.2f}%".format((num_zeros / total_elements) * 100))
+
+        # Initialize the TruncatedSVD model
+        svd = TruncatedSVD(n_components=2)
+
+        # Fit the model and transform the data
+        principalcomps = svd.fit_transform(correlation_matrix)
+
+
+        # Check if the correlation_matrix has become a scalar
+        if np.isscalar(correlation_matrix):
+            # Create a dummy matrix of the appropriate size
+            correlation_matrix = np.zeros((matrix.shape[0], matrix.shape[0]))
+
         # Compute the first principal component
         pca = PCA(n_components=1)
-        principalComponents = pca.fit_transform(correlation_matrix)
+        principalcomponents = pca.fit_transform(correlation_matrix)
 
         # Assign compartments based on the sign of PC1
-        compartments = np.sign(principalComponents)
+        compartments = np.sign(principalcomponents)
 
         # Create a DataFrame for this chromosome
         df = pd.DataFrame({
@@ -278,7 +347,7 @@ def call_compartments(cool_file, balanced_file, output_file):
             "start": c.bins().fetch(chrom)["start"],
             "end": c.bins().fetch(chrom)["end"],
             "compartment": ['A' if x > 0 else 'B' for x in compartments.flatten()],
-            "eigenvector": principalComponents.flatten()  # save the eigenvectors
+            "eigenvector": principalcomponents.flatten()  # save the eigenvectors
         })
 
         # Append the results to the main DataFrame
