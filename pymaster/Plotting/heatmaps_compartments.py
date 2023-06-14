@@ -1,10 +1,9 @@
 # Import modules
 import os as os
-import cooler
 import pandas as pd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-import matplotlib.colors as colors
+import matplotlib.colors as mcolors
 import numpy as np
 import subprocess as sp
 import pathlib as path
@@ -12,9 +11,10 @@ from sklearn.decomposition import PCA
 import h5py
 import time
 from scipy.stats import pearsonr
-
-
-
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+import seaborn as sns
+import cooler
+from scipy.stats import spearmanr
 
 
 # To generate .cool files from BEDPE count files using cooler cload pairs in command line:
@@ -28,6 +28,7 @@ class Dirs:
     base_path_figures = path.Path("/Users/GBS/Master/Figures")
 
     chrom_sizes_file = "/Users/GBS/Master/Reference/hg19/chrom_hg19.sizes"
+    hg19_cytoband_file = "/Users/GBS/Master/Reference/hg19/cytoBand_hg19.txt"
 
     compartments_path = root_path / "compartments"
     bedpe_path_intra = root_path / "bedpe_files/bedpe_intra"
@@ -66,7 +67,7 @@ def bedpe_to_cool(bedpe_file, chrom_sizes_file, bin_size, cool_file):
         "--field",
         "count=7:dtype=int",
         "--zero-based",
-        f"{chrom_sizes_file}:{bin_size}",
+        f"{str(chrom_sizes_file)}:{str(bin_size)}",
         str(bedpe_file),
         str(cool_file)
     ]
@@ -75,64 +76,10 @@ def bedpe_to_cool(bedpe_file, chrom_sizes_file, bin_size, cool_file):
 
 
 
-# bedpe_to_cool("/Users/GBS/Master/HiC-Data/bedpe_files/bedpe_intra/imr90_1000000.bedpe", "/Users/GBS/Master/Reference/hg19/chrom_hg19.sizes", 1000000, "/Users/GBS/Master/HiC-Data/coolfiles/intra/imr90_1000000.cool")
+# bedpe_to_cool("/Users/GBS/Master/HiC-Data/bedpe_files/bedpe_intra/imr90_120000.bedpe", "/Users/GBS/Master/Reference/hg19/chrom_hg19.sizes", 1000000, "/Users/GBS/Master/HiC-Data/coolfiles/intra/imr90_1000000.cool")
 
 
-def plot_heatmap(cool_file, region=None, saveas=None):
-    # Load the Cooler file
-    c = cooler.Cooler(cool_file)
 
-    # Define the region to plot
-    if region is not None:
-        matrix = c.matrix(balance=False).fetch(region)
-    else:
-        matrix = c.matrix(balance=False)
-
-    # Calculate the limits for the color scale
-    vmin, vmax = np.percentile(matrix.data, [1, 99])
-
-    # Define colormap
-    cmap = mpl.cm.get_cmap("YlOrRd")
-    cmap.set_bad("white")
-
-    # Plot the heatmap
-    plt.matshow(matrix, cmap=cmap, norm=colors.PowerNorm(gamma=0.3, vmin=vmin, vmax=vmax))
-    plt.title("Heatmap of chromosome 2")
-
-    plt.xlabel("Position (Mb)")
-    plt.ylabel("Position (Mb)")
-
-    ax = plt.gca()  # Get current axes
-
-    # Major and minor ticks
-    binsize_Mb = c.binsize / 1_000_000  # convert binsize to Mb
-    num_bins = matrix.shape[0]
-    bin_range_Mb = num_bins * binsize_Mb
-
-    # calculate the tick positions in bin units
-    major_ticks = np.arange(0, num_bins, 50 / binsize_Mb)  # every 50 Mb
-    minor_ticks = np.arange(0, num_bins, 10 / binsize_Mb)  # every 10 Mb
-
-    # remove the first major tick
-    major_ticks = major_ticks[1:]
-
-    # Set the tick locations
-    ax.set_xticks(major_ticks, minor=False)
-    ax.set_xticks(minor_ticks, minor=True)
-    ax.set_yticks(major_ticks, minor=False)
-    ax.set_yticks(minor_ticks, minor=True)
-
-    # Label the major ticks
-    ax.set_xticklabels([f"{x * binsize_Mb:.0f}" for x in major_ticks])
-    ax.set_yticklabels([f"{x * binsize_Mb:.0f}" for x in major_ticks])
-
-    if saveas:
-        plt.savefig(saveas, dpi=1000, format="png")
-
-    plt.show()
-
-
-# plot_heatmap("/Users/GBS/Master/HiC-Data/coolfiles/intra/imr90_120000.cool", region="chr2", saveas=Dirs.heatmap_dir_intra / "imr_120000_chr1_0:120Mb.png")
 
 
 def plot_contact_decay(cool_path, log_bins=True, bin_num=100):
@@ -218,6 +165,24 @@ def validate_and_save_cooler(bins, pixels, balanced_file):
         print("File does not exist.")
     print(f"The cooler file is now balanced and saved to {balanced_file}.")
 
+def create_cooler_file():
+    bedpe_file = Dirs.bedpe_path_intra / "imr90_120000.bedpe"
+    chrom_file = Dirs.chrom_sizes_file
+    resolution = 120000
+    output_file = Dirs.cool_path_intra / "imr90_120000.cool"
+
+    bedpe_to_cool(bedpe_file, chrom_file, resolution, output_file)
+
+# create_cooler_file()
+
+def balance_and_save_cooler(cool_file, balanced_file):
+    """Balance and save a cooler file."""
+    c, bins, pixels = balance_cooler_file(cool_file)
+    validate_and_save_cooler(bins, pixels, balanced_file)
+
+
+# balance_and_save_cooler("/Users/GBS/Master/HiC-Data/coolfiles/intra/mcf7_50000.cool", "/Users/GBS/Master/HiC-Data/coolfiles/intra/mcf7_1000000_balanced.cool")
+
 def process_chromosome(chrom, cooler_obj, bins_df):
     """
     Process a single chromosome: compute its correlation matrix,
@@ -287,20 +252,14 @@ def call_compartments(cool_file, balanced_file, output_file):
     # Save the results to a BED file
     result.to_csv(output_file, sep='\t', header=False, index=False)
 
-def create_cooler_file():
-    bedpe_file = Dirs.bedpe_path_intra / "gsm2824367_1000000.bedpe"
-    chrom_file = Dirs.chrom_sizes_file
-    resolution = 1000000
-    output_file = Dirs.cool_path_intra / "gsm2824367_1000000.cool"
 
-    bedpe_to_cool(bedpe_file, chrom_file, resolution, output_file)
 
-# create_cooler_file()
+
 
 def compartment_calling():
-    input_cool_file = Dirs.cool_path_intra / "gsm_1000000.cool"
-    balanced_cool_file = Dirs.cool_path_intra / "gsm_1000000_balanced.cool"
-    output_file = Dirs.compartments_path / "gsm_1mb_compartments.bed"
+    input_cool_file = Dirs.cool_path_intra / "imr90_1000000.cool"
+    balanced_cool_file = Dirs.cool_path_intra / "imr90_1000000_balanced_2.cool"
+    output_file = Dirs.compartments_path / "imr90_1Mb_pca1_compartments.bed"
 
     cooler_obj, bins, pixels = balance_cooler_file(input_cool_file)
     validate_and_save_cooler(bins, pixels, balanced_cool_file)
@@ -347,4 +306,143 @@ def compare_compartments():
     # Compute the Pearson correlation coefficient
     correlation = compute_pearson_and_plot(bed_file1, bed_file2, 'MCF7', 'MCF10')
 
-compare_compartments()
+# compare_compartments()
+
+def merge_bed_files(bed_file1, bed_file2):
+    # Load BED files into pandas DataFrames
+    df1 = pd.read_csv(bed_file1, sep='\t', header=None, names=['chrom', 'start', 'end', 'compartment', 'eigenvector'])
+    df2 = pd.read_csv(bed_file2, sep='\t', header=None, names=['chrom', 'start', 'end', 'compartment', 'eigenvector'])
+
+    # Merge the two dataframes on chrom, start and end
+    merged_df = pd.merge(df1, df2, on=['chrom', 'start', 'end'], suffixes=('_1', '_2'))
+
+    return merged_df
+
+
+
+def plot_compartments_on_heatmap_sns(cool_path, compartments_bed_path, chrom=None, saveas=None):
+    clr = cooler.Cooler(str(cool_path))
+    if chrom == "all":
+        matrix = clr.matrix()[:]
+    else:
+        matrix = clr.matrix(balance=True).fetch(chrom)
+
+    diag_sums = [np.nansum(np.diagonal(matrix, offset=i)) for i in range(matrix.shape[0])]
+    diag_counts = [np.sum(~np.isnan(np.diagonal(matrix, offset=i))) for i in range(matrix.shape[0])]
+    exp_const = 1e-10
+    expected = np.array(diag_sums) - np.array(diag_counts) + exp_const
+    print(matrix)
+    print(expected)
+    observed_over_expected = matrix / expected[:, None]
+    print(observed_over_expected)
+
+    corr = np.corrcoef(observed_over_expected, rowvar=False)
+    compartments = pd.read_csv(compartments_bed_path, sep="\t", header=None, names=["chrom", "start", "end", "compartment", "score"])
+
+    # Convert the genomic coordinates to bin coordinates
+    binsize = clr.binsize
+    if chrom != "all":
+        compartments = compartments[compartments["chrom"] == chrom]
+        compartments["start"] = compartments["start"] // binsize
+        compartments["end"] = compartments["end"] // binsize
+
+    # Generate the plot
+    # fig, (ax1, ax2) = plt.subplots(nrows=2, figsize=(10, 10), gridspec_kw={'height_ratios': [1, 4]}, sharex="all")
+    fig, ax2 = plt.subplots(figsize=(10, 10))
+
+    # Plot PCa1
+    # ax1.plot(compartments["start"], compartments["score"], color='k')
+
+    # Plot the contact map
+    vmax = np.percentile(corr[~np.isnan(corr)], 99)
+    vmin = np.percentile(corr[~np.isnan(corr)], 1)
+
+    # Make colors not blend:
+    colormap = ["blue", "blue", "black", "red", "red"]
+    gradient = [0.0, 0.3, 0.5, 0.7, 1.0]
+    cmap = mcolors.LinearSegmentedColormap.from_list("cmap", list(zip(gradient, colormap)))
+    sns.heatmap(corr, cmap=cmap, ax=ax2)
+
+    # Create ticks at every 25 Mb
+    tick_frequency = 25
+    ticks = np.arange(0, matrix.shape[0], tick_frequency * 10 ** 6 // binsize)
+
+    # Create tick labels with 'Mb' added
+    tick_labels = [f"{tick * binsize // 10 ** 6} Mb" for tick in ticks]
+
+
+    ax2.set_xticks(ticks[1:])
+    ax2.set_xticklabels(tick_labels[1:])
+    ax2.set_yticks(ticks[1:])
+    ax2.set_yticklabels(tick_labels[1:])
+
+    ax2.set_title(f"Contact map for {chrom}")
+    # ax1.set_title(f"Compartments for {chrom}")
+    plt.tight_layout()
+
+    if saveas:
+        plt.savefig(saveas, dpi=1000, format="png")
+
+    plt.show()
+
+# plot_compartments_on_heatmap_sns(Dirs.cool_path_intra / "mcf7_1000000_balanced.cool", Dirs.compartments_path / "mcf10_250kb_compartments.bed", chrom="chr2")  # :0-95000000")  # , saveas=Dirs.heatmap_dir_intra / "mcf10_250kb_chr2_compartments_plot.png")
+
+def plot_heatmap2(cool_file, chrom=None, saveas=None, log=False):
+    # Load the Cooler file
+    c = cooler.Cooler(str(cool_file))
+
+    # Define the region to plot
+    if chrom == "all":
+        matrix = c.matrix(balance=False)[:]
+    else:
+        matrix = c.matrix(balance=False).fetch(chrom)
+
+    # Copy matrix for processing
+    matrix_copy = matrix.copy()
+
+    if log:
+        matrix_copy = np.log1p(matrix_copy)
+        matrix_copy[matrix_copy == -np.inf] = 0
+
+    # Calculate the limits for the color scale
+    vmin, vmax = np.percentile(matrix_copy, [0, 100])
+
+    # Define colormap
+    cmap = mpl.cm.get_cmap("YlOrRd")
+    cmap.set_bad("white")
+
+    # Plot the heatmap
+    plt.matshow(matrix_copy, cmap=cmap, norm=mcolors.PowerNorm(gamma=0.2, vmin=vmin, vmax=vmax))
+    plt.title(f"Heatmap of {chrom}")
+
+    # Get current axes
+    ax = plt.gca()
+
+    # Create ticks at every 25 Mb
+    tick_frequency = 25
+    ticks = np.arange(0, matrix.shape[0], tick_frequency * 10 ** 6 // c.binsize)
+
+    # Create tick labels with 'Mb' added
+    tick_labels = [f"{tick * c.binsize // 10 ** 6} Mb" for tick in ticks]
+
+
+    ax.set_xticks(ticks[1:])
+    ax.set_xticklabels(tick_labels[1:])
+    ax.set_yticks(ticks[1:])
+    ax.set_yticklabels(tick_labels[1:])
+    ax.xaxis.tick_bottom()
+    plt.xticks(rotation='vertical')
+    ax.tick_params(axis='x', which='major', pad=10)
+    ax.tick_params(axis='x', labelsize=7)
+    ax.tick_params(axis='y', labelsize=7)
+
+    ax.set_title(f"Contact map for chromosome 2")
+    plt.tight_layout()
+
+    if saveas:
+        plt.savefig(saveas, dpi=1000, format="png", bbox_inches='tight')
+
+
+    plt.show()
+
+# plot_heatmap2(Dirs.cool_path_intra / "imr90_250000_balanced.cool", chrom="chr2", saveas=Dirs.heatmap_dir_intra / "imr90_example250kb_chr2.png")

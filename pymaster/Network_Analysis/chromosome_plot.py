@@ -184,18 +184,18 @@ def linear_plot():
 def compartment_plot():
     graphs = gi.all_graphs()
     filter_instance = gm.FilterGraphs(graphs)
-    filter_instance.filter_graphs(cell_lines=["gsm2824367"], resolutions=[1000000], interaction_type="intra", condition="intra-split-raw")  # , chromosomes=["chr1", "chr2"])
+    filter_instance.filter_graphs(cell_lines=["mcf10"], resolutions=[1000000], interaction_type="intra", condition="intra-split-raw")  # , chromosomes=["chr1", "chr2"])
     graph_dict = filter_instance.graph_dict
     plot_helper = ChromosomePlotHelper(graph_dict, "all")  # , ["chr1", "chr2"])
 
     # load compartment data
-    compartment_file = "/Users/GBS/Master/HiC-Data/compartments/gsm_1mb_compartments.bed"
+    compartment_file = "/Users/GBS/Master/HiC-Data/compartments/imr90_1Mb_multiples_compartments.bed"
     plot_helper.load_compartment_data(compartment_file)
 
     lin_plot = LinearChromosomePlot(plot_helper)
     lin_plot.plot()
 
-compartment_plot()
+# compartment_plot()
 
 # circ plot with sorted chromosomes (just need to somehow add the ideogram data to the circ plot):
 def plot_degree_network_circ():

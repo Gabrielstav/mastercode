@@ -12,6 +12,16 @@ import random as rd
 import cairo as cr
 import cairocffi as crffi
 import pathlib as path
+import cdlib as cd
+from cdlib import algorithms as cdalgs
+from cdlib import evaluation as cdeval
+
+
+
+# cd.NodeClustering. contains lots of community detection algs
+
+
+
 
 rd.seed = 42
 
@@ -51,7 +61,9 @@ class Directories:
 #   ...
 #   Lacking:
 #   Attribute Analysis: Find out how attribues (centrality) relate to/distribute over communities.
-#   External Validation: Lacking external "ground truth" validation of communities, like gene ontology, TADs...
+#   External Validation: Lacking external "ground truth" validation of communities, like gene ontology, TADs... Or compartments, which we can integrate.
+#   Also, isolate the nodes with highest centrality rank, and the hub nodes, and see where they are. Compare between MCF7 and MCF10A.
+#   ...
 
 
 class CommunityDetection:
@@ -76,7 +88,7 @@ class CommunityDetection:
     @staticmethod
     def _fastgreedy(graph):
         graph.vs["fg"] = graph.community_fastgreedy().as_clustering().membership
-        print(graph.community_fastgreedy().as_clustering().membership)
+
 
     @staticmethod
     def _louvain(graph):
@@ -154,22 +166,142 @@ class PlotTopology:
         pass
 
 
-def fg1_comm_mcf10():
+class CommunityComparison:
+    def __init__(self, graph_dict1, graph_dict2, method=None, detection_method=None):
+        self.graph_dict1 = graph_dict1
+        self.graph_dict2 = graph_dict2
+        self.method = method
+        self.detection_method = detection_method
+
+    def compare_communities(self):
+        results = {}
+        for graph_name1, graph1 in self.graph_dict1.items():
+            for graph_name2, graph2 in self.graph_dict2.items():
+                community1 = cdalgs.greedy_modularity(graph1)
+                community2 = cdalgs.greedy_modularity(graph2)
+                score1 = cd.FuzzyNodeClustering.overlapping_normalized_mutual_information_LFK(community1, community2)
+                score2 = cdeval.overlapping_normalized_mutual_information_MGH(community1, community2)
+
+                results[(graph_name1, graph_name2)] = score1, score2
+        return results
+
+
+
+
+def compare_coms():
+    # Filter on graphs
+    graph_dict = gi.all_graphs()
+    filter_instance_1 = gm.FilterGraphs(graph_dict)
+    filter_instance_2 = gm.FilterGraphs(graph_dict)
+    filtered1 = filter_instance_1.filter_graphs(resolutions=[1000000], cell_lines=["mcf10"], condition="intra-split-raw", interaction_type="intra", chromosomes=["chr1"])
+    filtered2 = filter_instance_2.filter_graphs(resolutions=[1000000], cell_lines=["gsm2824367"], condition="intra-split-raw", interaction_type="intra", chromosomes=["chr1"])
+
+
+    # Detect communities
+    cd1 = CommunityDetection(filtered1)
+    cd2 = CommunityDetection(filtered2)
+
+    filtered1 = cd1.calculate_communities(method="fg")
+    filtered2 = cd2.calculate_communities(method="fg")
+
+    # Compare communities
+    cc = CommunityComparison(filtered1, filtered2, method="fg", detection_method="fg") # Membership veector must be of equal size, ie same number of nodes, which is not the case.
+    comparison_results = cc.compare_communities()
+
+    print(comparison_results)
+
+compare_coms()
+
+
+
+
+
+class PlotTopologyComparison:
+    def __init__(self, graph_dict1, graph_dict2):
+        self.graph_dict1 = graph_dict1
+        self.graph_dict2 = graph_dict2
+
+    def plot_community(self, method=None, save_as=None):
+
+        # Create a new figure
+        fig, ax = plt.subplots()
+
+        for idx, graph_dict in enumerate([self.graph_dict1, self.graph_dict2]):
+            for graph_name, graph in graph_dict.items():
+
+                # Create a color map
+                cmap = plt.get_cmap('rainbow', max(graph.vs[method]) + 1)
+                colors = [cmap(i) for i in graph.vs[method]]
+
+                # Adjust the layout of nodes
+                layout = graph.layout("kk")
+                for coords in layout:
+                    # Shift the x-coordinate of nodes
+                    coords[0] += idx * 8
+                    # Shift the y-coordinate
+                    coords[1] += idx * 2
+
+                # Set visual style
+                node_size = 20 / graph.vcount()
+                edge_width = 250 / graph.ecount()
+                visual_style = {
+                    "layout": layout,
+                    "vertex_size": node_size,
+                    "edge_width": edge_width,
+                    "bbox": (6000, 6000),
+                    "margin": 200,
+                    "vertex_color": colors,
+                    "vertex_label_size": 10,
+                    "vertex_label_dist": 10,
+                    "vertex_label_angle": 100,
+                    "vertex_label_color": "black",
+                    "vertex_frame_color": colors,
+                    #  "vertex_label": graph.vs["name"],
+                }
+
+                # Plot the graph
+                ig.plot(graph, **visual_style, target=ax)
+                # ax.text(idx * 10, 0, graph_name, fontsize=12)
+
+        # Save the figure if required
+        if save_as:
+            plt.savefig(save_as)
+
+        plt.show()
+
+
+def mcf10_coms():
     # Filter on graphs
     graph_dict = gi.all_graphs()
     filter_instance = gm.FilterGraphs(graph_dict)
-    filtered = filter_instance.filter_graphs(resolutions=[1000000], cell_lines=["imr90"], condition="intra-nosplit-raw", interaction_type="intra", chromosomes=["chr18"])
+    filtered = filter_instance.filter_graphs(resolutions=[1000000], cell_lines=["mcf10"], condition="intra-split-raw", interaction_type="intra", chromosomes=["chr1"])
 
     # Detect communities
     cd = CommunityDetection(filtered)
     filtered = cd.calculate_communities(method="fg")  # update filtered with the added community information
+    return filtered
 
-    # Plot communities
-    pt = PlotTopology(filtered, cd)  # pass the CommunityDetection instance to PlotTopology
-    pt.plot_community(method="fg", save_as=False)
-    return print(filtered)  # print the updated graph_dict
+def mcf7_coms():
+    # Filter on graphs
+    graph_dict = gi.all_graphs()
+    filter_instance = gm.FilterGraphs(graph_dict)
+    filtered = filter_instance.filter_graphs(resolutions=[1000000], cell_lines=["mcf7"], condition="intra-split-raw", interaction_type="intra", chromosomes=["chr1"])
 
-# fg1_comm_mcf10()
+    # Detect communities
+    cd = CommunityDetection(filtered)
+    filtered = cd.calculate_communities(method="fg")  # update filtered with the added community information
+    return filtered
+
+# grapa, grapb = ig.Graph.Erdos_Renyi(100, 0.1), ig.Graph.Erdos_Renyi(100, 0.1)
+# dendrogram_a, dendrogram_b = grapa.community_fastgreedy(), grapb.community_fastgreedy()
+# a, b = dendrogram_a.as_clustering(), dendrogram_b.as_clustering()
+c, d = mcf10_coms(), mcf7_coms()
+print(c,d)
+# print(ig.compare_communities(c, d, method="nmi"))
+
+
+
+
 
 
 class DendrogramPlot:

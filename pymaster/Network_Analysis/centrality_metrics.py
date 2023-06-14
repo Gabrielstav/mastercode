@@ -97,8 +97,8 @@ class PlotDegreeNetwork(DegreeCentrality):
 
             # node_size = 0.8
             # edge_width = 1
-            node_size = 20 / graph.vcount()
-            edge_width = 500 / graph.ecount()
+            node_size = 175 / graph.vcount()
+            edge_width = 1000 / graph.ecount()
             edge_colors = [self.calculate_color(edge) for edge in graph.es] if color_edges else 'gray'
             visual_style = {
                 "layout": layout,
@@ -111,21 +111,22 @@ class PlotDegreeNetwork(DegreeCentrality):
                 "vertex_label_size": 2,
                 "vertex_label_dist": 10,
                 "vertex_label_angle": 100,
-                "vertex_label_color": "black",
-                "vertex_frame_color": colors,  # Remove black outline, use in circle layout
+                "vertex_label_color": colors,
+                "vertex_frame_color": colors,  # Remove black outline to use in circle layout
                 # "vertex_label": graph.vs["location"],  # Add location as label, can be used in small graphs
             }
             ig.plot(graph, **visual_style, target=ax)
             plt.title(graph_name)  # Add a title
 
+            # TODO: Change back
             # Create a colorbar
-            if normalize:
-                norm = Normalize(vmin=min(degrees), vmax=max(degrees))
-            else:
-                norm = Normalize(vmin=min(graph.degree()), vmax=max(graph.degree()))
-            sm = plt.cm.ScalarMappable(cmap=plt.cm.viridis, norm=norm)
-            sm.set_array([])
-            plt.colorbar(sm, ax=ax, orientation='vertical', label='Degree')
+            # if normalize:
+            #     norm = Normalize(vmin=min(degrees), vmax=max(degrees))
+            # else:
+            #     norm = Normalize(vmin=min(graph.degree()), vmax=max(graph.degree()))
+            # sm = plt.cm.ScalarMappable(cmap=plt.cm.viridis, norm=norm)
+            # sm.set_array([])
+            # plt.colorbar(sm, ax=ax, orientation='vertical', label='Degree')
 
             # Save the plot conditionally
             if save_as:
@@ -849,7 +850,7 @@ class FindUniqueNodes:
 
     def find_unique_nodes(self):
         unique_nodes_dict = {}
-        graph_names = list(self.graph_dict.keys())
+        # graph_names = list(self.graph_dict.keys())
 
         for graph_name, graph in self.graph_dict.items():
             other_graphs = [g for g in self.graph_dict.values() if g != graph]
@@ -872,22 +873,31 @@ class FindUniqueNodes:
             for node in unique_nodes:
                 print(node)
 
+def compare_unique_nodes():
+    graphs = gi.all_graphs()
+    filter_instance = gm.FilterGraphs(graphs)
+    filter_instance.filter_graphs(cell_lines=["mcf7", "mcf10"], interaction_type="intra", condition="intra-split-raw", resolutions=[1000000], chromosomes=["chr1"])
+    graph_dict = filter_instance.graph_dict
+    unique_nodes_instance = FindUniqueNodes(graph_dict)
+    # unique_nodes_instance.print_shared_nodes()
+    unique_nodes_instance.print_unique_nodes()
+# compare_unique_nodes()
 
 ### Centrality metrics
 
 def plot_degree_network():
     graphs = gi.all_graphs()
     filter_instance = gm.FilterGraphs(graphs)
-    filter_instance.filter_graphs(cell_lines=["mcf10"], interaction_type="intra", condition="intra-split-raw", resolutions=[1000000])  # , chromosomes=["chr1"])
+    filter_instance.filter_graphs(cell_lines=["imr90"], interaction_type="intra", condition="intra-split-raw", resolutions=[250000], chromosomes=["chr2"])
     graph_dict = filter_instance.graph_dict
-    print(graph_dict)
-    lcc_instance = gm.LargestComponent(graph_dict)
-    lcc = lcc_instance.find_lcc()
-    print(lcc)
+    # print(graph_dict)
+    # lcc_instance = gm.LargestComponent(graph_dict)
+    # lcc = lcc_instance.find_lcc()
+    # print(lcc)
     degree_instance = PlotDegreeNetwork(graph_dict)  # Use LCC for withtin-chromosome plots
     degree_instance.calculate_degree()
     degree_instance.normalize_degree()
-    degree_instance.plot_graph(save_as=None, normalize=True, color_edges=True, layout="circle")
+    degree_instance.plot_graph(save_as=False, normalize=True, color_edges=False, layout="fr")  # Directories.degree_path / "example_imr90_250kb"
 
 # plot_degree_network()
 
@@ -991,14 +1001,14 @@ def jaccard_plot():
     # Find graphs and filter on them
     graphs = gi.intra_1mb_graphs()
     filter_instance = gm.FilterGraphs(graphs)
-    filter_instance.filter_graphs(cell_lines=["mcf10", "mcf7"], interaction_type="intra", resolutions=[1000000], condition="intra-split-raw")
+    filter_instance.filter_graphs(cell_lines=["mcf7", "imr90"], interaction_type="intra", resolutions=[1000000], condition="intra-split-raw")
     graph_dict = filter_instance.graph_dict
 
     # Calculate Jaccard similarity and plot heatmap
     jaccard_instance = JaccardSimilarity(graph_dict)
     jaccard_instance.calculate_similarity(inter_similarity=False)
     jaccard_similarities = jaccard_instance.get_jaccard_similarity()
-    print(jaccard_similarities)
+
 
     # Create heatmap
     heatmap_instance = JaccardHeatmap(jaccard_similarities)
@@ -1090,7 +1100,7 @@ def exporter():
     exporter_instance = gg.GraphExporter(graph_dict, path.Path(Directories.bed_path))
     exporter_instance.export_gff3(["degree", "betweenness", "closeness"])
 
-exporter()
+# exporter()
 
 if __name__ == "__main__":
     print("main running")

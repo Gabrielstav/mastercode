@@ -29,23 +29,6 @@ class OutputDirectory:
     def get_output_dir(cls):
         return cls.output_dir
 
-# fig, ax = plt.subplots()
-# test_graph = ig.Graph.Erdos_Renyi(10, 0.5)
-# ig.plot(test_graph, target=ax)
-# plt.show()
-
-
-# Create a graph with 3 nodes and 3 edges
-g = ig.Graph(n=3, edges=[(0, 1), (0, 1), (1, 1)], directed=False)
-
-# Add labels to the vertices
-g.vs["name"] = ["Node 0", "Node 1", "Node 2"]
-
-# Plot the graph with vertex labels
-# fix, ax = plt.subplots()
-# ig.plot(g, target=ax, vertex_label=g.vs["name"])
-# plt.show()
-# ig.plot(g, vertex_label=g.vs["name"])
 
 
 def combined():
@@ -65,11 +48,11 @@ def combined():
     return combined_graphs
 
 
-filtered_graph_dict = combined()
-graph_name, filtered_graph = list(filtered_graph_dict.items())[0]
-fig, ax = plt.subplots()
-ig.plot(filtered_graph, bbox=(0, 0, 300, 300), target=ax, vertex_size=0.1, edge_width=0.5)  # node_color=filtered_graph.vs["chromosome"])
-plt.show()
+# filtered_graph_dict = combined()
+# graph_name, filtered_graph = list(filtered_graph_dict.items())[0]
+# fig, ax = plt.subplots()
+# ig.plot(filtered_graph, bbox=(0, 0, 300, 300), target=ax, vertex_size=0.1, edge_width=0.5)  # node_color=filtered_graph.vs["chromosome"])
+# plt.show()
 
 # TODO: Make plotting class that takes any graph dict from any class in Network_Metrics and plots it as a network
 
@@ -131,8 +114,16 @@ class PlotGraph:
             p.starmap(self.save_graph, self.graph_dict.items())
 
 
-# plotter = PlotGraph(gi.imr90_chr18(), OutputDirectory.get_output_dir())
-# plotter.show_graph()
+def plot_graph():
+    all_graphs = gi.all_graphs()
+    graph_filter = gm.FilterGraphs(all_graphs)
+    filtered_graphs = graph_filter.filter_graphs(cell_lines=["imr90"], resolutions=[1000000], chromosomes=["chr1"], condition="intra-split-raw")
+    plotter = PlotGraph(filtered_graphs, Path.cwd() / "plots")
+    plotter.show_graph()
+    # plotter.save_graph(filtered_graphs)
+# plot_graph()
+
+
 # plotter.save_graph(gi.imr90_chr18())
 
 class plot_components:
@@ -320,27 +311,3 @@ class plot_lcc_ratio:
 #     plot.plot_lcc_ratio_bar()
 # # plot_lcc_ratio_imr90()
 
-
-# TODO: Make degree distribution plots for each cell lines LCC for each chromosome, per resolution? Takes graph dict as input.
-
-# TODO: Make betweenness plot that colors the nodes by betwenness centrality, takes a graph dict as input. Make
-
-# TODO: Make closeness plot that colors the nodes by closeness, takes graph dict as input.
-
-
-# Networkx plot
-
-class PlotNetworkxGraphs:
-
-    def __init__(self, networkx_graph_dict):
-        self.networkx_graph_dict = networkx_graph_dict
-
-    def plot(self):
-        for graph_key, nx_graph in self.networkx_graph_dict.items():
-            plt.figure()
-            plt.title(f"{graph_key}")
-            nx.draw(nx_graph, with_labels=True, node_color="skyblue", font_weight="bold", node_size=1000)
-            plt.show()
-
-# plotter = PlotNetworkxGraphs(ConvertIgraphToNetworkx(chr18_inc_norm_graphs_50kb()).convert())
-# plotter.plot()
