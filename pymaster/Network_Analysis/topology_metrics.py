@@ -33,10 +33,9 @@ class Directories:
         comms_path.mkdir(parents=True)
 
 
+
 # TODO:
 #  Community Detection:
-#     Calculate community structure using Fastgreedy, Louvain, and Infomap methods.
-#     Compare the resulting communities across cell lines using the compare_to method (if applicable).
 #     ...
 #  Community Visualization:
 #     Create dendrogram plots of the community clusters.
@@ -181,11 +180,16 @@ class CommunityComparison:
                 community2 = cdalgs.greedy_modularity(graph2)
                 score1 = cd.FuzzyNodeClustering.overlapping_normalized_mutual_information_LFK(community1, community2)
                 score2 = cdeval.overlapping_normalized_mutual_information_MGH(community1, community2)
+                score3 = cdeval.partition_closeness_simple(community1, community2)
+                score4 = cd.FuzzyNodeClustering.f1(community1, community2)
 
-                results[(graph_name1, graph_name2)] = score1, score2
+                results[(graph_name1, graph_name2)] = score1, score2, score3, score4
         return results
 
 
+    def compare_node_communities(self):
+        # Make method to use the fg community membership mapped to nodes, and find differences between cell lines
+        pass
 
 
 def compare_coms():
@@ -193,9 +197,14 @@ def compare_coms():
     graph_dict = gi.all_graphs()
     filter_instance_1 = gm.FilterGraphs(graph_dict)
     filter_instance_2 = gm.FilterGraphs(graph_dict)
-    filtered1 = filter_instance_1.filter_graphs(resolutions=[1000000], cell_lines=["mcf10"], condition="intra-split-raw", interaction_type="intra", chromosomes=["chr1"])
-    filtered2 = filter_instance_2.filter_graphs(resolutions=[1000000], cell_lines=["gsm2824367"], condition="intra-split-raw", interaction_type="intra", chromosomes=["chr1"])
+    filtered1 = filter_instance_1.filter_graphs(resolutions=[1000000], cell_lines=["mcf10"], condition="intra-split-raw", interaction_type="intra", chromosomes=["chr2"])
+    filtered2 = filter_instance_2.filter_graphs(resolutions=[1000000], cell_lines=["mcf7"], condition="intra-split-raw", interaction_type="intra", chromosomes=["chr2"])
 
+    # {('intra-split-raw_mcf10_50000', 'intra-split-raw_mcf7_50000'): (MatchingResult(score=0.09531429795246016, std=None), MatchingResult(score=0.06330616073371602, std=None),
+    # MatchingResult(score=0.18415529905561384, std=None), MatchingResult(score=0.38147117296222666, std=0.23803499472082973))}
+
+    # {('intra-split-raw_mcf10_1000000', 'intra-split-raw_mcf7_1000000'): (MatchingResult(score=0.23712347613448248, std=None), MatchingResult(score=0.1679255378736726, std=None),
+    # MatchingResult(score=0.0784313725490196, std=None), MatchingResult(score=0.49666666666666676, std=0.15684387141358122))}
 
     # Detect communities
     cd1 = CommunityDetection(filtered1)
@@ -288,8 +297,8 @@ def mcf7_coms():
     filtered = filter_instance.filter_graphs(resolutions=[1000000], cell_lines=["mcf7"], condition="intra-split-raw", interaction_type="intra", chromosomes=["chr1"])
 
     # Detect communities
-    cd = CommunityDetection(filtered)
-    filtered = cd.calculate_communities(method="fg")  # update filtered with the added community information
+    com = CommunityDetection(filtered)
+    filtered = com.calculate_communities(method="fg")  # update filtered with the added community information
     return filtered
 
 # grapa, grapb = ig.Graph.Erdos_Renyi(100, 0.1), ig.Graph.Erdos_Renyi(100, 0.1)
@@ -411,14 +420,6 @@ class CommunityMetrics:
             inter_edges.append(outer_edges)
         return intra_edges, inter_edges
 
-class Ideaogram:
-
-    def __init__(self):
-        graph_dict = self.graph_dict
-
-
-
-
 
 
 def metrics_tester():
@@ -449,7 +450,8 @@ def metrics_tester():
 
 # metrics_tester()
 
-
+if __name__ == "__main__":
+    print("RUN")
 
 
 

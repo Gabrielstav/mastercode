@@ -17,7 +17,9 @@ from collections import defaultdict
 from scipy.spatial.distance import jensenshannon
 from collections import Counter
 import random as rd
+from matplotlib.lines import Line2D
 rd.seed = 42
+
 
 # TODO: Combine graphs (inter + intra, and mcf7 + mcf10) and visualize shared nodes and edges, and inter vs intra edges ?
 # TODO: Make Jaccard edge similarity visualizaiton (Heatmap or barplot?)
@@ -32,6 +34,9 @@ class Directories:
     betweenness_path = base_path_figures / "Betweenness"
     comms_path = base_path_figures / "Communities"
     bed_path = root_path / "HiC-Data/bed"
+    correlation_cent_path = base_path_figures / "Correlation_Centrality"
+    jaccard_heatmap_path = base_path_figures / "Jaccard_Heatmaps"
+    overlap_path = base_path_figures / "Overlap"
 
 
     if not degree_path.exists():
@@ -45,6 +50,15 @@ class Directories:
 
     if not bed_path.exists():
         bed_path.mkdir(parents=True)
+
+    if not correlation_cent_path.exists():
+        correlation_cent_path.mkdir(parents=True)
+
+    if not jaccard_heatmap_path.exists():
+        jaccard_heatmap_path.mkdir(parents=True)
+
+    if not overlap_path.exists():
+        overlap_path.mkdir(parents=True)
 
 
 class DegreeCentrality:
@@ -83,10 +97,33 @@ class PlotDegreeNetwork(DegreeCentrality):
             color = plt.cm.viridis(degrees / max(graph.degree()))
             return color
 
-    def plot_graph(self, normalize=False, color_edges=False, save_as=None, layout=None):
+
+    @staticmethod
+    def plot_legend(graph, top_n):
+        # Get top_n nodes with the highest degree
+        top_nodes = sorted(graph.vs, key=lambda v: v["degree"], reverse=True)[:top_n]
+
+        # Generate colors for the legend
+        colors = [plt.cm.viridis(node["degree"] / max(graph.degree())) for node in top_nodes]
+
+        # Change labels to Mega base pairs (Mb) format without decimal places and append degree
+        labels = ["-".join(str(int(pos)//10**6) + 'Mb' for pos in node["location"].split('-')) + ': ' + str(node["degree"]) for node in top_nodes]
+
+        # Create legend handles
+        legend_elements = [Line2D([0], [0], marker='o', color='w', label=label,
+                                  markerfacecolor=color, markersize=10) for color, label in zip(colors, labels)]
+
+        # Position the legend to avoid overlap with the network
+        # Change the values in the tuple to adjust the position
+        plt.legend(handles=legend_elements, loc=(1, 0))
+
+        # Return the legend handles
+        return legend_elements
+
+    def plot_graph(self, normalize=False, color_edges=False, save_as=None, layout=None, legend_top_n=5):
         for graph_name, graph in self.graph_dict.items():
             fig, ax = plt.subplots()
-            graph_name = '_'.join(graph_name.split('_')[1:3])
+            graph_name = '_'.join(graph_name.split('_')[1:2])
             if normalize:
                 degrees = [deg / max(graph.degree()) for deg in graph.degree()]  # Normalize degrees
             else:
@@ -97,14 +134,14 @@ class PlotDegreeNetwork(DegreeCentrality):
 
             # node_size = 0.8
             # edge_width = 1
-            node_size = 175 / graph.vcount()
-            edge_width = 1000 / graph.ecount()
-            edge_colors = [self.calculate_color(edge) for edge in graph.es] if color_edges else 'gray'
+            node_size = 50 / graph.vcount()
+            edge_width = 400 / graph.ecount()
+            edge_colors = [self.calculate_color(edge) for edge in graph.es] if color_edges else 'black'
             visual_style = {
                 "layout": layout,
                 "vertex_size": node_size,
                 "edge_width": edge_width,
-                "bbox": (1000, 1000),
+                "bbox": (2000, 2000),
                 "margin": 20,
                 "vertex_color": colors,
                 "edge_color": edge_colors,
@@ -113,10 +150,13 @@ class PlotDegreeNetwork(DegreeCentrality):
                 "vertex_label_angle": 100,
                 "vertex_label_color": colors,
                 "vertex_frame_color": colors,  # Remove black outline to use in circle layout
-                # "vertex_label": graph.vs["location"],  # Add location as label, can be used in small graphs
+                #  "vertex_label": graph.vs["location"],  # Add location as label, can be used in small graphs
             }
             ig.plot(graph, **visual_style, target=ax)
             plt.title(graph_name)  # Add a title
+            # Plot legend for top_n nodes with the highest degree
+            legend_elements = self.plot_legend(graph, legend_top_n)
+            ax.legend(handles=legend_elements, title="Hub nodes", loc="best")
 
             # TODO: Change back
             # Create a colorbar
@@ -173,7 +213,7 @@ class PlotClosenessNetwork(ClosenessCentrality):
     def plot_closeness(self, normalize=False, color_edges=False, save_as=None, layout=None):
         for graph_name, graph in self.graph_dict.items():
             fig, ax = plt.subplots()
-            graph_name = '_'.join(graph_name.split('_')[1:3])
+            graph_name = '_'.join(graph_name.split('_')[1:2])
             if normalize:
                 closeness = [closeness / max(graph.closeness()) for closeness in graph.closeness()]
             else:
@@ -181,7 +221,7 @@ class PlotClosenessNetwork(ClosenessCentrality):
 
             colors = [list(color) for color in plt.cm.viridis(closeness)]  # Convert numpy.ndarray to list of lists
 
-            node_size = 50 / graph.vcount()
+            node_size = 80 / graph.vcount()
             edge_width = 350 / graph.ecount()
             edge_colors = [self.calculate_color(edge) for edge in graph.es] if color_edges else 'gray'
             visual_style = {
@@ -256,7 +296,7 @@ class PlotBetweennessNetwork(BetweennessCentrality):
     def plot_betweenness(self, normalize=False, color_edges=False, save_as=None, layout=None):
         for graph_name, graph in self.graph_dict.items():
             fig, ax = plt.subplots()
-            graph_name = '_'.join(graph_name.split('_')[1:3])
+            graph_name = '_'.join(graph_name.split('_')[1:2])
             if normalize:
                 betweenness = [betweenness / max(graph.betweenness()) for betweenness in graph.betweenness()]
             else:
@@ -303,9 +343,60 @@ class PlotBetweennessNetwork(BetweennessCentrality):
             plt.show()
 
 
+def plot_degree_network():
+    graphs = gi.all_graphs()
+    filter_instance = gm.FilterGraphs(graphs)
+    filter_instance.filter_graphs(cell_lines=["mcf7"], interaction_type="intra", condition="intra-split-raw", resolutions=[1000000])  # , chromosomes=["chr5"])
+    graph_dict = filter_instance.graph_dict
+    # print(graph_dict)
+    lcc_instance = gm.LargestComponent(graph_dict)
+    lcc = lcc_instance.find_lcc()
+    # print(lcc)
+    degree_instance = PlotDegreeNetwork(graph_dict)  # Use LCC for within-chromosome plots
+    degree_instance.calculate_degree()
+    degree_instance.normalize_degree()
+
+    # Added the parameter `legend_top_n=5` to plot top 5 nodes with the highest degree in the legend
+    degree_instance.plot_graph(save_as=Directories.degree_path / "MCF7_all_degree_network.png", normalize=True, color_edges=False, layout="fr", legend_top_n=5)
+
+plot_degree_network()
+
+def plot_closeness_network():
+    graphs = gi.intra_1mb_graphs()
+    filter_instance = gm.FilterGraphs(graphs)
+    filter_instance.filter_graphs(cell_lines=["mcf7"], interaction_type="intra", chromosomes=["chr1"])
+    graph_dict = filter_instance.graph_dict
+    print(graph_dict)
+    lcc_instance = gm.LargestComponent(graph_dict)
+    lcc = lcc_instance.find_lcc()
+    print(lcc)
+    closeness_instance = cm.PlotClosenessNetwork(lcc)  # Use LCC for withtin-chromosome plots
+    closeness_instance.plot_closeness(save_as=None, normalize=False, color_edges=True, layout="fr")
+
+# plot_closeness_network()
+
+def plot_betweenness_network():
+    graphs = gi.intra_1mb_graphs()
+    filter_instance = gm.FilterGraphs(graphs)
+    filter_instance.filter_graphs(cell_lines=["gsm2824367"], interaction_type="intra", condition="intra-split-raw")  # , chromosomes=["chr1"])
+    graph_dict = filter_instance.graph_dict
+    print(graph_dict)
+    # lcc_instance = gm.LargestComponent(graph_dict)
+    # lcc = lcc_instance.find_lcc()
+    # print(lcc)
+    betweenness_instance = cm.PlotBetweennessNetwork(graph_dict)  # Use LCC for withtin-chromosome plots
+    betweenness_instance.plot_betweenness(save_as=None, normalize=True, color_edges=False, layout="fr")
+
+
+# plot_betweenness_network()
+
+
+
+
+
 class PlotDegreeDistribution(DegreeCentrality):
 
-    def plot_degree_distribution(self, plot_type='scatter', save_as=None, normalize=False):
+    def plot_degree_distribution(self, plot_type="line", save_as=None, normalize=False):
         # Define colors
         colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
         max_frequency = -np.inf
@@ -328,18 +419,21 @@ class PlotDegreeDistribution(DegreeCentrality):
             frequencies = counts / counts.sum()
 
             # Log transform frequencies
-            log_freq = np.log10(frequencies)
+            log_freq = -np.log10(frequencies)
 
             # Split graph_name for legend
-            legend_name = '_'.join(graph_name.split('_')[1:3])
+            legend_name = '_'.join(graph_name.split('_')[1:2])
+
+            print(degrees, log_freq)
 
             # Check plot type and plot accordingly
             if plot_type == 'scatter':
-                plt.scatter(degrees, log_freq, color=colors[idx % len(colors)], alpha=0.5, label=legend_name)
+                plt.scatter(degrees, 10 ** -log_freq, color=colors[idx % len(colors)], alpha=0.5, label=legend_name)
             elif plot_type == 'line':
-                plt.plot(degrees, log_freq, color=colors[idx % len(colors)], label=legend_name)
+                coefficients = np.polyfit(degrees, log_freq, 3)
+                poly = np.poly1d(coefficients)
+                plt.plot(degrees, 10 ** -poly(degrees), color=colors[idx % len(colors)], label=legend_name)
 
-            # TODO: If normalized, use normalized min and max degree as x- and y-limits
             # Update max frequency and max log-frequency
             max_frequency = max(max_frequency, np.max(frequencies))
             max_log_frequency = max(max_log_frequency, np.max(log_freq))
@@ -350,17 +444,18 @@ class PlotDegreeDistribution(DegreeCentrality):
         # Apply locator to y-axis
         majorlocator = MultipleLocator(1)
         minorlocator = AutoMinorLocator(10)
-        # TODO: Fix - Why do minor ticks not show up?
         plt.gca().yaxis.set_major_locator(majorlocator)
         plt.gca().yaxis.set_minor_locator(minorlocator)
         plt.gca().tick_params(axis='y', which='minor', bottom=True)
 
         # Set y ticks to represent frequency in a 10^n format with more granularity
-        plt.yticks(ticks=np.arange(max_log_frequency, min_log_frequency - 1, -1),
-                   labels=[f'$10^{{{int(tick)}}}$' for tick in np.arange(max_log_frequency, min_log_frequency - 1, -1)])
+        y_ticks = np.arange(np.floor(max_log_frequency), np.ceil(min_log_frequency), -1)
+        y_ticks = np.insert(y_ticks, 0, 0)
+        plt.yticks(ticks=10 ** -y_ticks, labels=[f'$10^{{{-int(tick)}}}$' for tick in y_ticks])
 
-        # Set log scale on x-axis
+        # Set log scale on x-axis and y-axis
         plt.xscale('log')
+        plt.yscale('log')
 
         plt.title("Degree Distribution")
         plt.xlabel("Degree")
@@ -374,8 +469,8 @@ class PlotDegreeDistribution(DegreeCentrality):
         min_y = minimum_y
         max_y = max_log_frequency
         plt.text(0.03, 0.03, f'Max Degree: {max_x}'
-                             f'\nMax frequency: $10^{{{max_y:.1f}}}$'
-                             f'\nMin Frequency: $10^{{{min_y:.1f}}}$',
+                             f'\nMax frequency: $10^{{{-max_y:.1f}}}$'
+                             f'\nMin Frequency: $10^{{{-min_y:.1f}}}$',
                  transform=plt.gca().transAxes)
 
         # Save the plot conditionally
@@ -392,14 +487,14 @@ class ClosenessDistribution(ClosenessCentrality):
         super().__init__(graph_dict)
         self.closeness_distribution_dict = {}
 
-    def calculate_closeness_distribution(self, num_bins=20):
+    def calculate_closeness_distribution(self, num_bins=50):
         for graph_name, graph in self.graph_dict.items():
             closeness_scores = graph.closeness()
             frequencies, bin_edges = np.histogram(closeness_scores, bins=num_bins)
             bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
             self.closeness_distribution_dict[graph_name] = (bin_centers, frequencies)
 
-    def plot_closeness_distribution(self, plot_type='scatter', save_as=None):
+    def plot_closeness_distribution(self, plot_type='line', save_as=None):
 
         colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
 
@@ -407,7 +502,7 @@ class ClosenessDistribution(ClosenessCentrality):
 
             frequencies = frequencies / frequencies.sum()  # Convert counts to frequencies
             log_frequencies = np.log10(frequencies + 1e-10)  # Add a small constant to avoid -inf values from log(0)
-            legend_name = '_'.join(graph_name.split('_')[1:3])
+            legend_name = '_'.join(graph_name.split('_')[1:2])
 
             # Exclude zero-frequency bins
             nonzero_indices = np.where(frequencies > 0)
@@ -417,7 +512,8 @@ class ClosenessDistribution(ClosenessCentrality):
             if plot_type == 'scatter':
                 plt.scatter(bin_centers, log_frequencies, color=colors[idx % len(colors)], alpha=0.5, label=legend_name)
             elif plot_type == 'line':
-                plt.plot(bin_centers, log_frequencies, color=colors[idx % len(colors)], label=legend_name)
+                poly = np.poly1d(np.polyfit(bin_centers, log_frequencies, 3))
+                plt.plot(bin_centers, poly(bin_centers), color=colors[idx % len(colors)], label=legend_name)
 
             max_log_freq = np.max(log_frequencies)
             min_log_freq = np.min(log_frequencies)
@@ -440,7 +536,7 @@ class BetweennessDistribution(BetweennessCentrality):
         super().__init__(graph_dict)
         self.betweenness_distribution_dict = {}
 
-    def calculate_betweenness_distribution(self, num_bins=100):
+    def calculate_betweenness_distribution(self, num_bins=50):
         for graph_name, graph in self.graph_dict.items():
             betweenness_scores = graph.betweenness()
             frequencies, bin_edges = np.histogram(betweenness_scores, bins=num_bins)
@@ -455,7 +551,7 @@ class BetweennessDistribution(BetweennessCentrality):
 
             frequencies = frequencies / frequencies.sum()  # Convert counts to frequencies
             log_frequencies = np.log10(frequencies + 1e-10)  # Add a small constant to avoid -inf values from log(0)
-            legend_name = '_'.join(graph_name.split('_')[1:3])
+            legend_name = '_'.join(graph_name.split('_')[1:2])
 
             # Exclude zero-frequency bins
             nonzero_indices = np.where(frequencies > 0)
@@ -465,7 +561,9 @@ class BetweennessDistribution(BetweennessCentrality):
             if plot_type == 'scatter':
                 plt.scatter(bin_centers, log_frequencies, color=colors[idx % len(colors)], alpha=0.5, label=legend_name)
             elif plot_type == 'line':
-                plt.plot(bin_centers, log_frequencies, color=colors[idx % len(colors)], label=legend_name)
+                poly = np.poly1d(np.polyfit(bin_centers, log_frequencies, 3))
+                plt.plot(bin_centers, poly(bin_centers), color=colors[idx % len(colors)], label=legend_name)
+                # plt.plot(bin_centers, log_frequencies, color=colors[idx % len(colors)], label=legend_name)
 
             max_log_freq = np.max(log_frequencies)
             min_log_freq = np.min(log_frequencies)
@@ -509,8 +607,8 @@ class CentralityCorrelation(BetweennessCentrality, ClosenessCentrality, DegreeCe
             # Calculate the correlation coefficient
             correlation = np.corrcoef(scores1, scores2)[0, 1]
 
-            legend_name = '_'.join(graph_name.split('_')[1:3])
-            plt.scatter(scores1, scores2, color=colors[idx % len(colors)], alpha=0.35, label=f'{legend_name} (corr={correlation:.2f})')
+            legend_name = '_'.join(graph_name.split('_')[1:2])
+            plt.scatter(scores1, scores2, color=colors[idx % len(colors)], alpha=0.2, label=f'{legend_name} (corr={correlation:.2f})')
 
             # Fit a line to the data
             m, b = np.polyfit(scores1, scores2, 1)
@@ -648,7 +746,7 @@ class JaccardHeatmap:
         print(f"Type of self: {type(self)}")
         print(f"Type of self.jaccard_similarities: {type(self.jaccard_similarities)}")
 
-    def jaccard_heatmap(self):
+    def jaccard_heatmap(self, save_as=None):
         # Convert to DataFrame
         df = pd.DataFrame.from_dict(self.jaccard_similarities, orient='index', columns=['Jaccard Similarity'])
         df.reset_index(inplace=True)
@@ -669,10 +767,14 @@ class JaccardHeatmap:
         # Create heatmap
         plt.figure(figsize=(10, 8))
         sns.heatmap(df_final, annot=True, fmt=".2f", cmap='YlGnBu')
+        plt.tick_params(axis='x', labelsize=7)
+        plt.tick_params(axis='y', labelsize=8)
         plt.title('Jaccard Similarity between Chromosomes')
+        if save_as:
+            plt.savefig(save_as, dpi=300)
         plt.show()
 
-    def inter_jaccard_heatmap(self):
+    def inter_jaccard_heatmap(self, save_as=None):
         # Convert to DataFrame
         df = pd.DataFrame.from_dict(self.jaccard_similarities, orient='index', columns=['Jaccard Similarity'])
         df.reset_index(inplace=True)
@@ -685,10 +787,14 @@ class JaccardHeatmap:
         # Create heatmap
         plt.figure(figsize=(10, 8))
         sns.heatmap(df_pivot, annot=True, fmt=".2f", cmap='GnBu')
+        plt.tick_params(axis='x', labelsize=6)
+        plt.tick_params(axis='y', labelsize=8)
         plt.title('Jaccard Similarity between Chromosomes')
+        if save_as:
+            plt.savefig(save_as, dpi=300)
         plt.show()
 
-    def jaccard_barplot(self):
+    def jaccard_barplot(self, save_as=None):
         # Convert to DataFrame
         df = pd.DataFrame.from_dict(self.jaccard_similarities, orient='index', columns=['Jaccard Similarity'])
         df.reset_index(inplace=True)
@@ -701,8 +807,13 @@ class JaccardHeatmap:
 
         # Create bar plot
         plt.figure(figsize=(10, 8))
-        sns.barplot(x='Chromosome', y='Jaccard Similarity', palette=colors, data=df)
+        sns.barplot(x='Chromosome', y='Jaccard Similarity', palette=colors, data=df, errorbar=("ci", 95), errcolor="red", errwidth=2, capsize=0.3)
+        plt.tick_params(axis='x', labelsize=7)
+        plt.tick_params(axis='y', labelsize=8)
+
         plt.title('Jaccard Similarity between Chromosomes')
+        if save_as:
+            plt.savefig(save_as, dpi=300)
         plt.show()
 
 
@@ -828,6 +939,136 @@ class CalculateCentralitySimilarity:
     def get_spearman_correlation(self):
         return self.spearman_correlation
 
+class find_hub_nodes:
+
+    def __init__(self, graph_dict):
+        self.graph_dict = graph_dict
+
+    def find_top_degree_nodes(self, top_n):
+        top_degree_nodes = {}
+        for cell_line, graph in self.graph_dict.items():
+            degrees = graph.degree()
+            # Get indices of top nodes
+            top_nodes_indices = sorted(range(len(degrees)), key=lambda i: degrees[i], reverse=True)[:top_n]
+            top_nodes = [(graph.vs[i]["name"], degrees[i]) for i in top_nodes_indices]  # assuming "name" attribute holds the name of the node
+            top_degree_nodes[cell_line] = top_nodes
+        return top_degree_nodes
+
+    def find_top_betweenness_nodes(self, top_n):
+        top_betweenness_nodes = {}
+        for cell_line, graph in self.graph_dict.items():
+            betweenness = graph.betweenness()
+            # Get indices of top nodes
+            top_nodes_indices = sorted(range(len(betweenness)), key=lambda i: betweenness[i], reverse=True)[:top_n]
+            top_nodes = [(graph.vs[i]["name"], betweenness[i]) for i in top_nodes_indices]  # assuming "name" attribute holds the name of the node
+            top_betweenness_nodes[cell_line] = top_nodes
+        return top_betweenness_nodes
+
+    def find_top_closeness_nodes(self, top_n):
+        top_closeness_nodes = {}
+        for cell_line, graph in self.graph_dict.items():
+            closeness = graph.closeness()
+            # Get indices of top nodes
+            top_nodes_indices = sorted(range(len(closeness)), key=lambda i: closeness[i], reverse=True)[:top_n]
+            top_closeness_nodes[cell_line] = top_nodes_indices
+        return top_closeness_nodes
+
+    def print_top_degree_nodes(self, top_n):
+        top_degree_nodes = self.find_top_degree_nodes(top_n)
+        for cell_line, node_indices in top_degree_nodes.items():
+            node_degrees = self.graph_dict[cell_line].degree(node_indices)
+            node_names = [self.graph_dict[cell_line].vs[i]["name"] for i in node_indices]  # assuming "name" attribute holds the name of the node
+            print(f'{cell_line}: {list(zip(node_names, node_degrees))}')
+
+    def print_top_betweenness_nodes(self, top_n):
+        top_betweenness_nodes = self.find_top_betweenness_nodes(top_n)
+        for cell_line, node_indices in top_betweenness_nodes.items():
+            node_betweenness = self.graph_dict[cell_line].betweenness(node_indices)
+            node_names = [self.graph_dict[cell_line].vs[i]["name"] for i in node_indices]
+            print(f'{cell_line}: {list(zip(node_names, node_betweenness))}')
+
+    def print_top_closeness_nodes(self, top_n):
+        top_closeness_nodes = self.find_top_closeness_nodes(top_n)
+        for cell_line, node_indices in top_closeness_nodes.items():
+            node_closeness = self.graph_dict[cell_line].closeness(node_indices)
+            node_names = [self.graph_dict[cell_line].vs[i]["name"] for i in node_indices]
+            print(f'{cell_line}: {list(zip(node_names, node_closeness))}')
+
+    def overlap_of_top_nodes(self, top_n, metric):
+
+        # Choose the metric
+        if metric == 'degree':
+            top_nodes_func = self.find_top_degree_nodes
+        elif metric == 'betweenness':
+            top_nodes_func = self.find_top_betweenness_nodes
+        else:
+            raise ValueError(f"Invalid metric: {metric}. Choose 'degree' or 'betweenness'.")
+
+        # Get the top nodes for each cell line based on the metric
+        top_nodes = top_nodes_func(top_n)
+
+        # Extract the unique chromosomes
+        chromosomes = set()
+        for cell_line in self.graph_dict.keys():
+            chromosomes.update([location.split(":")[0] for location, degree in top_nodes[cell_line]])
+        chromosomes = list(chromosomes)
+
+        overlap_counts = {}
+        for chromosome in chromosomes:
+            overlap_counts[chromosome] = {"overlap": 0, "non_overlap": 0}
+
+            # Get the list of cell lines
+            cell_lines = list(self.graph_dict.keys())
+
+            # Extracting the node locations for the top nodes in each cell line
+            top_locations_1 = set([location for location, degree in top_nodes[cell_lines[0]] if location.startswith(chromosome)])
+            top_locations_2 = set([location for location, degree in top_nodes[cell_lines[1]] if location.startswith(chromosome)])
+
+            overlap = top_locations_1 & top_locations_2
+            non_overlap = top_locations_1 ^ top_locations_2
+
+            overlap_counts[chromosome]["overlap"] += len(overlap)
+            overlap_counts[chromosome]["non_overlap"] += len(non_overlap)
+
+        return overlap_counts
+
+    @staticmethod
+    def plot_overlap_counts(self, top_n, metric, save_as=None):
+        overlap_counts = self.overlap_of_top_nodes(top_n, metric)
+
+        chromosomes = sorted(overlap_counts.keys(), key=lambda x: int(x[3:]))
+        overlaps = [overlap_counts[chrom]["overlap"] for chrom in chromosomes]
+        non_overlaps = [overlap_counts[chrom]["non_overlap"] for chrom in chromosomes]
+        total = [overlaps[i] + non_overlaps[i] for i in range(len(overlaps))]
+
+        plt.figure(figsize=(10, 7))
+
+        plt.bar(chromosomes, overlaps, label='Overlap')
+        plt.bar(chromosomes, non_overlaps, bottom=overlaps, label='Non Overlap')
+
+        # for i in range(len(chromosomes)):
+        #     plt.text(chromosomes[i], total[i] + 0.5, str(total[i]), ha='center', va='bottom')
+
+        plt.xlabel('Chromosomes')
+        plt.ylabel('Node Count')
+        plt.title('Betweenness node overlap between MCF-7 and MCF-10A')
+        plt.legend()
+        if save_as:
+            plt.savefig(save_as, dpi=300)
+        plt.show()
+
+def find_top_hubs():
+    graphs = gi.all_graphs()
+    filter_instance = gm.FilterGraphs(graphs)
+    filter_instance.filter_graphs(cell_lines=["mcf10", "mcf7"], interaction_type="intra", condition="intra-split-raw", resolutions=[1000000])  # , chromosomes=["chr2"])
+    graph_dict = filter_instance.graph_dict
+    hub_instance = find_hub_nodes(graph_dict)
+    # hub_instance.print_top_degree_nodes(10)
+    hub_instance.plot_overlap_counts(hub_instance, top_n=50, metric="betweenness", save_as=Directories.overlap_path / "50_betweenness_MCF10-A_MCF7_overlap.png")
+
+# find_top_hubs()
+
+
 
 class FindUniqueNodes:
     """
@@ -885,51 +1126,7 @@ def compare_unique_nodes():
 
 ### Centrality metrics
 
-def plot_degree_network():
-    graphs = gi.all_graphs()
-    filter_instance = gm.FilterGraphs(graphs)
-    filter_instance.filter_graphs(cell_lines=["imr90"], interaction_type="intra", condition="intra-split-raw", resolutions=[250000], chromosomes=["chr2"])
-    graph_dict = filter_instance.graph_dict
-    # print(graph_dict)
-    # lcc_instance = gm.LargestComponent(graph_dict)
-    # lcc = lcc_instance.find_lcc()
-    # print(lcc)
-    degree_instance = PlotDegreeNetwork(graph_dict)  # Use LCC for withtin-chromosome plots
-    degree_instance.calculate_degree()
-    degree_instance.normalize_degree()
-    degree_instance.plot_graph(save_as=False, normalize=True, color_edges=False, layout="fr")  # Directories.degree_path / "example_imr90_250kb"
 
-# plot_degree_network()
-
-def plot_closeness_network():
-    graphs = gi.intra_1mb_graphs()
-    filter_instance = gm.FilterGraphs(graphs)
-    filter_instance.filter_graphs(cell_lines=["mcf7"], interaction_type="intra", chromosomes=["chr1"])
-    graph_dict = filter_instance.graph_dict
-    print(graph_dict)
-    lcc_instance = gm.LargestComponent(graph_dict)
-    lcc = lcc_instance.find_lcc()
-    print(lcc)
-    closeness_instance = cm.PlotClosenessNetwork(lcc)  # Use LCC for withtin-chromosome plots
-    closeness_instance.plot_closeness(save_as=None, normalize=False, color_edges=True, layout="fr")
-
-
-# plot_closeness_network()
-
-def plot_betweenness_network():
-    graphs = gi.intra_1mb_graphs()
-    filter_instance = gm.FilterGraphs(graphs)
-    filter_instance.filter_graphs(cell_lines=["gsm2824367"], interaction_type="intra", condition="intra-split-raw")  # , chromosomes=["chr1"])
-    graph_dict = filter_instance.graph_dict
-    print(graph_dict)
-    # lcc_instance = gm.LargestComponent(graph_dict)
-    # lcc = lcc_instance.find_lcc()
-    # print(lcc)
-    betweenness_instance = cm.PlotBetweennessNetwork(graph_dict)  # Use LCC for withtin-chromosome plots
-    betweenness_instance.plot_betweenness(save_as=None, normalize=True, color_edges=False, layout="fr")
-
-
-# plot_betweenness_network()
 
 def combined_betweenness():
     # Instantiate the FilterGraphs class
@@ -950,16 +1147,14 @@ def combined_betweenness():
     betweenness_instance = PlotBetweennessNetwork(combined_graphs)
     betweenness_instance.plot_betweenness(save_as=None, normalize=True, color_edges=False, layout="fr")
 
-
 # combined_betweenness()
 
 def plot_degree():
     graph_dict = gi.intra_1mb_graphs()
-    degree_instance = cm.PlotDegreeDistribution(graph_dict)
+    degree_instance = PlotDegreeDistribution(graph_dict)
     degree_instance.calculate_degree()
     degree_instance.normalize_degree()
-    degree_instance.plot_degree_distribution(save_as=cm.Directories.degree_path / "degree_distribution.png", normalize=False)
-
+    degree_instance.plot_degree_distribution(save_as=Directories.degree_path / "degree_distribution_lines.png", normalize=False)
 
 # plot_degree()
 
@@ -969,9 +1164,7 @@ def closeness_plot():
     closeness_instance.calculate_closeness()
     closeness_instance.calculate_closeness_distribution()
     closeness_instance.normalize_closeness()
-    # closeness_instance.plot_closeness_distribution(save_as=None)
-    closeness_instance.plot_closeness_distribution(save_as=None)
-
+    closeness_instance.plot_closeness_distribution(save_as= Directories.closeness_path / "closeness_dist_line.png")
 
 # closeness_plot()
 
@@ -981,19 +1174,17 @@ def betweenness_plot():
     betweenness_instance.calculate_betweenness()
     betweenness_instance.calculate_betweenness_distribution()
     betweenness_instance.normalize_betweenness()
-    betweenness_instance.plot_betweenness_distribution(save_as=None)
-
+    betweenness_instance.plot_betweenness_distribution(save_as = Directories.betweenness_path / "betweenness_dist_scatter.png")
 
 # betweenness_plot()
 
 def centrality_correlation_plot():
     graph_dict = gi.intra_1mb_graphs()
     filter_instance = gm.FilterGraphs(graph_dict)
-    filtered = filter_instance.filter_graphs(cell_lines=["mcf10"], resolutions=[1000000], condition="intra-split-raw")
+    filtered = filter_instance.filter_graphs(cell_lines=["mcf10", "mcf7", "imr90", "huvec", "gsm2824367"], resolutions=[1000000], condition="intra-split-raw")
     centrality_instance = CentralityCorrelation(filtered)
     centrality_instance.calculate_centrality_correlation()
-    centrality_instance.plot_centrality_correlation(save_as=None, metric1="betweenness", metric2="degree")
-
+    centrality_instance.plot_centrality_correlation(save_as= Directories.correlation_cent_path / "betweenness_vs_closeness.png", metric1="closeness", metric2="betweenness")
 
 # centrality_correlation_plot()
 
@@ -1001,7 +1192,7 @@ def jaccard_plot():
     # Find graphs and filter on them
     graphs = gi.intra_1mb_graphs()
     filter_instance = gm.FilterGraphs(graphs)
-    filter_instance.filter_graphs(cell_lines=["mcf7", "imr90"], interaction_type="intra", resolutions=[1000000], condition="intra-split-raw")
+    filter_instance.filter_graphs(cell_lines=["mcf10", "mcf7", "imr90", "huvec", "gsm2824367"], interaction_type="intra", resolutions=[1000000], condition="intra-split-raw")
     graph_dict = filter_instance.graph_dict
 
     # Calculate Jaccard similarity and plot heatmap
@@ -1009,11 +1200,9 @@ def jaccard_plot():
     jaccard_instance.calculate_similarity(inter_similarity=False)
     jaccard_similarities = jaccard_instance.get_jaccard_similarity()
 
-
     # Create heatmap
     heatmap_instance = JaccardHeatmap(jaccard_similarities)
-    heatmap_instance.jaccard_barplot()
-
+    heatmap_instance.jaccard_barplot(save_as=Directories.jaccard_heatmap_path / "jaccard_heatmap_all.png")
 
 # jaccard_plot()
 
@@ -1101,6 +1290,7 @@ def exporter():
     exporter_instance.export_gff3(["degree", "betweenness", "closeness"])
 
 # exporter()
+
 
 if __name__ == "__main__":
     print("main running")

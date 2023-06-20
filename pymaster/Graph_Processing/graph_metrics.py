@@ -494,3 +494,5 @@ class GetGraph:
         graph_filter = FilterGraphs({self.graph_name: None})
         graph_filter.print_filtered_edges()
 
+if __name__ == "__main__":
+    print("RUN")

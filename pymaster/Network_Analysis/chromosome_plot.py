@@ -9,6 +9,13 @@ import re
 from Network_Analysis import centrality_metrics as cm
 from Graph_Processing import graph_generator as gg
 
+class Directories:
+    base_path = path.Path("/Users/GBS/Master/Figures")
+    chromosome_path = base_path / "chromosome_plots"
+
+    if not chromosome_path.exists():
+        chromosome_path.mkdir(parents=True)
+
 
 
 def cytoband_path():
@@ -86,7 +93,7 @@ class ChromosomePlotHelper:
                 node_data['chrom'].append(chrom)
                 node_data['start'].append(start)
                 node_data['end'].append(end)
-                node_data['colors'].append("gray")  # "('#2243a8')  # Blue looks good (change to green?)
+                node_data['colors'].append("blue")  # "('#2243a8')  # Blue looks good (change to green?)
 
         return node_data
 
@@ -130,7 +137,7 @@ class LinearChromosomePlot:
 
         chrom_height = 1
         chrom_spacing = 1
-        node_height = 0.4
+        node_height = 0.5
         node_padding = 0.1
         figsize = (6, 8)
 
@@ -151,12 +158,12 @@ class LinearChromosomePlot:
         for collection in self.chromosome_collections(ideo_df, chrom_ybase, chrom_height):
             ax.add_collection(collection)
 
-        for collection in self.chromosome_collections(nodes_df, node_ybase, node_height, alpha=0.5, linewidths=0):
+        for collection in self.chromosome_collections(nodes_df, node_ybase, node_height, alpha=0.7, linewidths=0):
             ax.add_collection(collection)
 
         if self.plot_helper.compartment_data is not None:
             compartment_df = pd.DataFrame.from_dict(self.plot_helper.compartment_data)
-            for collection in self.compartment_collections(compartment_df, chrom_ybase, chrom_height, alpha=0.5, linewidths=0):
+            for collection in self.compartment_collections(compartment_df, chrom_ybase, chrom_height, alpha=0.4, linewidths=0):
                 ax.add_collection(collection)
 
         # Convert x-axis labels to megabases
@@ -173,18 +180,18 @@ class LinearChromosomePlot:
 def linear_plot():
     graphs = gi.all_graphs()
     filter_instance = gm.FilterGraphs(graphs)
-    filter_instance.filter_graphs(cell_lines=["mcf10"], resolutions=[1000000], interaction_type="intra", condition="intra-split-raw", chromosomes=["chr1", "chr2"])
+    filter_instance.filter_graphs(cell_lines=["mcf10"], resolutions=[1000000], interaction_type="intra", condition="intra-split-norm")  # , chromosomes=["chr1", "chr2"])
     graph_dict = filter_instance.graph_dict
-    plot_helper = ChromosomePlotHelper(graph_dict, ["chr1", "chr2"])
+    plot_helper = ChromosomePlotHelper(graph_dict, "all")  # , ["chr1", "chr2"])
     lin_plot = LinearChromosomePlot(plot_helper)
     lin_plot.plot()
 
-# linear_plot()
+linear_plot()
 
 def compartment_plot():
     graphs = gi.all_graphs()
     filter_instance = gm.FilterGraphs(graphs)
-    filter_instance.filter_graphs(cell_lines=["mcf10"], resolutions=[1000000], interaction_type="intra", condition="intra-split-raw")  # , chromosomes=["chr1", "chr2"])
+    filter_instance.filter_graphs(cell_lines=["imr90"], resolutions=[1000000], interaction_type="intra", condition="intra-split-raw")  # , chromosomes=["chr1", "chr2"])
     graph_dict = filter_instance.graph_dict
     plot_helper = ChromosomePlotHelper(graph_dict, "all")  # , ["chr1", "chr2"])
 
@@ -213,4 +220,6 @@ def plot_degree_network_circ():
 # plot_degree_network_circ()
 
 
+if __name__ == "__main__":
+    print("RUN")
 

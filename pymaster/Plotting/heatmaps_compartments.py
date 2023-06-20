@@ -11,16 +11,20 @@ from sklearn.decomposition import PCA
 import h5py
 import time
 from scipy.stats import pearsonr
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 import seaborn as sns
 import cooler
-from scipy.stats import spearmanr
 
 
 # To generate .cool files from BEDPE count files using cooler cload pairs in command line:
 # cooler cload pairs -c1 1 -p1 2 -c2 4 -p2 5 --field count=7:dtype=int --zero-based
 # /Users/GBS/Master/Reference/hg19/chrom_hg19.sizes:1000000 /Users/GBS/Master/HiC-Data/testing_chrom_parallelization/output/temp_dir/bedpe/mcf10_1000000.bedpe matrix_mcf10.cool
 
+class Directories:
+    base_path = path.Path("/Users/GBS/Master/Figures")
+    compartment_path = base_path / "comparment_plots"
+
+    if not compartment_path.exists():
+        compartment_path.mkdir(parents=True)
 
 class Dirs:
 
@@ -197,6 +201,14 @@ def process_chromosome(chrom, cooler_obj, bins_df):
         print(f"Skipping chromosome {chrom} because it only contains one bin.")
         return None
 
+    # Trying this instead:
+    oe_matrix = chrom_matrix / chrom_matrix.mean(axis=1)
+
+    # Replace infinite values and nan values
+    oe_matrix = np.nan_to_num(oe_matrix)
+    oe_matrix[oe_matrix == np.inf] = 0
+    oe_matrix[oe_matrix == -np.inf] = 0
+
     # Compute the correlation matrix and replace NaN/infinite values
     correlation_matrix = np.corrcoef(chrom_matrix)
     correlation_matrix = np.nan_to_num(correlation_matrix)
@@ -204,6 +216,11 @@ def process_chromosome(chrom, cooler_obj, bins_df):
     # Compute the first principal component
     pca = PCA(n_components=1)
     principal_components = pca.fit_transform(correlation_matrix)
+
+    # TODO: Try this instead?
+    # Use cooler to decompose the matrix
+    # decomposition = cooler.tools.decompose(chrom_matrix, n_eigs=1)
+    # principal_components = decomposition["eigenvectors"]
 
     # Assign compartments based on the sign of PC1
     compartments = np.sign(principal_components)
@@ -446,3 +463,7 @@ def plot_heatmap2(cool_file, chrom=None, saveas=None, log=False):
     plt.show()
 
 # plot_heatmap2(Dirs.cool_path_intra / "imr90_250000_balanced.cool", chrom="chr2", saveas=Dirs.heatmap_dir_intra / "imr90_example250kb_chr2.png")
+
+if __name__ == "__main__":
+    print("RUN")
+

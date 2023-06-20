@@ -1,12 +1,10 @@
 # Import modules
 import igraph as ig
-import networkx as nx
 from Graph_Processing import graph_metrics as gm
 from Graph_Processing import graph_generator as gg
 from Graph_Processing import graph_instances as gi
 import matplotlib.pyplot as plt
 from pathlib import Path
-import cairocffi as cairo
 from multiprocessing import Pool
 
 # ig.config["plotting.backend"] = "cairo"
