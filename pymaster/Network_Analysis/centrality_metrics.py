@@ -135,7 +135,7 @@ class PlotDegreeNetwork(DegreeCentrality):
             # node_size = 0.8
             # edge_width = 1
             node_size = 50 / graph.vcount()
-            edge_width = 400 / graph.ecount()
+            edge_width = 120 / graph.ecount()
             edge_colors = [self.calculate_color(edge) for edge in graph.es] if color_edges else 'black'
             visual_style = {
                 "layout": layout,
@@ -209,6 +209,7 @@ class PlotClosenessNetwork(ClosenessCentrality):
             # Map degree to a color
             color = plt.cm.viridis(closeness / max(graph.closeness()))
             return color
+
 
     def plot_closeness(self, normalize=False, color_edges=False, save_as=None, layout=None):
         for graph_name, graph in self.graph_dict.items():
@@ -293,7 +294,30 @@ class PlotBetweennessNetwork(BetweennessCentrality):
             color = plt.cm.viridis(betweenness / max(graph.betweenness()))
             return color
 
-    def plot_betweenness(self, normalize=False, color_edges=False, save_as=None, layout=None):
+    @staticmethod
+    def plot_legend(graph, top_n):
+        print(graph.vs["betweenness"])
+        # Get top_n nodes with the highest betweenness
+        top_nodes = sorted(graph.vs, key=lambda v: v["betweenness"], reverse=True)[:top_n]
+
+        # Generate colors for the legend
+        colors = [plt.cm.viridis(node["betweenness"] / max(graph.betweenness())) for node in top_nodes]
+
+        # Change labels to Mega base pairs (Mb) format without decimal places and append degree
+        labels = ["-".join(str(int(pos)//10**6) + 'Mb' for pos in node["location"].split('-')) + ': ' + str(int(round(node["betweenness"]))) for node in top_nodes]
+
+        # Create legend handles
+        legend_elements = [Line2D([0], [0], marker='o', color='w', label=label,
+                                  markerfacecolor=color, markersize=10) for color, label in zip(colors, labels)]
+
+        # Position the legend to avoid overlap with the network
+        # Change the values in the tuple to adjust the position
+        plt.legend(handles=legend_elements, loc=(1, 0), title_fontsize=5)
+
+        # Return the legend handles
+        return legend_elements
+
+    def plot_betweenness(self, normalize=False, color_edges=False, save_as=None, layout=None, legend_top_n=5):
         for graph_name, graph in self.graph_dict.items():
             fig, ax = plt.subplots()
             graph_name = '_'.join(graph_name.split('_')[1:2])
@@ -304,8 +328,8 @@ class PlotBetweennessNetwork(BetweennessCentrality):
 
             colors = [list(color) for color in plt.cm.viridis(betweenness)]
 
-            node_size = 50 / graph.vcount()
-            edge_width = 400 / graph.ecount()
+            node_size = 40 / graph.vcount()
+            edge_width = 100 / graph.ecount()
             edge_colors = [self.calculate_color(edge) for edge in graph.es] if color_edges else 'gray'
             visual_style = {
                 "layout": layout,
@@ -332,9 +356,12 @@ class PlotBetweennessNetwork(BetweennessCentrality):
             else:
                 norm = Normalize(vmin=min(graph.betweenness()), vmax=max(graph.betweenness()))
 
-            sm = plt.cm.ScalarMappable(cmap=plt.cm.viridis, norm=norm)
-            sm.set_array([])
-            plt.colorbar(sm, ax=ax, orientation='vertical', label='Betweenness')
+            # sm = plt.cm.ScalarMappable(cmap=plt.cm.viridis, norm=norm)
+            # sm.set_array([])
+            # plt.colorbar(sm, ax=ax, orientation='vertical', label='Betweenness')
+
+            legend_elements = self.plot_legend(graph, legend_top_n)
+            ax.legend(handles=legend_elements, title="Bottleneck nodes", loc="best")
 
             # Save the plot conditionally
             if save_as:
@@ -359,7 +386,7 @@ def plot_degree_network():
     # Added the parameter `legend_top_n=5` to plot top 5 nodes with the highest degree in the legend
     degree_instance.plot_graph(save_as=Directories.degree_path / "MCF7_all_degree_network.png", normalize=True, color_edges=False, layout="fr", legend_top_n=5)
 
-plot_degree_network()
+# plot_degree_network()
 
 def plot_closeness_network():
     graphs = gi.intra_1mb_graphs()
@@ -370,23 +397,23 @@ def plot_closeness_network():
     lcc_instance = gm.LargestComponent(graph_dict)
     lcc = lcc_instance.find_lcc()
     print(lcc)
-    closeness_instance = cm.PlotClosenessNetwork(lcc)  # Use LCC for withtin-chromosome plots
+    closeness_instance = PlotClosenessNetwork(lcc)  # Use LCC for withtin-chromosome plots
     closeness_instance.plot_closeness(save_as=None, normalize=False, color_edges=True, layout="fr")
 
-# plot_closeness_network()
+plot_closeness_network()
 
 def plot_betweenness_network():
     graphs = gi.intra_1mb_graphs()
     filter_instance = gm.FilterGraphs(graphs)
-    filter_instance.filter_graphs(cell_lines=["gsm2824367"], interaction_type="intra", condition="intra-split-raw")  # , chromosomes=["chr1"])
+    filter_instance.filter_graphs(cell_lines=["mcf7"], interaction_type="intra", condition="intra-split-raw", chromosomes=["chr9"])
     graph_dict = filter_instance.graph_dict
-    print(graph_dict)
-    # lcc_instance = gm.LargestComponent(graph_dict)
-    # lcc = lcc_instance.find_lcc()
+    # print(graph_dict)
+    lcc_instance = gm.LargestComponent(graph_dict)
+    lcc = lcc_instance.find_lcc()
     # print(lcc)
-    betweenness_instance = cm.PlotBetweennessNetwork(graph_dict)  # Use LCC for withtin-chromosome plots
-    betweenness_instance.plot_betweenness(save_as=None, normalize=True, color_edges=False, layout="fr")
-
+    betweenness_instance = PlotBetweennessNetwork(lcc)  # Use LCC for withtin-chromosome plots
+    betweenness_instance.calculate_betweenness()
+    betweenness_instance.plot_betweenness(normalize=True, legend_top_n=5, color_edges=False, layout="fr", save_as=Directories.betweenness_path / "MCF7_chr9_betweenness_network.png")
 
 # plot_betweenness_network()
 
@@ -1064,7 +1091,7 @@ def find_top_hubs():
     graph_dict = filter_instance.graph_dict
     hub_instance = find_hub_nodes(graph_dict)
     # hub_instance.print_top_degree_nodes(10)
-    hub_instance.plot_overlap_counts(hub_instance, top_n=50, metric="betweenness", save_as=Directories.overlap_path / "50_betweenness_MCF10-A_MCF7_overlap.png")
+    hub_instance.plot_overlap_counts(hub_instance, top_n=100, metric="betweenness", save_as=Directories.overlap_path / "100_betweenness_MCF10-A_MCF7_overlap.png")
 
 # find_top_hubs()
 
