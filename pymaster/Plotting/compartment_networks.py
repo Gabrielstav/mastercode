@@ -5,6 +5,9 @@ import matplotlib.pyplot as plt
 from Graph_Processing import graph_metrics as gm
 from Graph_Processing import graph_instances as gi
 import numpy as np
+import pandas as pd
+import seaborn as sns
+from Network_Analysis import centrality_metrics as cm
 
 def compartment_paths(cell_line=None):
 
@@ -273,21 +276,66 @@ class CompartmentComparison:
         plt.show()
 
     def plot_comparison_chromosome(self, save_as=None):
-        results = self.compare_compartments_chromosome()  # Call the new method here
-        labels = ['No Overlap', 'No Change', 'Active', 'Inactive']
-        n = len(results)  # Number of chromosomes
-        fig, axs = plt.subplots(n, 1, figsize=(10, 5 * n))
+        results = self.compare_compartments_chromosome()
 
-        for i, (chromosome, counts) in enumerate(results.items()):
-            axs[i].bar(labels, [counts[label] for label in labels])
-            axs[i].set_title(f'Comparison of Compartment Changes for {chromosome}')
-            axs[i].set_xlabel('Compartments')
-            axs[i].set_ylabel('Count')
+        labels = ['No Change', 'Active', 'Inactive']
+        colors = ['gray', 'red', 'blue']
+
+        chromosomes = sorted(results.keys(), key=lambda x: int(x[3:]) if x[3:].isdigit() else float('inf'))
+        chromosome_labels = [chrom.replace("chr", "") for chrom in chromosomes]  # Remove "chr" from chromosome name
+
+        # Remove 'No Overlap' from the results
+        for chromosome in results:
+            results[chromosome].pop('No Overlap', None)
+
+        x = np.arange(len(chromosomes))  # The label locations
+        width = 0.25  # The width of the bars
+
+        fig, ax = plt.subplots()
+
+        # Create bars for each label
+        for i, label in enumerate(labels):
+            ax.bar(x - width / 2 + i * width, [results[chromosome][label] for chromosome in chromosomes], width, label=label, color=colors[i])
+
+        # Add some text for labels, title, and custom x-axis tick labels, etc.
+        ax.set_xlabel('Chromosome')
+        ax.set_ylabel('Node Count')
+        ax.set_title('Compartment Change from MCF-10A to MCF-7')
+        ax.set_xticks(x)
+        ax.set_xticklabels(chromosome_labels)
+        ax.legend()
 
         fig.tight_layout()
         if save_as:
             plt.savefig(save_as, dpi=300)
         plt.show()
+
+    def plot_comparison_chromosome_stacked(self, save_as=None):
+        results = self.compare_compartments_chromosome()
+        chromosomes = sorted(results.keys(), key=lambda x: int(x[3:]) if x[3:].isdigit() else float('inf'))
+        labels = ['No Change', 'Active', 'Inactive']
+        label_colors = {'No Change': 'gray', 'Active': 'red', 'Inactive': 'blue'}
+
+        x = np.arange(len(chromosomes))
+        width = 0.8
+
+        bottom = np.zeros(len(chromosomes))
+        for label in labels:
+            counts = [results[chromosome][label] for chromosome in chromosomes]
+            plt.bar(x, counts, width, bottom=bottom, label=label, color=label_colors[label])
+            bottom += np.array(counts)
+
+        plt.xticks(x, [chromosome[3:] for chromosome in chromosomes], rotation=45)
+        plt.xlabel('Chromosome')
+        plt.ylabel('Node Count')
+        plt.title('Compartment Change from MCF-10A to MCF-7')
+        plt.legend()
+
+        if save_as:
+            plt.savefig(save_as, dpi=300)
+        plt.show()
+
+
 
 
 def compare_compartments():
@@ -314,10 +362,9 @@ def compare_compartments():
 
     # Compare compartments
     comparison = CompartmentComparison(reference_graph, perturbed_graph)
-    comparison.plot_comparison_chromosome(save_as=plot_dirs.comp_path / "mcf10_mcf10_overall_compartments_comparison")
+    comparison.plot_comparison_chromosome(save_as=plot_dirs.comp_path / "mcf10_mcf10_unstacked.png")
 
-
-compare_compartments()
+# compare_compartments()
 
 
 def compare_compartments_overall():
@@ -347,6 +394,72 @@ def compare_compartments_overall():
     # comparison.plot_comparison(save_as=plot_dirs.comp_path / "mcf10_mcf10_overall_compartments_comparison")
 
 # compare_compartments_overall()
+
+class CentralityCompartmentComparison:
+
+    def __init__(self, reference_graph, perturbed_graph):
+        self.reference_graph = reference_graph
+        self.perturbed_graph = perturbed_graph
+
+    def plot(self, save_as=None):
+        # Extract degrees and compartment status from each graph
+        degrees_ref = [(node['degree'], node['compartment']) for node in self.reference_graph.vs]
+        degrees_per = [(node['degree'], node['compartment']) for node in self.perturbed_graph.vs]
+
+        # Combine data and convert to pandas DataFrame for easier plotting
+        degrees_all = degrees_ref + degrees_per
+        df = pd.DataFrame(degrees_all, columns=['Degree', 'Compartment'])
+
+        # Plot degree distribution using seaborn for automatic histogram and kde
+        plt.figure(figsize=(10, 8))
+        sns.histplot(df, x='Degree', hue='Compartment', kde=True, stat="density", common_norm=False)
+
+        plt.title('Degree Distribution by Compartment')
+        plt.xlabel('Degree')
+        plt.ylabel('Density')
+
+        if save_as:
+            plt.savefig(save_as, dpi=300)
+
+        plt.show()
+
+def degree_distribution_of_compartment_nodes():
+
+    # Load and filter reference and perturbed graphs
+    graphs_ref = gi.all_graphs()
+    filter_instance_ref = gm.FilterGraphs(graphs_ref)
+    filter_instance_ref.filter_graphs(cell_lines=["mcf10"], interaction_type="intra", condition="intra-split-raw", resolutions=[1000000])  # , chromosomes=["chr1"])
+    reference_graph = filter_instance_ref.graph_dict
+
+    graphs_per = gi.all_graphs()
+    filter_instance_perturbed = gm.FilterGraphs(graphs_per)
+    filter_instance_perturbed.filter_graphs(cell_lines=["mcf7"], interaction_type="intra", condition="intra-split-raw", resolutions=[1000000])  # , chromosomes=["chr1"])
+    perturbed_graph = filter_instance_perturbed.graph_dict
+
+    # Call compartments
+    annotater_ref = CompartmentNetworkAnnotator(compartment_paths("mcf10"), reference_graph)
+    annotated_graphs_ref = annotater_ref.annotate_networks()
+    annotater_ref.graph_dict = annotated_graphs_ref  # Update the graph_dict attribute with the annotated graphs
+
+    annotater_per = CompartmentNetworkAnnotator(compartment_paths("mcf7"), perturbed_graph)
+    annotated_graphs_per = annotater_per.annotate_networks()
+    annotater_per.graph_dict = annotated_graphs_per
+
+    for graph_ref, graph_name_ref, graph_per, graph_name_per in [annotated_graphs_ref.items(), annotated_graphs_per.items()]:
+        graph_ref.vs['degree'] = graph_ref.degree()
+        graph_ref.vs['closeness'] = graph_ref.closeness()
+        graph_ref.vs['betweenness'] = graph_ref.betweenness()
+        graph_per.vs['degree'] = graph_per.degree()
+        graph_per.vs['closeness'] = graph_per.closeness()
+        graph_per.vs['betweenness'] = graph_per.betweenness()
+
+    degree_distribution = CentralityCompartmentComparison(annotated_graphs_ref, annotated_graphs_per)
+    degree_distribution.plot()
+
+degree_distribution_of_compartment_nodes()
+
+
+
 
 
 

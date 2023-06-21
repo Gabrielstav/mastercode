@@ -190,6 +190,7 @@ def linear_plot():
 
 # linear_plot()
 
+
 def compartment_plot():
     graphs = gi.all_graphs()
     filter_instance = gm.FilterGraphs(graphs)
