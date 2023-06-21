@@ -21,6 +21,7 @@ from matplotlib.lines import Line2D
 rd.seed = 42
 
 
+
 # TODO: Combine graphs (inter + intra, and mcf7 + mcf10) and visualize shared nodes and edges, and inter vs intra edges ?
 # TODO: Make Jaccard edge similarity visualizaiton (Heatmap or barplot?)
 
@@ -210,21 +211,37 @@ class PlotClosenessNetwork(ClosenessCentrality):
             color = plt.cm.viridis(closeness / max(graph.closeness()))
             return color
 
+    @staticmethod
+    def plot_legend(graph, top_n):
+        top_nodes = sorted(graph.vs, key=lambda v: v["closeness"], reverse=True)[:top_n]
+        max_closeness = max(graph.vs["closeness"])
 
-    def plot_closeness(self, normalize=False, color_edges=False, save_as=None, layout=None):
+        colors = [plt.cm.viridis(node["closeness"] / max_closeness) for node in top_nodes]
+        labels = ["-".join(str(int(pos)//10**6) + 'Mb' for pos in node["location"].split('-')) + ': ' + str(round(node["closeness"], 3)) for node in top_nodes]
+
+
+        legend_elements = [Line2D([0], [0], marker='o', color='w', label=label,
+                                  markerfacecolor=color, markersize=10) for color, label in zip(colors, labels)]
+
+        plt.legend(handles=legend_elements, loc=(1, 0))
+        return legend_elements
+
+    def plot_closeness(self, normalize=False, color_edges=False, save_as=None, layout=None, legend_top_n=5):
         for graph_name, graph in self.graph_dict.items():
             fig, ax = plt.subplots()
             graph_name = '_'.join(graph_name.split('_')[1:2])
+
             if normalize:
-                closeness = [closeness / max(graph.closeness()) for closeness in graph.closeness()]
+                closeness = [clos / max(graph.closeness()) for clos in graph.closeness()]  # Normalize closeness
             else:
-                closeness = graph.closeness()
+                max_closeness = max(graph.closeness())
+                closeness = [clos / max_closeness for clos in graph.closeness()]  # Normalize degrees for color mapping
 
-            colors = [list(color) for color in plt.cm.viridis(closeness)]  # Convert numpy.ndarray to list of lists
+            colors = [list(color) for color in plt.cm.viridis(closeness)]
 
-            node_size = 80 / graph.vcount()
-            edge_width = 350 / graph.ecount()
-            edge_colors = [self.calculate_color(edge) for edge in graph.es] if color_edges else 'gray'
+            node_size = 25 / graph.vcount()
+            edge_width = 40 / graph.ecount()
+            edge_colors = 'gray'
             visual_style = {
                 "layout": layout,
                 "vertex_size": node_size,
@@ -237,20 +254,22 @@ class PlotClosenessNetwork(ClosenessCentrality):
                 "vertex_label_dist": 10,
                 "vertex_label_angle": 100,
                 "vertex_label_color": "black",
-                "vertex_frame_color": colors,  # Remove black outline, use in circle layout
-                # "vertex_label": graph.vs["location"],  # Add location as label, can be used in small graphs
+                "vertex_frame_color": colors,
             }
+
             ig.plot(graph, **visual_style, target=ax)
-            plt.title(graph_name)  # Add a title
+            plt.title(graph_name)
+            legend_elements = self.plot_legend(graph, legend_top_n)
+            ax.legend(handles=legend_elements, title="Central nodes", loc="best", frameon=True, fontsize='xx-small')
 
             # Create a colorbar
-            if normalize:
-                norm = Normalize(vmin=min(closeness), vmax=max(closeness))
-            else:
-                norm = Normalize(vmin=min(graph.closeness()), vmax=max(graph.closeness()))
-            sm = plt.cm.ScalarMappable(cmap=plt.cm.viridis, norm=norm)
-            sm.set_array([])
-            plt.colorbar(sm, ax=ax, orientation='vertical', label='Closeness')
+            # if normalize:
+            #     norm = Normalize(vmin=min(closeness), vmax=max(closeness))
+            # else:
+            #     norm = Normalize(vmin=min(graph.closeness()), vmax=max(graph.closeness()))
+            # sm = plt.cm.ScalarMappable(cmap=plt.cm.viridis, norm=norm)
+            # sm.set_array([])
+            # plt.colorbar(sm, ax=ax, orientation='vertical', label='Closeness')
 
             # Save the plot conditionally
             if save_as:
@@ -378,29 +397,28 @@ def plot_degree_network():
     # print(graph_dict)
     lcc_instance = gm.LargestComponent(graph_dict)
     lcc = lcc_instance.find_lcc()
-    # print(lcc)
+    print(lcc)
     degree_instance = PlotDegreeNetwork(graph_dict)  # Use LCC for within-chromosome plots
     degree_instance.calculate_degree()
     degree_instance.normalize_degree()
 
     # Added the parameter `legend_top_n=5` to plot top 5 nodes with the highest degree in the legend
-    degree_instance.plot_graph(save_as=Directories.degree_path / "MCF7_all_degree_network.png", normalize=True, color_edges=False, layout="fr", legend_top_n=5)
+    degree_instance.plot_graph(save_as=Directories.degree_path / "MCF7_all_degree_network.png", normalize=False, color_edges=True, layout="fr", legend_top_n=5)
 
 # plot_degree_network()
 
 def plot_closeness_network():
     graphs = gi.intra_1mb_graphs()
     filter_instance = gm.FilterGraphs(graphs)
-    filter_instance.filter_graphs(cell_lines=["mcf7"], interaction_type="intra", chromosomes=["chr1"])
+    filter_instance.filter_graphs(cell_lines=["mcf10"], interaction_type="intra", chromosomes=["chr6"])
     graph_dict = filter_instance.graph_dict
-    print(graph_dict)
     lcc_instance = gm.LargestComponent(graph_dict)
     lcc = lcc_instance.find_lcc()
-    print(lcc)
     closeness_instance = PlotClosenessNetwork(lcc)  # Use LCC for withtin-chromosome plots
-    closeness_instance.plot_closeness(save_as=None, normalize=False, color_edges=True, layout="fr")
+    closeness_instance.calculate_closeness()
+    closeness_instance.plot_closeness(normalize=True, color_edges=False, layout="fr", legend_top_n=5, save_as=Directories.closeness_path / "MCF10_chr6_closeness_network.png")
 
-plot_closeness_network()
+# plot_closeness_network()
 
 def plot_betweenness_network():
     graphs = gi.intra_1mb_graphs()
@@ -997,7 +1015,8 @@ class find_hub_nodes:
             closeness = graph.closeness()
             # Get indices of top nodes
             top_nodes_indices = sorted(range(len(closeness)), key=lambda i: closeness[i], reverse=True)[:top_n]
-            top_closeness_nodes[cell_line] = top_nodes_indices
+            top_nodes = [(graph.vs[i]["name"], closeness[i]) for i in top_nodes_indices]  # assuming "name" attribute holds the name of the node
+            top_closeness_nodes[cell_line] = top_nodes
         return top_closeness_nodes
 
     def print_top_degree_nodes(self, top_n):
@@ -1028,6 +1047,8 @@ class find_hub_nodes:
             top_nodes_func = self.find_top_degree_nodes
         elif metric == 'betweenness':
             top_nodes_func = self.find_top_betweenness_nodes
+        elif metric == 'closeness':
+            top_nodes_func = self.find_top_closeness_nodes
         else:
             raise ValueError(f"Invalid metric: {metric}. Choose 'degree' or 'betweenness'.")
 
@@ -1078,7 +1099,7 @@ class find_hub_nodes:
 
         plt.xlabel('Chromosomes')
         plt.ylabel('Node Count')
-        plt.title('Betweenness node overlap between MCF-7 and MCF-10A')
+        plt.title('Closeness node overlap between MCF-7 and MCF-10A')
         plt.legend()
         if save_as:
             plt.savefig(save_as, dpi=300)
@@ -1091,7 +1112,7 @@ def find_top_hubs():
     graph_dict = filter_instance.graph_dict
     hub_instance = find_hub_nodes(graph_dict)
     # hub_instance.print_top_degree_nodes(10)
-    hub_instance.plot_overlap_counts(hub_instance, top_n=100, metric="betweenness", save_as=Directories.overlap_path / "100_betweenness_MCF10-A_MCF7_overlap.png")
+    hub_instance.plot_overlap_counts(hub_instance, top_n=100, metric="closeness", save_as=Directories.overlap_path / "100_closeness_MCF10-A_MCF7_overlap.png")
 
 # find_top_hubs()
 

@@ -130,7 +130,7 @@ class LinearChromosomePlot:
             yield plt.broken_barh(
                 xranges, yrange, facecolors=group['colors'], alpha=alpha, linewidths=linewidths)
 
-    def plot(self):
+    def plot(self, save_as=None):
         ideo_df = pd.DataFrame.from_dict(self.plot_helper.ideogram_data)
         nodes_df = pd.DataFrame.from_dict(self.plot_helper.node_data)
         compartments_df = pd.DataFrame.from_dict(self.plot_helper.compartment_data)
@@ -174,19 +174,21 @@ class LinearChromosomePlot:
         ax.set_yticks([chrom_centers[i] for i in self.chromosomes])
         ax.set_yticklabels(self.chromosomes)
         ax.axis('tight')
+        if save_as is not None:
+            plt.savefig(save_as, dpi=300)
         plt.show()
 
 
 def linear_plot():
     graphs = gi.all_graphs()
     filter_instance = gm.FilterGraphs(graphs)
-    filter_instance.filter_graphs(cell_lines=["mcf10"], resolutions=[1000000], interaction_type="intra", condition="intra-split-norm")  # , chromosomes=["chr1", "chr2"])
+    filter_instance.filter_graphs(cell_lines=["mcf7"], resolutions=[1000000], interaction_type="intra", condition="intra-split-norm")  # , chromosomes=["chr1", "chr2"])
     graph_dict = filter_instance.graph_dict
     plot_helper = ChromosomePlotHelper(graph_dict, "all")  # , ["chr1", "chr2"])
     lin_plot = LinearChromosomePlot(plot_helper)
-    lin_plot.plot()
+    lin_plot.plot(save_as=Directories.chromosome_path / "mcf7_chrom.png")
 
-linear_plot()
+# linear_plot()
 
 def compartment_plot():
     graphs = gi.all_graphs()

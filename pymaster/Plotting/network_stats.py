@@ -1,6 +1,5 @@
 # Import modules
 import igraph as ig
-from Graph_Processing import graph_metrics as gm
 from Graph_Processing import graph_instances as gi
 import matplotlib.pyplot as plt
 from matplotlib import cm
@@ -63,6 +62,99 @@ class GetMetrics:
             lcc_ratio[(graph['cell_line'], graph['norm_status'], graph['resolution'])] = (graph.components().giant().vcount()/graph.vcount())
         return lcc_ratio
 
+    def get_chromosome_lcc(self):
+        lcc_sizes = {}
+        for name, graph in self.graph_dict.items():
+            # Group vertices by chromosome
+            vertices_by_chromosome = {}
+            for idx in range(len(graph.vs)):
+                chrom = graph.vs[idx]['chromosome']
+                if chrom not in vertices_by_chromosome:
+                    vertices_by_chromosome[chrom] = []
+                vertices_by_chromosome[chrom].append(idx)
+
+            # Create subgraph for each chromosome and find its LCC
+            for chrom, vertices in vertices_by_chromosome.items():
+                subgraph = graph.subgraph(vertices)
+                lcc_size = subgraph.components().giant().vcount()
+                key = (chrom, graph['cell_line'])
+                if key not in lcc_sizes or lcc_size > lcc_sizes[key]:
+                    lcc_sizes[key] = lcc_size
+
+        return lcc_sizes
+
+    def get_chromosome_lcc_ratio(self):
+        lcc_ratios = {}
+        for name, graph in self.graph_dict.items():
+            # Group vertices by chromosome
+            vertices_by_chromosome = {}
+            for idx in range(len(graph.vs)):
+                chrom = graph.vs[idx]['chromosome']
+                if chrom not in vertices_by_chromosome:
+                    vertices_by_chromosome[chrom] = []
+                vertices_by_chromosome[chrom].append(idx)
+
+            # Create subgraph for each chromosome and find its LCC
+            for chrom, vertices in vertices_by_chromosome.items():
+                subgraph = graph.subgraph(vertices)
+                lcc_size = subgraph.components().giant().vcount()
+                lcc_ratio = lcc_size / subgraph.vcount()
+                key = (chrom, graph['cell_line'])
+                lcc_ratios[key] = lcc_ratio
+
+        return lcc_ratios
+
+    def chromosome_sort_key(chrom):
+        try:
+            return int(chrom[3:])
+        except ValueError:
+            return float("100")
+
+    def plot_lcc_chromosomes(self, save_as=None):
+        lcc_sizes = self.get_chromosome_lcc()
+        chromosomes = sorted(list(set(chrom for chrom, _ in lcc_sizes.keys())), key=GetMetrics.chromosome_sort_key)
+        cell_lines = sorted(list(set(cell_line for _, cell_line in lcc_sizes.keys())))
+
+        # Prepare data for bar plot
+        cell_line_colors = ['b', 'r']
+        bar_width = 0.35
+        x = np.arange(len(chromosomes))  # the label locations
+
+        for i, cell_line in enumerate(cell_lines):
+            values = [lcc_sizes.get((chrom, cell_line), 0) for chrom in chromosomes]
+            plt.bar(x + i * bar_width - bar_width / 2, values, color=cell_line_colors[i], width=bar_width, label=cell_line)
+
+        plt.xlabel("Chromosome")
+        plt.ylabel("Number of nodes in LCC")
+        plt.title("Largest Connected Component Size")
+        plt.xticks(x, [chrom[3:] for chrom in chromosomes])  # remove 'chr' from chromosome names
+        plt.legend()
+
+        if save_as:
+            plt.savefig(save_as, dpi=300, format='png')
+        plt.show()
+
+    def plot_lcc_ratio_chromosomes(self, save_as=None):
+        lcc_ratios = self.get_chromosome_lcc_ratio()
+        chromosomes = sorted(list(set(chrom for chrom, _ in lcc_ratios.keys())), key=GetMetrics.chromosome_sort_key)
+
+        # Prepare data for bar plot
+        cell_lines = sorted(list(set(cell_line for _, cell_line in lcc_ratios.keys())))
+        cell_line_colors = ['b', 'r']
+        bar_width = 0.35
+        for i, cell_line in enumerate(cell_lines):
+            values = [lcc_ratios.get((chrom, cell_line), 0) for chrom in chromosomes]
+            plt.bar(np.arange(len(chromosomes)) + i * bar_width, values, color=cell_line_colors[i], width=bar_width, label=cell_line)
+
+        plt.xlabel("Chromosome")
+        plt.ylabel("LCC proprotion")
+        plt.title("LCC Size proportion to Network Size")
+        plt.xticks(np.arange(len(chromosomes)), [chrom[3:] for chrom in chromosomes])
+        plt.legend()
+
+        if save_as:
+            plt.savefig(save_as, dpi=300, format='png')
+        plt.show()
 
     # TODO: Maybe
     def get_component_size_distribution(self):
@@ -355,6 +447,23 @@ class GetMetrics:
             plt.savefig(save_as, dpi=300, format='png')
         plt.show()
 
+def get_lcc_chromosomes():
+    graphs = gi.all_graphs()
+    filter_instance = gm.FilterGraphs(graphs)
+    filter_instance.filter_graphs(cell_lines=["mcf10", "mcf7"], condition="intra-split-raw", resolutions=[1000000])
+    graph_dict = filter_instance.graph_dict
+    size = GetMetrics(graph_dict)
+    size.plot_lcc_chromosomes(save_as= Directories.networkstats_path / "mcf10-mcf7_lcc_chromosome_plot.png")
+get_lcc_chromosomes()
+
+def get_lcc_chromosomes_ratio():
+    graphs = gi.all_graphs()
+    filter_instance = gm.FilterGraphs(graphs)
+    filter_instance.filter_graphs(cell_lines=["mcf10", "mcf7"], condition="intra-split-raw", resolutions=[1000000])
+    graph_dict = filter_instance.graph_dict
+    size = GetMetrics(graph_dict)
+    size.plot_lcc_ratio_chromosomes(save_as= Directories.networkstats_path / "mcf10-mcf7_lcc_chromosome_ratio_plot.png")
+# get_lcc_chromosomes_ratio()
 
 def get_size():
     graphs = gi.all_graphs()
@@ -430,6 +539,9 @@ def component_size_distribution():
     size.plot_component_size_distribution(save_as= None)  # Directories.networkstats_path / "intra_component_size_distribution_plot.png")
 
 # component_size_distribution()
+
+
+
 
 
 if __name__ == "__main__":

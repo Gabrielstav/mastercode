@@ -26,8 +26,8 @@ class Directories:
     if not compartment_path.exists():
         compartment_path.mkdir(parents=True)
 
-class Dirs:
 
+class Dirs:
     root_path = path.Path("/Users/GBS/Master/HiC-Data")
     base_path_figures = path.Path("/Users/GBS/Master/Figures")
 
@@ -40,8 +40,9 @@ class Dirs:
     cool_path_intra = root_path / "coolfiles/intra"
     cool_path_inter = root_path / "coolfiles/inter"
 
+
     heatmap_dir_intra = base_path_figures / "heatmaps/intra"
-    distance_dir_intra= base_path_figures / "decay_distances"
+    distance_dir_intra = base_path_figures / "decay_distances"
     heatmap_dir_inter = base_path_figures / "heatmaps/inter"
     distance_dir_inter = base_path_figures / "decay_distances/inter"
 
@@ -79,11 +80,33 @@ def bedpe_to_cool(bedpe_file, chrom_sizes_file, bin_size, cool_file):
     sp.run(command, check=True)
 
 
+def bedpe_to_cool_py(bedpe_file, chrom_file, resolution, output_file):
 
-# bedpe_to_cool("/Users/GBS/Master/HiC-Data/bedpe_files/bedpe_intra/imr90_120000.bedpe", "/Users/GBS/Master/Reference/hg19/chrom_hg19.sizes", 1000000, "/Users/GBS/Master/HiC-Data/coolfiles/intra/imr90_1000000.cool")
+    # API is not working
+    """
+    Convert a BEDPE file to a COOL file using the Cooler Python API.
+
+    Parameters:
+    bedpe_file (str): The path to the BEDPE file.
+    chrom_file (str): The path to the chromosome sizes file.
+    resolution (int): The resolution in base pairs.
+    output_file (str): The path to the output COOL file.
+    """
+    # Load the BEDPE file into a DataFrame
+    pairs_df = pd.read_csv(bedpe_file, sep='\t', names=['chrom1', 'start1', 'end1', 'chrom2', 'start2', 'end2', 'count'])
+
+    # Generate the bins
+    chromsizes = cooler.util.read_chromsizes(chrom_file)
+    bins = cooler.binnify(chromsizes, resolution)
+
+    # Generate the pixels
+    pixels = cooler.tools.digest(bins, pairs_df, cooler.util.get_binsize(resolution))
+
+    # Create the COOL file
+    cooler.create_cooler(cool_uri=f'{output_file}::{resolution}', bins=bins, pixels=pixels)
 
 
-
+# bedpe_to_cool_py("/Users/GBS/Master/HiC-Data/bedpe_files/bedpe_intra/mcf7_1000000.bedpe", "/Users/GBS/Master/Reference/hg19/chrom_hg19.sizes", 1000000, "/Users/GBS/Master/HiC-Data/coolfiles/intra/mcf7_1000000.cool")
 
 
 def plot_contact_decay(cool_path, log_bins=True, bin_num=100):
@@ -136,6 +159,7 @@ def plot_contact_decay(cool_path, log_bins=True, bin_num=100):
     plt.ylabel("Average Interaction Frequency")
     plt.show()
 
+
 # plot_contact_decay("/Users/GBS/matrix_mcf10.cool", log_bins=True, bin_num=100)
 
 
@@ -156,6 +180,7 @@ def balance_cooler_file(cool_file):
         pixels['weight'] = pixels['weight1'] * pixels['weight2']
         return c, bins, pixels
 
+
 def validate_and_save_cooler(bins, pixels, balanced_file):
     """Save a balanced cooler file and validate it."""
     cooler.create_cooler(cool_uri=str(balanced_file), bins=bins, pixels=pixels)
@@ -169,15 +194,17 @@ def validate_and_save_cooler(bins, pixels, balanced_file):
         print("File does not exist.")
     print(f"The cooler file is now balanced and saved to {balanced_file}.")
 
-def create_cooler_file():
-    bedpe_file = Dirs.bedpe_path_intra / "imr90_120000.bedpe"
-    chrom_file = Dirs.chrom_sizes_file
-    resolution = 120000
-    output_file = Dirs.cool_path_intra / "imr90_120000.cool"
 
-    bedpe_to_cool(bedpe_file, chrom_file, resolution, output_file)
+def create_cooler_file():
+    bedpe_file = Dirs.bedpe_path_intra / "mcf7_1000000.bedpe"
+    chrom_file = Dirs.chrom_sizes_file
+    resolution = 1000000
+    output_file = Dirs.cool_path_intra / "mcf7_1000000.cool"
+
+    bedpe_to_cool_py(bedpe_file, chrom_file, resolution, output_file)
 
 # create_cooler_file()
+
 
 def balance_and_save_cooler(cool_file, balanced_file):
     """Balance and save a cooler file."""
@@ -185,7 +212,7 @@ def balance_and_save_cooler(cool_file, balanced_file):
     validate_and_save_cooler(bins, pixels, balanced_file)
 
 
-# balance_and_save_cooler("/Users/GBS/Master/HiC-Data/coolfiles/intra/mcf7_50000.cool", "/Users/GBS/Master/HiC-Data/coolfiles/intra/mcf7_1000000_balanced.cool")
+# balance_and_save_cooler("/Users/GBS/Master/HiC-Data/coolfiles/inter/mcf7_1000000.cool", "/Users/GBS/Master/HiC-Data/coolfiles/intra/mcf7_1000000_balanced.cool")
 
 def process_chromosome(chrom, cooler_obj, bins_df):
     """
@@ -194,43 +221,40 @@ def process_chromosome(chrom, cooler_obj, bins_df):
     """
 
     # Fetch the contact matrix for the chromosome
-    chrom_matrix = cooler_obj.matrix(balance=True).fetch(chrom)
+    chrom_matrix = cooler_obj.matrix(balance=False, as_pixels=False, join=True).fetch(chrom)
 
     # Skip chromosome if it only contains one bin
-    if chrom_matrix.size == 1:
+    if chrom_matrix.shape[0] <= 1:
         print(f"Skipping chromosome {chrom} because it only contains one bin.")
         return None
 
-    # Trying this instead:
-    oe_matrix = chrom_matrix / chrom_matrix.mean(axis=1)
+    # Replace zero values with a small number (e.g., 1e-10)
+    small_value = 1e-10
+    chrom_matrix = np.where(chrom_matrix == 0, small_value, chrom_matrix)
 
-    # Replace infinite values and nan values
-    oe_matrix = np.nan_to_num(oe_matrix)
-    oe_matrix[oe_matrix == np.inf] = 0
-    oe_matrix[oe_matrix == -np.inf] = 0
+    # Prepare the observed/expected matrix
+    distance_matrix = np.abs(np.arange(chrom_matrix.shape[0])[:, None] - np.arange(chrom_matrix.shape[0]))
+    expected = np.bincount(distance_matrix.flatten(), weights=chrom_matrix.flatten()) / np.bincount(distance_matrix.flatten())
+    oe_matrix = chrom_matrix / expected[distance_matrix]
 
     # Compute the correlation matrix and replace NaN/infinite values
-    correlation_matrix = np.corrcoef(chrom_matrix)
+    correlation_matrix = np.corrcoef(oe_matrix)
     correlation_matrix = np.nan_to_num(correlation_matrix)
+
 
     # Compute the first principal component
     pca = PCA(n_components=1)
     principal_components = pca.fit_transform(correlation_matrix)
 
-    # TODO: Try this instead?
-    # Use cooler to decompose the matrix
-    # decomposition = cooler.tools.decompose(chrom_matrix, n_eigs=1)
-    # principal_components = decomposition["eigenvectors"]
-
     # Assign compartments based on the sign of PC1
     compartments = np.sign(principal_components)
 
     # Create and return a DataFrame for this chromosome
-    chrom_bins = bins_df.fetch(chrom)
+    chrom_bins = bins_df[bins_df['chrom'] == chrom]
     chrom_df = pd.DataFrame({
         "chrom": chrom,
-        "start": chrom_bins["start"],
-        "end": chrom_bins["end"],
+        "start": chrom_bins["start"].values,
+        "end": chrom_bins["end"].values,
         "compartment": ['A' if x > 0 else 'B' for x in compartments.flatten()],
         "eigenvector": principal_components.flatten()  # save the eigenvectors
     })
@@ -238,52 +262,76 @@ def process_chromosome(chrom, cooler_obj, bins_df):
     return chrom_df
 
 
-def call_compartments(cool_file, balanced_file, output_file):
+def calculate_distance_matrix(bin_starts):
+    """
+    Calculate a matrix where each cell contains the genomic distance between two bins.
+    """
+    bin_starts = bin_starts.reshape(-1, 1)  # convert to column vector
+    return np.abs(bin_starts - bin_starts.T)
+
+
+def call_compartments(balanced_file, output_file):
     """
     Call chromatin compartments using Hi-C data in a cooler file
     """
 
-    # Convert Path objects to string
-    cool_file = str(cool_file)
-    output_file = str(output_file)
-
-    # Balance the cooler file
-    c, bins, pixels = balance_cooler_file(cool_file)
-    validate_and_save_cooler(bins, pixels, balanced_file)
-
     # Load the balanced cooler file
     c_balanced = cooler.Cooler(str(balanced_file))
+
+    # Fetch all the bins once
+    all_bins = c_balanced.bins()[:]
 
     # Create a DataFrame to hold the results
     result = pd.DataFrame(columns=["chrom", "start", "end", "compartment", "eigenvector"])
 
     # Loop over each chromosome
     for chrom in c_balanced.chromnames:
-        if chrom == 'chrM':
-            print("Skipping mitochondrial chromosome (chrM).")
+        if chrom in ['chrM', 'chrX', 'chrY']:
+            print(f"Skipping {chrom}.")
             continue
-        chrom_df = process_chromosome(chrom, c_balanced, c_balanced.bins())
+        chrom_bins = all_bins[all_bins['chrom'] == chrom]
+        chrom_df = process_chromosome(chrom, c_balanced, chrom_bins)
         if chrom_df is not None:
             result = result.append(chrom_df)
 
     # Save the results to a BED file
     result.to_csv(output_file, sep='\t', header=False, index=False)
 
+def inspect_cooler(file_path):
+    c = cooler.Cooler(file_path)
+    df = c.matrix(balance=False, as_pixels=True)[:]
 
+    # print basic statistics
+    print(df.describe())
 
+    # print the variance
+    print("\nVariance:\n", df.var())
+
+    # print number of zero values
+    print("\nNumber of zero values:\n", (df==0).sum())
+
+    # print the number of NaN values
+    print("\nNumber of NaN values:\n", df.isna().sum())
+
+    # print the number of infinite values
+    print("\nNumber of infinite values:\n", np.isinf(df).sum())
+
+    # print the number of negative values
+    print("\nNumber of negative values:\n", (df<0).sum())
+
+    # print the number of positive values
+    print("\nNumber of positive values:\n", (df>0).sum())
+
+# inspect_cooler("/Users/GBS/Master/HiC-Data/coolfiles/intra/mcf10_1000000_balanced.cool")
 
 
 def compartment_calling():
-    input_cool_file = Dirs.cool_path_intra / "imr90_1000000.cool"
-    balanced_cool_file = Dirs.cool_path_intra / "imr90_1000000_balanced_2.cool"
-    output_file = Dirs.compartments_path / "imr90_1Mb_pca1_compartments.bed"
+    balanced_cool_file = Dirs.cool_path_intra / "mcf10_1000000_balanced.cool"
+    output_file = Dirs.compartments_path / "mcf10_1mb_pca1_compartments.bed"
 
-    cooler_obj, bins, pixels = balance_cooler_file(input_cool_file)
-    validate_and_save_cooler(bins, pixels, balanced_cool_file)
+    call_compartments(balanced_cool_file, output_file)
 
-    call_compartments(input_cool_file, balanced_cool_file, output_file)
-
-# compartment_calling()
+compartment_calling()
 
 def compute_pearson_and_plot(bed_file1, bed_file2, cell_line1, cell_line2):
     # Load BED files into pandas DataFrames
@@ -315,6 +363,7 @@ def compute_pearson_and_plot(bed_file1, bed_file2, cell_line1, cell_line2):
     # Return the correlation
     return correlation
 
+
 def compare_compartments():
     # Load the BED files
     bed_file1 = Dirs.compartments_path / "mcf7_1mb_compartments.bed"
@@ -322,6 +371,7 @@ def compare_compartments():
 
     # Compute the Pearson correlation coefficient
     correlation = compute_pearson_and_plot(bed_file1, bed_file2, 'MCF7', 'MCF10')
+
 
 # compare_compartments()
 
@@ -334,7 +384,6 @@ def merge_bed_files(bed_file1, bed_file2):
     merged_df = pd.merge(df1, df2, on=['chrom', 'start', 'end'], suffixes=('_1', '_2'))
 
     return merged_df
-
 
 
 def plot_compartments_on_heatmap_sns(cool_path, compartments_bed_path, chrom=None, saveas=None):
@@ -387,7 +436,6 @@ def plot_compartments_on_heatmap_sns(cool_path, compartments_bed_path, chrom=Non
     # Create tick labels with 'Mb' added
     tick_labels = [f"{tick * binsize // 10 ** 6} Mb" for tick in ticks]
 
-
     ax2.set_xticks(ticks[1:])
     ax2.set_xticklabels(tick_labels[1:])
     ax2.set_yticks(ticks[1:])
@@ -401,6 +449,7 @@ def plot_compartments_on_heatmap_sns(cool_path, compartments_bed_path, chrom=Non
         plt.savefig(saveas, dpi=1000, format="png")
 
     plt.show()
+
 
 # plot_compartments_on_heatmap_sns(Dirs.cool_path_intra / "mcf7_1000000_balanced.cool", Dirs.compartments_path / "mcf10_250kb_compartments.bed", chrom="chr2")  # :0-95000000")  # , saveas=Dirs.heatmap_dir_intra / "mcf10_250kb_chr2_compartments_plot.png")
 
@@ -442,7 +491,6 @@ def plot_heatmap2(cool_file, chrom=None, saveas=None, log=False):
     # Create tick labels with 'Mb' added
     tick_labels = [f"{tick * c.binsize // 10 ** 6} Mb" for tick in ticks]
 
-
     ax.set_xticks(ticks[1:])
     ax.set_xticklabels(tick_labels[1:])
     ax.set_yticks(ticks[1:])
@@ -459,11 +507,17 @@ def plot_heatmap2(cool_file, chrom=None, saveas=None, log=False):
     if saveas:
         plt.savefig(saveas, dpi=1000, format="png", bbox_inches='tight')
 
-
     plt.show()
+
 
 # plot_heatmap2(Dirs.cool_path_intra / "imr90_250000_balanced.cool", chrom="chr2", saveas=Dirs.heatmap_dir_intra / "imr90_example250kb_chr2.png")
 
+
+
+
+
+
+
+
 if __name__ == "__main__":
     print("RUN")
-
