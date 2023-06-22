@@ -26,22 +26,6 @@ class Directories:
 
 
 
-# TODO:
-#     Create dendrogram plots of the community clusters: Compare MCF10-A and MCF-7
-#     Compare the largest chromosomes
-#     Make similarity NMI plot
-#     Annotate communities with compartment A and B
-
-
-#  Community Analysis???
-#     Make a histogram of cluster sizes for each cell line.
-#     Calculate the partition density for each community.
-#     Calculate the mixing parameter between communities.
-#     Determine the modularity of each community.
-#     Determine the clustering coefficient for each community.
-#     Determine the assortativity for each community.
-
-
 def chromosome_sort_key(chrom):
     try:
         return int(chrom[3:])
@@ -117,7 +101,7 @@ class PlotTopology:
             fig, ax = plt.subplots()
             graph_name = graph_name.split("_")[1:2]
             print(graph_name)
-            node_size = 30 / graph.vcount()
+            node_size = 5 / graph.vcount()
             edge_width = 60 / graph.ecount()
             visual_style = {
                 "layout": "kk",
@@ -153,11 +137,16 @@ def plot_communities():
     # Filter on graphs
     graph_dict = gi.all_graphs()
     filter_instance = gm.FilterGraphs(graph_dict)
-    filtered = filter_instance.filter_graphs(resolutions=[1000000], cell_lines=["mcf7"], condition="intra-split-raw", interaction_type="intra", chromosomes=["chr9"])  # , chromosomes=["chr1"])
+    filtered = filter_instance.filter_graphs(resolutions=[1000000], cell_lines=["mcf7"], condition="intra-split-raw", interaction_type="intra", chromosomes=["chr14"])  # , chromosomes=["chr1"])
+
+    # Get LCC
+    lcc_instance = gm.LargestComponent(filtered)
+    filtered = lcc_instance.find_lcc()
+
     topology_instance = CommunityDetection(filtered)
     topology_instance.calculate_communities(method="fg")
     plot_instance = PlotTopology(filtered, topology_instance)
-    plot_instance.plot_community(method="fg", save_as=Directories.comms_path / "chr9_mcf7_fg.png")
+    plot_instance.plot_community(method="fg", save_as=None)  # Directories.comms_path / "chr14_mcf7_fg.png")
 
 # plot_communities()
 
@@ -295,6 +284,8 @@ class NMI_comparison:
     def calculate_communities_per_chromosome(self):
         communities_per_chrom = {}
 
+        print(self.graph_dict)
+
         for name, graph in self.graph_dict.items():
             nodes_by_chromosome = {}
             for idx in range(len(graph.vs)):
@@ -314,27 +305,27 @@ class NMI_comparison:
 
         return communities_per_chrom
 
-    def calculate_communities_per_chromosome_network(self):
-        communities_per_chrom = {}
-
-        for name, graph in self.graph_dict.items():
-            nodes_by_chromosome = {}
-            for idx in range(len(graph.vs)):  # Iterate over the indices of the nodes
-                chrom = graph.vs[idx]['chromosome']
-                if chrom not in nodes_by_chromosome:
-                    nodes_by_chromosome[chrom] = []
-                nodes_by_chromosome[chrom].append(idx)
-
-            for chrom, nodes in nodes_by_chromosome.items():
-                subgraph = graph.subgraph(nodes)
-                community = cdalgs.louvain(subgraph)
-                key = (chrom, name)  # Use the graph name instead of cell line name
-                communities_per_chrom[key] = community
-
-        return communities_per_chrom
+    # def calculate_communities_per_chromosome_network(self):
+    #     communities_per_chrom = {}
+    #
+    #     for name, graph in self.graph_dict.items():
+    #         nodes_by_chromosome = {}
+    #         for idx in range(len(graph.vs)):  # Iterate over the indices of the nodes
+    #             chrom = graph.vs[idx]['chromosome']
+    #             if chrom not in nodes_by_chromosome:
+    #                 nodes_by_chromosome[chrom] = []
+    #             nodes_by_chromosome[chrom].append(idx)
+    #
+    #         for chrom, nodes in nodes_by_chromosome.items():
+    #             subgraph = graph.subgraph(nodes)
+    #             community = cdalgs.louvain(subgraph)
+    #             key = (chrom, name)  # Use the graph name instead of cell line name
+    #             communities_per_chrom[key] = community
+    #
+    #     return communities_per_chrom
 
     def calculate_nmi(self):
-        communities_per_chrom = self.calculate_communities_per_chromosome_network()
+        communities_per_chrom = self.calculate_communities_per_chromosome()
         nmi_per_chrom = {}
 
         for chrom in set(chrom for chrom, _ in communities_per_chrom.keys() if _ == "mcf7"):
@@ -347,16 +338,16 @@ class NMI_comparison:
 
         return nmi_per_chrom
 
-    def calculate_nmi_network(self, communities_per_chrom):
-        nmi_per_chrom = {}
-
-        for chrom in set(chrom for chrom, _ in communities_per_chrom.keys() if _ == "intra-split-raw_mcf7_1000000"):
-            communities_mcf10 = communities_per_chrom[(chrom, "intra-split-raw_mcf10_1000000")].communities
-            communities_mcf7 = communities_per_chrom[(chrom, "intra-split-raw_mcf7_1000000")].communities
-            nmi = cdeval.overlapping_normalized_mutual_information_MGH(communities_mcf10, communities_mcf7)
-            nmi_per_chrom[chrom] = nmi.score
-
-        return nmi_per_chrom
+    # def calculate_nmi_network(self, communities_per_chrom):
+    #     nmi_per_chrom = {}
+    #
+    #     for chrom in set(chrom for chrom, _ in communities_per_chrom.keys() if _ == "intra-split-raw_mcf7_1000000"):
+    #         communities_mcf10 = communities_per_chrom[(chrom, "intra-split-raw_mcf10_1000000")].communities
+    #         communities_mcf7 = communities_per_chrom[(chrom, "intra-split-raw_mcf7_1000000")].communities
+    #         nmi = cdeval.overlapping_normalized_mutual_information_MGH(communities_mcf10, communities_mcf7)
+    #         nmi_per_chrom[chrom] = nmi.score
+    #
+    #     return nmi_per_chrom
 
     def plot_nmi_per_chromosome(self, save_as=None):
         nmi_per_chrom = self.calculate_nmi()
@@ -376,7 +367,7 @@ class NMI_comparison:
         plt.show()
 
     def print_same_and_different_nodes(self):
-        communities_per_chrom = self.calculate_communities_per_chromosome_network()
+        communities_per_chrom = self.calculate_communities_per_chromosome()
 
         for chrom in set(chrom for chrom, _ in communities_per_chrom.keys() if _ == "intra-split-raw_mcf7_1000000"):
             communities_mcf10 = communities_per_chrom[(chrom, "intra-split-raw_mcf10_1000000")].communities
@@ -402,20 +393,28 @@ def get_nmi_per_chromosome():
 
     # Filter on graphs
     filter_instance = gm.FilterGraphs(graph_dict)
-    filtered = filter_instance.filter_graphs(resolutions=[1000000], cell_lines=["mcf10", "mcf7"], condition="intra-split-raw", interaction_type="intra", chromosomes=["chr1"])
+    filtered = filter_instance.filter_graphs(resolutions=[1000000], cell_lines=["mcf10", "mcf7"], condition="intra-split-raw", interaction_type="intra", chromosomes=["chr5"])
+
+    # Get LCC
+    lcc_instance = gm.LargestComponent(filtered)
+    lcc = lcc_instance.find_lcc()
 
     # Calculate communities
-    topology_instance = NMI_comparison(filtered)
-    topology_instance.calculate_communities_per_chromosome()
+    # topology_instance = NMI_comparison(filtered)
+    # topology_instance = NMI_comparison(lcc)
+    # topology_instance.calculate_communities_per_chromosome()
 
     # Calculate and plot communities per chromosome
-    comm_per_chrom_instance = NMI_comparison(topology_instance.graph_dict)
+    comm_per_chrom_instance = NMI_comparison(lcc)
     comm_per_chrom_instance.calculate_nmi()
-    # comm_per_chrom_instance.plot_nmi_per_chromosome(save_as=Directories.comms_path / "mcf7-mcf10_nmi.png")
+    comm_per_chrom_instance.print_same_and_different_nodes()
+    comm_per_chrom_instance.plot_nmi_per_chromosome(save_as=None)  # Directories.comms_path / "mcf7-mcf10_nmi.png")
     comm_per_chrom_instance.print_same_and_different_nodes()
 
 # get_nmi_per_chromosome()
 
+
+# DID not work:
 class NMItopology:
     def __init__(self, original_graph_dict, community_detection):
         self.original_graph_dict = original_graph_dict
@@ -622,6 +621,12 @@ def compare_coms():
     filtered1 = cd1.calculate_communities(method="fg")
     filtered2 = cd2.calculate_communities(method="fg")
 
+    # Get lcc
+    lcc_instance1 = gm.LargestComponent(filtered1)
+    lcc_instance2 = gm.LargestComponent(filtered2)
+    filtered1 = lcc_instance1.find_lcc()
+    filtered2 = lcc_instance2.find_lcc()
+
     # Compare communities
     cc = CommunityComparison(filtered1, filtered2, method="fg", detection_method="fg") # Membership veector must be of equal size, ie same number of nodes, which is not the case.
     comparison_results = cc.compare_communities()
@@ -712,13 +717,7 @@ def mcf7_coms():
     filtered = com.calculate_communities(method="fg")  # update filtered with the added community information
     return filtered
 
-# grapa, grapb = ig.Graph.Erdos_Renyi(100, 0.1), ig.Graph.Erdos_Renyi(100, 0.1)
-# dendrogram_a, dendrogram_b = grapa.community_fastgreedy(), grapb.community_fastgreedy()
-# a, b = dendrogram_a.as_clustering(), dendrogram_b.as_clustering()
-# c, d = mcf10_coms(), mcf7_coms()
-# print(c,d)
-# print(ig.compare_communities(c, d, method="nmi"))
-
+# mcf7_coms()
 
 
 

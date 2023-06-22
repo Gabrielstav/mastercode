@@ -7,7 +7,7 @@ from Graph_Processing import graph_instances as gi
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from Network_Analysis import centrality_metrics as cm
+
 
 def compartment_paths(cell_line=None):
 
@@ -89,14 +89,6 @@ class CompartmentNetworkAnnotator:
                 target_compartment = target['compartment']
                 print(f"{source_name} ({source_compartment}) -- {target_name} ({target_compartment})")
 
-# The problem is that I do not find any overlap between the nodes (when I know there is). When I print the counters, I get this:
-#
-# No Overlap:  0
-# No Change:  0
-# Changed Active:  0
-# Changed Inactive:  0
-#
-# And when I plot, I of course get no data in the plot.
 
 class CompartmentNetworkPlotter:
     def __init__(self, graph_dict):
@@ -176,7 +168,7 @@ def annotate_network():
     # Load and filter graphs
     graphs = gi.all_graphs()
     filter_instance = gm.FilterGraphs(graphs)
-    filter_instance.filter_graphs(cell_lines=["mcf10"], interaction_type="intra", condition="intra-split-raw", resolutions=[1000000], chromosomes=["chr16"])
+    filter_instance.filter_graphs(cell_lines=["mcf10"], interaction_type="intra", condition="intra-split-raw", resolutions=[1000000], chromosomes=["chr1"])
     graph_dict = filter_instance.graph_dict
 
     # Annotate networks with compartments
@@ -186,10 +178,10 @@ def annotate_network():
     annotater.print_edgelist()
 
     # Plot annotated network
-    plot_instance = CompartmentNetworkPlotter(annotated_graphs)
-    plot_instance.plot_networks(save_as=plot_dirs.comp_path / "mcf10_chr16_compartments")
+    # plot_instance = CompartmentNetworkPlotter(annotated_graphs)
+    # plot_instance.plot_networks(save_as=plot_dirs.comp_path / "mcf10_chr16_compartments")
 
-# annotate_network()
+annotate_network()
 
 
 # TODO: Make compartment switch plot for mcf10 and mcf7
@@ -395,20 +387,69 @@ def compare_compartments_overall():
 
 # compare_compartments_overall()
 
-class CentralityCompartmentComparison:
+class DegreeCompartmentComparison:
 
     def __init__(self, reference_graph, perturbed_graph):
-        self.reference_graph = reference_graph
-        self.perturbed_graph = perturbed_graph
+        self.graph_reference = list(reference_graph.values())[0]
+        self.graph_perturbed = list(perturbed_graph.values())[0]
 
     def plot(self, save_as=None):
         # Extract degrees and compartment status from each graph
-        degrees_ref = [(node['degree'], node['compartment']) for node in self.reference_graph.vs]
-        degrees_per = [(node['degree'], node['compartment']) for node in self.perturbed_graph.vs]
+        degrees_ref = [(node['degree'], node['compartment']) for node in self.graph_reference.vs]
+        degrees_per = [(node['degree'], node['compartment']) for node in self.graph_perturbed.vs]
+
+        # Convert to DataFrame
+        df_ref = pd.DataFrame(degrees_ref, columns=['Degree', 'Compartment'])
+        df_per = pd.DataFrame(degrees_per, columns=['Degree', 'Compartment'])
+
+        # Add 'Graph' column
+        df_ref['Graph'] = 'mcf10'
+        df_per['Graph'] = 'mcf7'
+
+        # Combine 'Graph' and 'Compartment' into one column
+        df_ref['Legend'] = df_ref['Graph'] + ' ' + df_ref['Compartment']
+        df_per['Legend'] = df_per['Graph'] + ' ' + df_per['Compartment']
+
+        # Concatenate dataframes
+        df = pd.concat([df_ref, df_per])
+
+        # Define a color palette
+        palette = {"mcf10 A": "red", "mcf10 B": "blue", "mcf7 A": "darkred", "mcf7 B": "darkblue"}
+
+        # Plot
+        plt.figure(figsize=(10, 8))
+
+        for legend_group in df['Legend'].unique():
+            data = df[df['Legend'] == legend_group]['Degree'].values
+            hist, bin_edges = np.histogram(data, bins=50)
+            bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+            plt.plot(bin_centers, hist, label=legend_group, color=palette[legend_group])
+
+        plt.xscale('log')
+        plt.yscale('log')
+        plt.title('Degree Distribution by Compartment Status')
+        plt.xlabel('Degree')
+        plt.ylabel('Frequency')
+        plt.legend(title='Compartment Status')
+
+        if save_as:
+            plt.savefig(save_as, dpi=300)
+        plt.show()
+
+class ClosenessCompartmentComparison:
+
+    def __init__(self, reference_graph, perturbed_graph):
+        self.graph_reference = list(reference_graph.values())[0]
+        self.graph_perturbed = list(perturbed_graph.values())[0]
+
+    def plot(self, save_as=None):
+        # Extract degrees and compartment status from each graph
+        degrees_ref = [(node['closeness'], node['compartment']) for node in self.graph_reference.vs]
+        degrees_per = [(node['closenss'], node['compartment']) for node in self.graph_perturbed.vs]
 
         # Combine data and convert to pandas DataFrame for easier plotting
         degrees_all = degrees_ref + degrees_per
-        df = pd.DataFrame(degrees_all, columns=['Degree', 'Compartment'])
+        df = pd.DataFrame(degrees_all, columns=['Closeness', 'Compartment'])
 
         # Plot degree distribution using seaborn for automatic histogram and kde
         plt.figure(figsize=(10, 8))
@@ -422,6 +463,36 @@ class CentralityCompartmentComparison:
             plt.savefig(save_as, dpi=300)
 
         plt.show()
+
+
+class BetweennessCompartmentComparison:
+
+    def __init__(self, reference_graph, perturbed_graph):
+        self.graph_reference = list(reference_graph.values())[0]
+        self.graph_perturbed = list(perturbed_graph.values())[0]
+
+    def plot(self, save_as=None):
+        # Extract degrees and compartment status from each graph
+        degrees_ref = [(node['betweenness'], node['compartment']) for node in self.graph_reference.vs]
+        degrees_per = [(node['betweenness'], node['compartment']) for node in self.graph_perturbed.vs]
+
+        # Combine data and convert to pandas DataFrame for easier plotting
+        degrees_all = degrees_ref + degrees_per
+        df = pd.DataFrame(degrees_all, columns=['Closeness', 'Compartment'])
+
+        # Plot degree distribution using seaborn for automatic histogram and kde
+        plt.figure(figsize=(10, 8))
+        sns.histplot(df, x='Degree', hue='Compartment', kde=True, stat="density", common_norm=False)
+
+        plt.title('Degree Distribution by Compartment')
+        plt.xlabel('Degree')
+        plt.ylabel('Density')
+
+        if save_as:
+            plt.savefig(save_as, dpi=300)
+
+        plt.show()
+
 
 def degree_distribution_of_compartment_nodes():
 
@@ -445,18 +516,20 @@ def degree_distribution_of_compartment_nodes():
     annotated_graphs_per = annotater_per.annotate_networks()
     annotater_per.graph_dict = annotated_graphs_per
 
-    for graph_ref, graph_name_ref, graph_per, graph_name_per in [annotated_graphs_ref.items(), annotated_graphs_per.items()]:
+    for graph_name_ref, graph_ref in annotated_graphs_ref.items():
         graph_ref.vs['degree'] = graph_ref.degree()
         graph_ref.vs['closeness'] = graph_ref.closeness()
         graph_ref.vs['betweenness'] = graph_ref.betweenness()
+
+    for graph_name_per, graph_per in annotated_graphs_per.items():
         graph_per.vs['degree'] = graph_per.degree()
         graph_per.vs['closeness'] = graph_per.closeness()
         graph_per.vs['betweenness'] = graph_per.betweenness()
 
-    degree_distribution = CentralityCompartmentComparison(annotated_graphs_ref, annotated_graphs_per)
-    degree_distribution.plot()
+    degree_distribution = DegreeCompartmentComparison(annotated_graphs_ref, annotated_graphs_per)
+    degree_distribution.plot(save_as=plot_dirs.comp_path / "mcf10_mcf7_log_degree_compartments_comparison.png")
 
-degree_distribution_of_compartment_nodes()
+# degree_distribution_of_compartment_nodes()
 
 
 

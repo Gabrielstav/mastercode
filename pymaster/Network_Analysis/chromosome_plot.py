@@ -62,6 +62,8 @@ class ChromosomePlotHelper:
             names=['chrom', 'start', 'end', 'name', 'gieStain']
         )
         ideo_df = ideo_df[ideo_df.chrom.apply(lambda x: x in self.chromosomes)]
+        # if "chrx" in self.chromosomes:
+        #     ideo_df = ideo_df[ideo_df.chrom != "chrx"]
         ideo_df['width'] = ideo_df.end - ideo_df.start
 
         color_lookup = {
@@ -75,6 +77,7 @@ class ChromosomePlotHelper:
             'stalk': (.9, .9, .9),
         }
         ideo_df['colors'] = ideo_df['gieStain'].apply(lambda x: color_lookup[x])
+        print(ideo_df)
 
         return ideo_df.to_dict('list')
 
@@ -93,7 +96,7 @@ class ChromosomePlotHelper:
                 node_data['chrom'].append(chrom)
                 node_data['start'].append(start)
                 node_data['end'].append(end)
-                node_data['colors'].append("blue")  # "('#2243a8')  # Blue looks good (change to green?)
+                node_data['colors'].append("gray")  # "('#2243a8') Blue looks good (change to green?)
 
         return node_data
 
@@ -107,6 +110,8 @@ class LinearChromosomePlot:
         if 'width' not in df.columns:
             df['width'] = df['end'] - df['start']
         for chrom, group in df.groupby('chrom'):
+            if chrom == "chrX":  # Skip for compartments
+                continue
             if chrom not in y_positions:
                 continue
             yrange = (y_positions[chrom], height)
@@ -115,7 +120,7 @@ class LinearChromosomePlot:
                 xranges, yrange, facecolors=group['colors'], alpha=alpha, linewidths=linewidths, edgecolor=edgecolor)
 
     @staticmethod
-    def compartment_collections(df, y_positions, height, alpha=0.5, linewidths=0):
+    def compartment_collections(df, y_positions, height, alpha=0.6, linewidths=0):
         """
         Add a collection for compartments. Compartment data (df) should include 'chrom', 'start', 'end', and 'compartment' columns,
         with 'compartment' being 'A' or 'B'. Compartment 'A' is colored red, and 'B' is colored blue.
@@ -163,7 +168,7 @@ class LinearChromosomePlot:
 
         if self.plot_helper.compartment_data is not None:
             compartment_df = pd.DataFrame.from_dict(self.plot_helper.compartment_data)
-            for collection in self.compartment_collections(compartment_df, chrom_ybase, chrom_height, alpha=0.4, linewidths=0):
+            for collection in self.compartment_collections(compartment_df, chrom_ybase, chrom_height, alpha=0.8, linewidths=0):
                 ax.add_collection(collection)
 
         # Convert x-axis labels to megabases
@@ -174,6 +179,9 @@ class LinearChromosomePlot:
         ax.set_yticks([chrom_centers[i] for i in self.chromosomes])
         ax.set_yticklabels(self.chromosomes)
         ax.axis('tight')
+        ax.set_xlabel('Position (Mb)')
+        ax.set_ylabel('Chromosome')
+        ax.set_title("Compartment State and Node Positons for MCF-7")
         if save_as is not None:
             plt.savefig(save_as, dpi=300)
         plt.show()
@@ -182,11 +190,11 @@ class LinearChromosomePlot:
 def linear_plot():
     graphs = gi.all_graphs()
     filter_instance = gm.FilterGraphs(graphs)
-    filter_instance.filter_graphs(cell_lines=["mcf7"], resolutions=[1000000], interaction_type="intra", condition="intra-split-norm")  # , chromosomes=["chr1", "chr2"])
+    filter_instance.filter_graphs(cell_lines=["mcf10"], resolutions=[1000000], interaction_type="intra", condition="intra-split-raw")  # , chromosomes=["chr1", "chr2"])
     graph_dict = filter_instance.graph_dict
     plot_helper = ChromosomePlotHelper(graph_dict, "all")  # , ["chr1", "chr2"])
     lin_plot = LinearChromosomePlot(plot_helper)
-    lin_plot.plot(save_as=Directories.chromosome_path / "mcf7_chrom.png")
+    lin_plot.plot(save_as=Directories.chromosome_path / "mcf10_chrom.png")
 
 # linear_plot()
 
@@ -194,18 +202,18 @@ def linear_plot():
 def compartment_plot():
     graphs = gi.all_graphs()
     filter_instance = gm.FilterGraphs(graphs)
-    filter_instance.filter_graphs(cell_lines=["imr90"], resolutions=[1000000], interaction_type="intra", condition="intra-split-raw")  # , chromosomes=["chr1", "chr2"])
+    filter_instance.filter_graphs(cell_lines=["mcf7"], resolutions=[1000000], interaction_type="intra", condition="intra-split-raw")  # , chromosomes=["chr1", "chr2"])
     graph_dict = filter_instance.graph_dict
     plot_helper = ChromosomePlotHelper(graph_dict, "all")  # , ["chr1", "chr2"])
 
     # load compartment data
-    compartment_file = "/Users/GBS/Master/HiC-Data/compartments/imr90_1Mb_multiples_compartments.bed"
+    compartment_file = "/Users/GBS/Master/HiC-Data/mcf_comps/mcf7_compartments_noIC_no0.bed"
     plot_helper.load_compartment_data(compartment_file)
 
     lin_plot = LinearChromosomePlot(plot_helper)
-    lin_plot.plot()
+    lin_plot.plot(save_as=Directories.chromosome_path / "mcf7_chrom_compartments.png")
 
-# compartment_plot()
+compartment_plot()
 
 # circ plot with sorted chromosomes (just need to somehow add the ideogram data to the circ plot):
 def plot_degree_network_circ():
