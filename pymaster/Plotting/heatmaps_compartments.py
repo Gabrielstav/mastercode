@@ -221,7 +221,7 @@ def process_chromosome(chrom, cooler_obj, bins_df):
     """
 
     # Fetch the contact matrix for the chromosome
-    chrom_matrix = cooler_obj.matrix(balance=False, as_pixels=False, join=True).fetch(chrom)
+    chrom_matrix = cooler_obj.matrix(balance=True, as_pixels=False, join=True).fetch(chrom)
 
     # Skip chromosome if it only contains one bin
     if chrom_matrix.shape[0] <= 1:
@@ -237,7 +237,7 @@ def process_chromosome(chrom, cooler_obj, bins_df):
     expected = np.bincount(distance_matrix.flatten(), weights=chrom_matrix.flatten()) / np.bincount(distance_matrix.flatten())
     oe_matrix = chrom_matrix / expected[distance_matrix]
 
-    # Compute the correlation matrix and replace NaN/infinite values
+    # Compute the correlation matrix and replace NaN/infinite values (no NaNs/infs in oe_matrix)
     correlation_matrix = np.corrcoef(oe_matrix)
     correlation_matrix = np.nan_to_num(correlation_matrix)
 
@@ -331,7 +331,7 @@ def compartment_calling():
 
     call_compartments(balanced_cool_file, output_file)
 
-compartment_calling()
+# compartment_calling()
 
 def compute_pearson_and_plot(bed_file1, bed_file2, cell_line1, cell_line2):
     # Load BED files into pandas DataFrames

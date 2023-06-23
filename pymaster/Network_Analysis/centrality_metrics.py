@@ -159,7 +159,6 @@ class PlotDegreeNetwork(DegreeCentrality):
             legend_elements = self.plot_legend(graph, legend_top_n)
             ax.legend(handles=legend_elements, title="Hub nodes", loc="best")
 
-            # TODO: Change back
             # Create a colorbar
             # if normalize:
             #     norm = Normalize(vmin=min(degrees), vmax=max(degrees))
@@ -392,31 +391,31 @@ class PlotBetweennessNetwork(BetweennessCentrality):
 def plot_degree_network():
     graphs = gi.all_graphs()
     filter_instance = gm.FilterGraphs(graphs)
-    filter_instance.filter_graphs(cell_lines=["mcf7"], interaction_type="intra", condition="intra-split-raw", resolutions=[1000000])  # , chromosomes=["chr5"])
+    filter_instance.filter_graphs(cell_lines=["mcf10"], interaction_type="intra", condition="intra-split-raw", resolutions=[1000000], chromosomes=["chr2"])  # , chromosomes=["chr5"])
     graph_dict = filter_instance.graph_dict
     # print(graph_dict)
     lcc_instance = gm.LargestComponent(graph_dict)
     lcc = lcc_instance.find_lcc()
-    print(lcc)
-    degree_instance = PlotDegreeNetwork(graph_dict)  # Use LCC for within-chromosome plots
+    # print(lcc)
+    degree_instance = PlotDegreeNetwork(lcc)  # Use LCC for within-chromosome plots
     degree_instance.calculate_degree()
     degree_instance.normalize_degree()
 
     # Added the parameter `legend_top_n=5` to plot top 5 nodes with the highest degree in the legend
-    degree_instance.plot_graph(save_as=Directories.degree_path / "MCF7_all_degree_network.png", normalize=False, color_edges=True, layout="fr", legend_top_n=5)
+    degree_instance.plot_graph(normalize=True, save_as=None)  # Directories.degree_path / "MCF7_all_degree_network.png", normalize=False, color_edges=True, layout="fr", legend_top_n=5)
 
 # plot_degree_network()
 
 def plot_closeness_network():
     graphs = gi.intra_1mb_graphs()
     filter_instance = gm.FilterGraphs(graphs)
-    filter_instance.filter_graphs(cell_lines=["mcf10"], interaction_type="intra", chromosomes=["chr6"])
+    filter_instance.filter_graphs(cell_lines=["mcf10"], interaction_type="intra", chromosomes=["chr16"], resolutions=[1000000], condition="intra-split-raw")
     graph_dict = filter_instance.graph_dict
     lcc_instance = gm.LargestComponent(graph_dict)
     lcc = lcc_instance.find_lcc()
     closeness_instance = PlotClosenessNetwork(lcc)  # Use LCC for withtin-chromosome plots
     closeness_instance.calculate_closeness()
-    closeness_instance.plot_closeness(normalize=True, color_edges=False, layout="fr", legend_top_n=5, save_as=Directories.closeness_path / "MCF10_chr6_closeness_network.png")
+    closeness_instance.plot_closeness(normalize=True, color_edges=False, layout="fr", legend_top_n=5, save_as=None)  # Directories.closeness_path / "MCF10_chr6_closeness_network.png")
 
 # plot_closeness_network()
 
@@ -539,14 +538,14 @@ class ClosenessDistribution(ClosenessCentrality):
             bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
             self.closeness_distribution_dict[graph_name] = (bin_centers, frequencies)
 
-    def plot_closeness_distribution(self, plot_type='line', save_as=None):
+    def plot_closeness_distribution(self, plot_type='scatter', save_as=None):
 
-        colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
+        colors = ['b', 'g', 'r', 'c', 'm']  # , 'y', 'k']
 
         for idx, (graph_name, (bin_centers, frequencies)) in enumerate(self.closeness_distribution_dict.items()):
 
             frequencies = frequencies / frequencies.sum()  # Convert counts to frequencies
-            log_frequencies = np.log10(frequencies + 1e-10)  # Add a small constant to avoid -inf values from log(0)
+            log_frequencies = np.log10(frequencies)  #  + 1e-10)  # Add a small constant to avoid -inf values from log(0)
             legend_name = '_'.join(graph_name.split('_')[1:2])
 
             # Exclude zero-frequency bins
@@ -590,12 +589,12 @@ class BetweennessDistribution(BetweennessCentrality):
 
     def plot_betweenness_distribution(self, plot_type='scatter', save_as=None):
 
-        colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
+        colors = ['b', 'g', 'r', 'c', 'm']
 
         for idx, (graph_name, (bin_centers, frequencies)) in enumerate(self.betweenness_distribution_dict.items()):
 
             frequencies = frequencies / frequencies.sum()  # Convert counts to frequencies
-            log_frequencies = np.log10(frequencies + 1e-10)  # Add a small constant to avoid -inf values from log(0)
+            log_frequencies = np.log10(frequencies)  #  + 1e-10)  # Add a small constant to avoid -inf values from log(0)
             legend_name = '_'.join(graph_name.split('_')[1:2])
 
             # Exclude zero-frequency bins
@@ -1110,9 +1109,17 @@ def find_top_hubs():
     filter_instance = gm.FilterGraphs(graphs)
     filter_instance.filter_graphs(cell_lines=["mcf10", "mcf7"], interaction_type="intra", condition="intra-split-raw", resolutions=[1000000])  # , chromosomes=["chr2"])
     graph_dict = filter_instance.graph_dict
+
+    # lcc instance
+    lcc_instance = gm.LargestComponent(graph_dict)
+    lcc_instance.find_lcc()
     hub_instance = find_hub_nodes(graph_dict)
+
+    # lcc instance
+    lcc_instance = gm.LargestComponent(graph_dict)
+    lcc_instance.find_lcc()
     # hub_instance.print_top_degree_nodes(10)
-    hub_instance.plot_overlap_counts(hub_instance, top_n=100, metric="closeness", save_as=Directories.overlap_path / "100_closeness_MCF10-A_MCF7_overlap.png")
+    hub_instance.plot_overlap_counts(hub_instance, top_n=100, metric="closeness", save_as=None)  # Directories.overlap_path / "100_closeness_MCF10-A_MCF7_overlap.png")
 
 # find_top_hubs()
 
@@ -1212,7 +1219,7 @@ def closeness_plot():
     closeness_instance.calculate_closeness()
     closeness_instance.calculate_closeness_distribution()
     closeness_instance.normalize_closeness()
-    closeness_instance.plot_closeness_distribution(save_as= Directories.closeness_path / "closeness_dist_line.png")
+    closeness_instance.plot_closeness_distribution(save_as=None)  # Directories.closeness_path / "closeness_dist_line.png")
 
 # closeness_plot()
 

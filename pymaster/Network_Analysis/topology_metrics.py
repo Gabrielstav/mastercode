@@ -137,11 +137,11 @@ def plot_communities():
     # Filter on graphs
     graph_dict = gi.all_graphs()
     filter_instance = gm.FilterGraphs(graph_dict)
-    filtered = filter_instance.filter_graphs(resolutions=[1000000], cell_lines=["mcf7"], condition="intra-split-raw", interaction_type="intra", chromosomes=["chr14"])  # , chromosomes=["chr1"])
+    filtered = filter_instance.filter_graphs(resolutions=[1000000], cell_lines=["mcf7"], condition="intra-split-raw", interaction_type="intra", chromosomes=["chr1"])  # , chromosomes=["chr1"])
 
     # Get LCC
-    lcc_instance = gm.LargestComponent(filtered)
-    filtered = lcc_instance.find_lcc()
+    # lcc_instance = gm.LargestComponent(filtered)
+    # filtered = lcc_instance.find_lcc()
 
     topology_instance = CommunityDetection(filtered)
     topology_instance.calculate_communities(method="fg")
@@ -359,7 +359,7 @@ class NMI_comparison:
 
         plt.xlabel("Chromosome")
         plt.ylabel("NMI")
-        plt.title("NMI of Communities per Chromosome")
+        plt.title("NMI of Communities in LCC per Chromosome")
         plt.xticks(np.arange(len(chromosomes)), [chrom[3:] for chrom in chromosomes])
 
         if save_as:
@@ -393,16 +393,16 @@ def get_nmi_per_chromosome():
 
     # Filter on graphs
     filter_instance = gm.FilterGraphs(graph_dict)
-    filtered = filter_instance.filter_graphs(resolutions=[1000000], cell_lines=["mcf10", "mcf7"], condition="intra-split-raw", interaction_type="intra", chromosomes=["chr5"])
+    filtered = filter_instance.filter_graphs(resolutions=[1000000], cell_lines=["mcf10", "mcf7"], condition="intra-split-raw", interaction_type="intra")  # , chromosomes=["chr14"])
 
     # Get LCC
     lcc_instance = gm.LargestComponent(filtered)
     lcc = lcc_instance.find_lcc()
 
     # Calculate communities
-    # topology_instance = NMI_comparison(filtered)
-    # topology_instance = NMI_comparison(lcc)
-    # topology_instance.calculate_communities_per_chromosome()
+    topology_instance = NMI_comparison(lcc)
+    topology_instance = NMI_comparison(lcc)
+    topology_instance.calculate_communities_per_chromosome()
 
     # Calculate and plot communities per chromosome
     comm_per_chrom_instance = NMI_comparison(lcc)
@@ -413,6 +413,30 @@ def get_nmi_per_chromosome():
 
 # get_nmi_per_chromosome()
 
+def get_nmi_per_lcc():
+    # Get the graphs
+    graph_dict = gi.all_graphs()
+
+    # Filter on graphs
+    filter_instance = gm.FilterGraphs(graph_dict)
+    filtered = filter_instance.filter_graphs(resolutions=[1000000], cell_lines=["mcf10", "mcf7"], condition="intra-split-raw", interaction_type="intra")  # , chromosomes=["chr1", "chr6", "chr19"])
+
+    # Get LCC
+    lcc_instance = gm.LargestComponent(filtered)
+    lcc = lcc_instance.find_lcc_per_chromosome()
+
+    # Calculate communities
+    topology_instance = NMI_comparison(lcc)
+    topology_instance.calculate_communities_per_chromosome()
+
+    # Calculate and plot communities per chromosome
+    comm_per_chrom_instance = NMI_comparison(lcc)
+    comm_per_chrom_instance.calculate_nmi()
+    # comm_per_chrom_instance.print_same_and_different_nodes()
+    comm_per_chrom_instance.plot_nmi_per_chromosome(save_as=None)  # Directories.comms_path / "mcf7-mcf10_1Mb_nmi_LCC.png")
+    # comm_per_chrom_instance.print_same_and_different_nodes()
+
+# get_nmi_per_lcc()
 
 # DID not work:
 class NMItopology:

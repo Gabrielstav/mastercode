@@ -38,7 +38,7 @@ class ChromosomePlotHelper:
     def read_compartment_data(bed_file):
         df = pd.read_csv(bed_file, sep='\t', header=None, names=['chrom', 'start', 'end', 'compartment', 'eigenvalue'])
         # Convert compartment column to 'A' or 'B' based on the sign of eigenvalue
-        df['compartment'] = df['eigenvalue'].apply(lambda x: 'A' if x >= 0 else 'B')
+        df['compartment'] = df['eigenvalue'].apply(lambda x: 'A' if x > 0 else 'B')
         # Convert the dataframe to a list of dictionaries and return
         return df.to_dict('records')
 
@@ -138,7 +138,6 @@ class LinearChromosomePlot:
     def plot(self, save_as=None):
         ideo_df = pd.DataFrame.from_dict(self.plot_helper.ideogram_data)
         nodes_df = pd.DataFrame.from_dict(self.plot_helper.node_data)
-        compartments_df = pd.DataFrame.from_dict(self.plot_helper.compartment_data)
 
         chrom_height = 1
         chrom_spacing = 1
@@ -202,16 +201,16 @@ def linear_plot():
 def compartment_plot():
     graphs = gi.all_graphs()
     filter_instance = gm.FilterGraphs(graphs)
-    filter_instance.filter_graphs(cell_lines=["mcf7"], resolutions=[1000000], interaction_type="intra", condition="intra-split-raw")  # , chromosomes=["chr1", "chr2"])
+    filter_instance.filter_graphs(cell_lines=["mcf7"], resolutions=[1000000], interaction_type="intra", condition="intra-split-raw")  # , chromosomes=["chr22"])  # , "chr2"])
     graph_dict = filter_instance.graph_dict
     plot_helper = ChromosomePlotHelper(graph_dict, "all")  # , ["chr1", "chr2"])
 
     # load compartment data
-    compartment_file = "/Users/GBS/Master/HiC-Data/mcf_comps/mcf7_compartments_noIC_no0.bed"
+    compartment_file = "/Users/GBS/Master/HiC-Data/mcf_comps/mcf10_compartments_IC_0.bed"
     plot_helper.load_compartment_data(compartment_file)
 
     lin_plot = LinearChromosomePlot(plot_helper)
-    lin_plot.plot(save_as=Directories.chromosome_path / "mcf7_chrom_compartments.png")
+    lin_plot.plot(save_as=None)  # Directories.chromosome_path / "mcf7_chrom_compartments.png")
 
 compartment_plot()
 

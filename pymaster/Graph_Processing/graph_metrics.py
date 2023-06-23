@@ -50,6 +50,24 @@ class LargestComponent:
             largest_component_dict[graph_name] = largest_component
         return largest_component_dict
 
+    def find_lcc_per_chromosome(self):
+        largest_component_dict = {}
+        for graph_name, graph in self.graph_dict.items():
+            nodes_by_chromosome = {}
+            for idx in range(len(graph.vs)):
+                chrom = graph.vs[idx]['name'].split(':')[0]
+                if chrom not in nodes_by_chromosome:
+                    nodes_by_chromosome[chrom] = []
+                nodes_by_chromosome[chrom].append(idx)
+
+            for chrom, nodes in nodes_by_chromosome.items():
+                subgraph = graph.subgraph(nodes)
+                components = subgraph.components()
+                largest_component = components.giant()
+                largest_component_dict[(graph_name, chrom)] = largest_component
+
+        return largest_component_dict
+
     def lcc_membership(self):
         lcc_membership_dict = {}
         for graph_name, graph in self.graph_dict.items():
