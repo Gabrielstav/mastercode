@@ -23,4 +23,4 @@ Key results:
 
 ## Acknowledgements
 
-This project was conducted at the University of Oslo under the supervision of Dr. Marieke Kuijjer within the Kuijjer group at NCMM, with Jonas Paulsen from IBV at UiO as co-supervisor.
+This project was conducted at the University of Oslo under the supervision of Marieke Kuijjer within the Kuijjer group at NCMM, with Jonas Paulsen from IBV at UiO as co-supervisor.
