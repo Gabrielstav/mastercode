@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from Pipeline import SetDirectories
 import os as os
 
+# Unused code
 @dataclass(frozen=True, eq=True)
 class Node:
     id: str

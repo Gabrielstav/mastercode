@@ -7,9 +7,6 @@ def all_graphs():
     graph_db_manager = gg.GraphDatabaseManager.from_default_path()
     return graph_db_manager.get_all_graphs()
 
-
-
-
 # Intra graphs 1 MB
 def intra_1mb_graphs():
     graph_db_manager = gg.GraphDatabaseManager.from_default_path()
@@ -19,64 +16,6 @@ def intra_1mb_graphs():
     # lcc = instance_lcc.find_lcc()
     # return lcc
     return graphs
-
-# print(intra_1mb_graph())
-
-def inter_1mb_graphs():
-    graph_db_manager = gg.GraphDatabaseManager.from_default_path()
-    graph_filter = gm.FilterGraphs(graph_db_manager.get_all_graphs())
-    graphs = graph_filter.filter_graphs(cell_lines=["mcf10", "mcf7", "imr90", "gsm2824367", "huvec"], resolutions=[1000000], interaction_type="inter", condition="inter-nosplit-raw")
-    return graphs
-# print(inter_1mb_graphs())
-
-def intra_500kb_graphs():
-    graph_db_manager = gg.GraphDatabaseManager.from_default_path()
-    graph_filter = gm.FilterGraphs(graph_db_manager.get_all_graphs())
-    graphs = graph_filter.filter_graphs(cell_lines=["mcf10", "mcf7", "imr90", "gsm2824367", "huvec"], resolutions=[500000], interaction_type="intra", condition="intra-split-raw")
-    return graphs
-
-def intra_250kb_graphs():
-    graph_db_manager = gg.GraphDatabaseManager.from_default_path()
-    graph_filter = gm.FilterGraphs(graph_db_manager.get_all_graphs())
-    graphs = graph_filter.filter_graphs(cell_lines=["mcf10", "mcf7", "imr90", "gsm2824367", "huvec"], resolutions=[250000], interaction_type="intra", condition="intra-split-raw")
-    return graphs
-
-def intra_120kb_graphs():
-    graph_db_manager = gg.GraphDatabaseManager.from_default_path()
-    graph_filter = gm.FilterGraphs(graph_db_manager.get_all_graphs())
-    graphs = graph_filter.filter_graphs(cell_lines=["mcf10", "mcf7", "imr90", "gsm2824367", "huvec"], resolutions=[120000], interaction_type="intra", condition="intra-split-raw")
-    return graphs
-
-def intra_80kb_graphs():
-    graph_db_manager = gg.GraphDatabaseManager.from_default_path()
-    graph_filter = gm.FilterGraphs(graph_db_manager.get_all_graphs())
-    graphs = graph_filter.filter_graphs(cell_lines=["mcf10", "mcf7", "imr90", "gsm2824367", "huvec"], resolutions=[80000], interaction_type="intra", condition="intra-split-raw")
-    return graphs
-
-def intra_50kb_graphs():
-    graph_db_manager = gg.GraphDatabaseManager.from_default_path()
-    graph_filter = gm.FilterGraphs(graph_db_manager.get_all_graphs())
-    graphs = graph_filter.filter_graphs(cell_lines=["mcf10", "mcf7", "imr90", "gsm2824367", "huvec"], resolutions=[50000], interaction_type="intra", condition="intra-split-raw")
-    return graphs
-
-def norm_mcf10_graphs():
-    graph_db_manager = gg.GraphDatabaseManager.from_default_path()
-    graph_filter = gm.FilterGraphs(graph_db_manager.get_all_graphs())
-    mcf10_graphs = graph_filter.filter_graphs(cell_lines=["mcf10"], interaction_type="intra", condition="intra-split-norm")
-    return mcf10_graphs
-
-def norm_mcf7_graphs():
-    graph_db_manager = gg.GraphDatabaseManager.from_default_path()
-    graph_filter = gm.FilterGraphs(graph_db_manager.get_all_graphs())
-    mcf7_graphs = graph_filter.filter_graphs(cell_lines=["mcf7"], interaction_type="intra", condition="intra-split-norm")
-    return mcf7_graphs
-
-
-
-
-
-
-
 
 # Make all graphs
 def make_all_graphs():
@@ -88,8 +27,6 @@ def make_all_graphs():
     return graph_names
 
 # Make isntances and filter graphs
-
-
 def mcf7_mcf10_intra_1Mb():
     graph_db_manager = gg.GraphDatabaseManager.from_default_path()
     graph_filter = gm.FilterGraphs(graph_db_manager.get_all_graphs())
