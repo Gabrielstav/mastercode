@@ -1,8 +1,8 @@
 # Import modules
 import igraph as ig
-from Graph_Processing import graph_metrics as gm
-from Graph_Processing import graph_generator as gg
-from Graph_Processing import graph_instances as gi
+from graph_processing import graph_metrics as gm
+from graph_processing import graph_generator as gg
+from graph_processing import graph_instances as gi
 import matplotlib.pyplot as plt
 from pathlib import Path
 from multiprocessing import Pool

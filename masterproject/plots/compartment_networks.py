@@ -2,8 +2,8 @@
 import pathlib as path
 import igraph as ig
 import matplotlib.pyplot as plt
-from Graph_Processing import graph_metrics as gm
-from Graph_Processing import graph_instances as gi
+from graph_processing import graph_metrics as gm
+from graph_processing import graph_instances as gi
 import numpy as np
 import pandas as pd
 import seaborn as sns

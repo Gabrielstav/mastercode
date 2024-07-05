@@ -18,7 +18,7 @@ from collections import defaultdict
 # Pre-processing pipeline for Hi-C data from HiC-Pro
 ####################################################
 
-help_message = "HiC_Pipeline for processing Hi-C data from HiC-Pro to statistically significant edge-lists. \n\n" \
+help_message = "hic_pipeline for processing Hi-C data from HiC-Pro to statistically significant edge-lists. \n\n" \
                "INPUT DIR: -i\n" \
                "Directory containing HiC-Pro output folders (bed and matrix files) is set as input directory. Any folder can be the input, as long as it contains the HiC-Pro output folders (raw, matrix) for one HiC-Pro run. \n\n" \
                "OUTPUT DIR: -o \n" \
@@ -471,7 +471,7 @@ class Pipeline_Input:
                     else:
                         grouped_iced_files[key] += (bedfile, inted_matrixfile)
 
-        # Checks if HiC_Pipeline should be run on raw or ICE-normalized data
+        # Checks if hic_pipeline should be run on raw or ICE-normalized data
         grouped_files_checked = None
         if SetDirectories.get_normalized_data():
             grouped_files_checked = grouped_iced_files
@@ -1177,7 +1177,7 @@ class Pipeline:
 
 def run_pipeline():
     """
-    Call selected methods of the HiC_Pipeline, in the order specified
+    Call selected methods of the hic_pipeline, in the order specified
     """
 
     global first_print
@@ -1203,7 +1203,7 @@ def run_pipeline():
 
     # Print runtime on completion
     end_time = time.time()
-    print(f"HiC_Pipeline completed in {end_time - start_time:.2f} seconds. ({(end_time - start_time) / 60:.2f} minutes, {((end_time - start_time) / 60) / 60:.2f} hours).")
+    print(f"hic_pipeline completed in {end_time - start_time:.2f} seconds. ({(end_time - start_time) / 60:.2f} minutes, {((end_time - start_time) / 60) / 60:.2f} hours).")
 
 
 if __name__ == "__main__":

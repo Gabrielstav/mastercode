@@ -2,8 +2,8 @@
 import igraph as ig
 import matplotlib.pyplot as plt
 import numpy as np
-from Graph_Processing import graph_metrics as gm
-from Graph_Processing import graph_instances as gi
+from graph_processing import graph_metrics as gm
+from graph_processing import graph_instances as gi
 import random as rd
 import pathlib as path
 import cdlib as cd

@@ -1,6 +1,6 @@
 # Import modules
-from Graph_Processing import graph_generator as gg
-from Graph_Processing import graph_metrics as gm
+from graph_processing import graph_generator as gg
+from graph_processing import graph_metrics as gm
 
 
 def all_graphs():

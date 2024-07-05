@@ -2,7 +2,7 @@
 from collections import defaultdict
 from typing import Union
 import itertools as it
-from Graph_Processing import graph_generator as gg
+from graph_processing import graph_generator as gg
 
 
 class ConnectedComponents:

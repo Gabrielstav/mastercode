@@ -1,12 +1,12 @@
 # Import modules
 import igraph as ig
-from Graph_Processing import graph_instances as gi
+from graph_processing import graph_instances as gi
 import matplotlib.pyplot as plt
 from matplotlib import cm
 import numpy as np
 import pandas as pd
 import pathlib as path
-from Graph_Processing import graph_metrics as gm
+from graph_processing import graph_metrics as gm
 
 
 class Directories:

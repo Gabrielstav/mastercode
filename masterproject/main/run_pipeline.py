@@ -3,14 +3,14 @@ import time as time
 from tqdm import tqdm
 
 
-from HiC_Pipeline.HiEdge import SetDirectories
-from HiC_Pipeline.HiEdge import Pipeline_Input
-from HiC_Pipeline.HiEdge import Pipeline
+from hic_pipeline.HiEdge import SetDirectories
+from hic_pipeline.HiEdge import Pipeline_Input
+from hic_pipeline.HiEdge import Pipeline
 
 
 def run_pipeline():
     """
-    Call selected methods of the HiC_Pipeline, in the order specified
+    Call selected methods of the hic_pipeline, in the order specified
     """
 
     global first_print
@@ -36,7 +36,7 @@ def run_pipeline():
 
     # Print runtime on completion
     end_time = time.time()
-    print(f"HiC_Pipeline completed in {end_time - start_time:.2f} seconds. ({(end_time - start_time) / 60:.2f} minutes, {((end_time - start_time) / 60) / 60:.2f} hours).")
+    print(f"hic_pipeline completed in {end_time - start_time:.2f} seconds. ({(end_time - start_time) / 60:.2f} minutes, {((end_time - start_time) / 60) / 60:.2f} hours).")
 
 
 if __name__ == "__main__":

@@ -1,13 +1,13 @@
 # Import modules
 import pandas as pd
-from Graph_Processing import graph_metrics as gm
-from Graph_Processing import graph_instances as gi
+from graph_processing import graph_metrics as gm
+from graph_processing import graph_instances as gi
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import pathlib as path
 import re
-from Network_Analysis import centrality_metrics as cm
-from Graph_Processing import graph_generator as gg
+from network_analysis import centrality_metrics as cm
+from graph_processing import graph_generator as gg
 
 class Directories:
     base_path = path.Path("/Users/GBS/Master/Figures")
