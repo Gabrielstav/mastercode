@@ -9,7 +9,7 @@ Large-scale differences in chromatin topology were found between the benign and 
 
 The thesis in full can be found in full [here](https://www.duo.uio.no/handle/10852/105389?show=full). 
     
-![Overview of Hi-C to network pipeline](/Users/GBS/Desktop/Screen Shot 2024-07-05 at 7.15.48 PM.png)
+![/Users/GBS/Desktop/msc_pipeline.png)
     
 ![Ideaograms of nodes in MCF-7]()
     
