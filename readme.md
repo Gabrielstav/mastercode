@@ -7,9 +7,9 @@ A pipeline was made to process raw Hi-C data to networks. Hi-C data from five di
 
 Large-scale differences in chromatin topology were found between the benign and malignant cell line, especially on small chromosomes where MCF-7 had a larger degree of nodes in compartment A.
 
-The thesis in full can be found in full [here](https://www.duo.uio.no/handle/10852/105389?show=full): 
+The thesis in full can be found in full [here](https://www.duo.uio.no/handle/10852/105389?show=full). 
     
-![Overview of Hi-C to network pipeline](/var/folders/vj/dh4xmk3x01b3lb_w4zh7r61c0000gn/T/TemporaryItems/NSIRD_screencaptureui_WhV9Tj/Screen Shot 2024-07-05 at 7.00.34 PM.png)
+![Overview of Hi-C to network pipeline](/var/folders/vj/dh4xmk3x01b3lb_w4zh7r61c0000gn/T/TemporaryItems/NSIRD_screencaptureui_WhV9Tj/ScreenShot2024-07-05at7.00.34PM.png)
     
 ![Ideaograms of nodes in MCF-7](/var/folders/vj/dh4xmk3x01b3lb_w4zh7r61c0000gn/T/TemporaryItems/NSIRD_screencaptureui_sxpJjV/Screen Shot 2024-07-05 at 7.02.39 PM.png)
     
