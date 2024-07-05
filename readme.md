@@ -11,9 +11,8 @@ The thesis in full can be found in full [here](https://www.duo.uio.no/handle/108
     
 ![Overview of pipeline](images/msc_pipeline.png)
     
-![Ideaograms of nodes in MCF-7]()
-    
-![Full genome community detection using at 1Mb resolution]()
+
+![Full genome community detection using at 1Mb resolution](/Users/GBS/Master/images/fg_comms.png)
     
     
     
